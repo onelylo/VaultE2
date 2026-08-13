@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
-  Camera, Mic, Paperclip, Copy, ChevronRight,
+  Camera, Mic, Paperclip, Copy, MoreHorizontal, X,
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
@@ -274,82 +274,100 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         )}
       </div>
 
-      {/* CONTEXTUAL ACTION MENU */}
+      {/* ACTION BUTTONS — Reply + Edit on side, 3-dot for more */}
       <div
-        className={`${showActions ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'} transition-all duration-150 z-20 shrink-0`}
+        className={`flex flex-col gap-1 transition-all duration-150 z-20 shrink-0 ${
+          showActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
       >
-        <div
-          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[160px] overflow-hidden"
-          style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
-        >
-          {/* Reply */}
-          {!msg.isDeleted && editingMsgId !== msg.id && (
-            <button
-              type="button"
-              onClick={() => { handleStartReply(msg); setShowActions(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
-              style={{ color: 'var(--text-main)' }}
-            >
-              <Reply className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-              <span>Reply</span>
-            </button>
-          )}
-
-          {/* Copy Text */}
-          {!msg.isDeleted && msg.text && (
-            <button
-              type="button"
-              onClick={() => { navigator.clipboard.writeText(msg.text); setShowActions(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
-              style={{ color: 'var(--text-main)' }}
-            >
-              <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-              <span>Copy</span>
-            </button>
-          )}
-
-          {/* Edit — own messages only, within 5m, not audio */}
-          {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
-            <button
-              type="button"
-              onClick={() => { handleStartEdit(msg); setShowActions(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
-              style={{ color: 'var(--text-main)' }}
-            >
-              <Pencil className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-              <span>Edit</span>
-            </button>
-          )}
-
-          {/* Divider before destructive actions */}
-          {(isSelf || !msg.isDeleted) && (
-            <div className="mx-2 my-0.5" style={{ borderTop: '1px solid var(--border-color)' }} />
-          )}
-
-          {/* Delete For Me — always visible */}
+        {/* Reply button */}
+        {!msg.isDeleted && editingMsgId !== msg.id && (
           <button
             type="button"
-            onClick={() => { setPendingDeleteForMeId(msg.id); setShowActions(false); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-amber-500/10 transition-colors text-left"
-            style={{ color: '#f59e0b' }}
+            onClick={() => handleStartReply(msg)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+            title="Reply"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete for me</span>
+            <Reply className="w-3.5 h-3.5" />
           </button>
+        )}
 
-          {/* Delete For Everyone — own messages only, not deleted */}
-          {isSelf && !msg.isDeleted && (
+        {/* Edit button — own messages, within 5m, not audio */}
+        {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
+          <button
+            type="button"
+            onClick={() => handleStartEdit(msg)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+            title="Edit"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* 3-dot menu button */}
+        {!msg.isDeleted && (
+          <div className="relative">
             <button
               type="button"
-              onClick={() => { setPendingDeleteEveryoneId(msg.id); setShowActions(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-red-500/10 transition-colors text-left"
-              style={{ color: '#ef4444' }}
+              onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+              title="More"
             >
-              <Trash className="w-3.5 h-3.5" />
-              <span>Delete for everyone</span>
+              <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
-          )}
-        </div>
+
+            {/* Dropdown menu */}
+            {showActions && (
+              <div
+                className="absolute right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[140px] overflow-hidden z-30"
+                style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
+              >
+                {/* Copy */}
+                {msg.text && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.text); setShowActions(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                    <span>Copy</span>
+                  </button>
+                )}
+
+                {/* Divider */}
+                <div className="mx-2 my-0.5" style={{ borderTop: '1px solid var(--border-color)' }} />
+
+                {/* Delete For Me */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPendingDeleteForMeId(msg.id); setShowActions(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-amber-500/10 transition-colors text-left"
+                  style={{ color: '#f59e0b' }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete for me</span>
+                </button>
+
+                {/* Delete For Everyone — own messages only */}
+                {isSelf && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteEveryoneId(msg.id); setShowActions(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-red-500/10 transition-colors text-left"
+                    style={{ color: '#ef4444' }}
+                  >
+                    <Trash className="w-3.5 h-3.5" />
+                    <span>Delete for everyone</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
