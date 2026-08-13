@@ -220,9 +220,9 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           </div>
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col items-center">
             {activeTab === 'profile' && (
-              <div className="max-w-md space-y-6">
+              <div className="w-full max-w-md space-y-6">
                 {/* Avatar */}
                 <div className="flex items-center gap-5">
                   <div
@@ -329,7 +329,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             )}
 
             {activeTab === 'notifications' && (
-              <div className="max-w-md space-y-4">
+              <div className="w-full max-w-md space-y-4">
                 {[
                   { label: 'Message Sounds', desc: 'Play audio cues for new messages', icon: soundEnabled ? Volume2 : VolumeX, value: soundEnabled, onChange: () => setSoundEnabled(!soundEnabled) },
                   { label: 'Desktop Notifications', desc: 'Show browser notifications for messages', icon: notificationsEnabled ? Bell : BellOff, value: notificationsEnabled, onChange: () => setNotificationsEnabled(!notificationsEnabled) },
@@ -360,7 +360,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             )}
 
             {activeTab === 'security' && (
-              <div className="max-w-md space-y-4">
+              <div className="w-full max-w-md space-y-4">
                 <div className="p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)]">
                   <div className="flex items-center gap-2 mb-3">
                     <KeyRound className="w-4 h-4 text-[var(--accent-primary)]" />
