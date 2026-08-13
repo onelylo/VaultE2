@@ -1,4 +1,13 @@
 let audioCtx: AudioContext | null = null;
+let hasUserInteracted = false;
+
+// Resume AudioContext on first user interaction
+document.addEventListener('click', () => {
+  if (!hasUserInteracted) {
+    hasUserInteracted = true;
+    if (audioCtx) audioCtx.resume();
+  }
+}, { once: true });
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
