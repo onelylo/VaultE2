@@ -9,6 +9,9 @@ interface MessageSearchProps {
   onSelectMessage: (message: LocalMessage) => void;
   allUsers: User[];
   channels: Channel[];
+  selectedUser?: User | null;
+  selectedChannel?: Channel | null;
+  currentUserId?: string;
 }
 
 export const MessageSearch: React.FC<MessageSearchProps> = ({
@@ -17,6 +20,9 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
   onSelectMessage,
   allUsers,
   channels,
+  selectedUser,
+  selectedChannel,
+  currentUserId,
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalMessage[]>([]);
@@ -69,7 +75,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [isOpen, onClose]);
 
-  // Search messages
+  // Search messages — scoped to current DM/channel if one is open
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -80,8 +86,20 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
       try {
         const allMessages = await db.messages.toArray();
         const lowerQuery = query.toLowerCase();
-        const matches = allMessages
-          .filter(m => m.text && m.text.toLowerCase().includes(lowerQuery) && !m.isDeleted)
+        let filtered = allMessages.filter(m => m.text && m.text.toLowerCase().includes(lowerQuery) && !m.isDeleted);
+        // Scope to current conversation
+        if (selectedChannel) {
+          filtered = filtered.filter(m => m.channelId === selectedChannel.id);
+        } else if (selectedUser && currentUserId) {
+          // DM filter: messages between current user and selected user
+          filtered = filtered.filter(m =>
+            !m.channelId && (
+              (m.senderId === currentUserId && m.recipientId === selectedUser.userId) ||
+              (m.senderId === selectedUser.userId && m.recipientId === currentUserId)
+            )
+          );
+        }
+        const matches = filtered
           .sort((a, b) => b.timestamp - a.timestamp)
           .slice(0, 50);
         setResults(matches);
@@ -93,7 +111,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
       }
     }, 200);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, selectedUser, selectedChannel, currentUserId]);
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -153,7 +171,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search messages…"
+            placeholder={selectedChannel ? `Search in #${selectedChannel.name}…` : selectedUser ? `Search with ${selectedUser.fullName || selectedUser.username}…` : 'Search messages…'}
             className="flex-1 bg-transparent text-sm focus:outline-none"
             style={{ color: 'var(--text-main)' }}
           />
@@ -214,7 +232,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
 
           {!query.trim() && (
             <div className="p-6 text-center">
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Type to search across all messages</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{selectedChannel ? `Search messages in #${selectedChannel.name}` : selectedUser ? `Search messages with ${selectedUser.fullName || selectedUser.username}` : 'Type to search across all messages'}</p>
               <div className="flex items-center justify-center gap-4 mt-3">
                 <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>↑↓</kbd>

@@ -78,10 +78,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
-  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
+  const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
-  });
+  }) : '';
 
   const senderName = isSelf
     ? 'YOU'
@@ -260,19 +260,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </button>
         )}
 
-        {/* Delete For Me — visible on all messages */}
-        {!msg.isDeleted && (
-          <button
-            type="button"
-            onClick={() => setPendingDeleteForMeId(msg.id)}
-            className="p-1.5 rounded-lg text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-            title="Delete for me"
-          >
-            <Trash2 className="w-4 h-4"/>
-          </button>
-        )}
+        {/* Delete For Me — visible on ALL messages including deleted */}
+        <button
+          type="button"
+          onClick={() => setPendingDeleteForMeId(msg.id)}
+          className="p-1.5 rounded-lg text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+          title="Delete for me"
+        >
+          <Trash2 className="w-4 h-4"/>
+        </button>
 
-        {/* Delete For Everyone — sent messages only */}
+        {/* Delete For Everyone — sent messages only, not deleted */}
         {isSelf && !msg.isDeleted && (
           <button
             type="button"

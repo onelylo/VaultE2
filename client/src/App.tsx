@@ -1903,6 +1903,9 @@ export const App: React.FC = () => {
           }}
           allUsers={allUsers}
           channels={channels}
+          selectedUser={selectedPeer}
+          selectedChannel={selectedChannel}
+          currentUserId={currentUserKeys?.userId}
         />
       </React.Suspense>
     </div>

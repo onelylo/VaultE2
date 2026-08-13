@@ -217,6 +217,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleEmojiSelect = (emoji: string) => {
     setText(prev => prev + emoji);
+    setShowEmojiPicker(false);
     textareaRef.current?.focus();
   };
 
