@@ -16,14 +16,15 @@
 - Voice message recording and playback
 - Message editing and deletion (for self or everyone)
 - Message pinning in channels
-- Typing indicators
+- Typing indicators (DMs + channels)
 - Reply threading with quoted messages
 - Shared media gallery in profile (WhatsApp-style: images, audio, video, docs with date grouping)
 - WhatsApp-style contextual message menu (Reply, Edit, Copy, Delete)
-- Image lightbox with zoom, slide-down-to-close, and title auto-hide
+- Image lightbox with zoom, pan, and slide-down-to-close
 - "Take me there" jump-to-message from profile media gallery
 - "Stay logged in" option with session persistence control
 - DM message previews in sidebar
+- Lazy message loading (50 msgs initially, load more on scroll)
 - Emoji picker
 - 12 custom themes (6 dark, 6 light)
 - TOFU (Trust On First Use) key verification
@@ -57,6 +58,11 @@
 | 2026-08-13 | `66f47ac` | Optimized DM queries (targeted DB queries instead of full table scan) | `client/ChatArea.tsx`, `client/App.tsx` |
 | 2026-08-13 | `66f47ac` | DM order persists on refresh (loaded from IndexedDB on mount) | `client/App.tsx` |
 | 2026-08-13 | `66f47ac` | Faster receipt updates (2s interval instead of 5s) | `client/App.tsx` |
+| 2026-08-13 | `latest` | Typing indicators: store username on socket + auto-join channel rooms | `server/index.ts` |
+| 2026-08-13 | `latest` | channel:create adds creator to channel_members | `server/index.ts` |
+| 2026-08-13 | `latest` | Offline queue: fixed stale closures using refs | `client/App.tsx` |
+| 2026-08-13 | `latest` | AttachmentMessage: use getJwtToken helper (localStorage + sessionStorage) | `client/AttachmentMessage.tsx` |
+| 2026-08-13 | `latest` | Reactions/pins: use socket.broadcast instead of io.emit | `server/index.ts` |
 | 2026-08-13 | `0ca9f09` | Message/reaction/pin spoofing prevention (server uses authenticatedUserId) | `server/index.ts` |
 | 2026-08-13 | `0ca9f09` | Timing-safe password comparison for legacy SHA-256 hashes | `server/index.ts` |
 | 2026-08-13 | `0ca9f09` | EditUserModal stale state fix (useEffect resets state on user change) | `client/admin/EditUserModal.tsx` |

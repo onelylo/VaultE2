@@ -1125,7 +1125,17 @@ io.on('connection', (socket) => {
     activeUsers.set(data.userId, activeUser);
     socketToUser.set(socket.id, data.userId);
     userToSocket.set(data.userId, socket.id);
+    // Store username on socket for typing indicators
+    (socket as any).username = data.username;
     console.log(`[Registry] Joined: ${activeUser.username} (${data.userId}) [${activeUser.role}]`);
+
+    // Auto-join user's channel rooms
+    try {
+      const userChannels = await getChannelsForUser(data.userId).catch(() => []);
+      for (const ch of userChannels) {
+        socket.join(`channel:${ch.id}`);
+      }
+    } catch {}
 
     // Send full user directory (excluding self) to joining user
     const directory = await buildUserDirectory(data.userId).catch(() => []);
@@ -1181,6 +1191,10 @@ io.on('connection', (socket) => {
       allowedRoles: data.allowedRoles || ['ADMIN', 'SUPERVISOR', 'MEMBER'],
     };
     await insertChannel(newChannel).catch(e => console.error('[Channel] Persist error:', e));
+    // Add creator to channel_members so they can see the channel
+    await addChannelMember(channelId, authenticatedUserId, authenticatedUserId).catch(() => {});
+    // Auto-join creator to channel room
+    socket.join(`channel:${channelId}`);
     console.log(`[Channel] Created #${newChannel.name}`);
     const updated = await getAllChannels().catch(() => [newChannel]);
     io.emit('channels:update', updated);
@@ -1352,7 +1366,7 @@ io.on('connection', (socket) => {
     if (!userId) return;
     await addReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Add error:', e));
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    io.emit('message:reactions', { messageId: data.messageId, reactions });
+    socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
   socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
@@ -1360,7 +1374,7 @@ io.on('connection', (socket) => {
     if (!userId) return;
     await removeReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Remove error:', e));
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    io.emit('message:reactions', { messageId: data.messageId, reactions });
+    socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
   // Message Pinning
@@ -1369,7 +1383,7 @@ io.on('connection', (socket) => {
     if (!userId) return;
     await pinMessage(data.channelId, data.messageId, userId).catch(e => console.error('[Pin] Error:', e));
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
-    io.emit('channel:pinned', { channelId: data.channelId, pinned });
+    socket.to(`channel:${data.channelId}`).emit('channel:pinned', { channelId: data.channelId, pinned });
   });
 
   socket.on('message:unpin', async (data: { channelId: string; messageId: string }) => {
@@ -1377,7 +1391,7 @@ io.on('connection', (socket) => {
     if (!userId) return;
     await unpinMessage(data.channelId, data.messageId).catch(e => console.error('[Unpin] Error:', e));
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
-    io.emit('channel:pinned', { channelId: data.channelId, pinned });
+    socket.to(`channel:${data.channelId}`).emit('channel:pinned', { channelId: data.channelId, pinned });
   });
 
   // Typing Indicators — use authenticated user, never trust client-supplied userId/username

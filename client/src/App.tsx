@@ -1394,6 +1394,8 @@ export const App: React.FC = () => {
   }, [currentUserKeys]);
 
   // ── Offline Queue Auto-Flush ──────────────────────────────────────────────────
+  const offlineQueueRef = useRef({ sharedKeysCache, privateKeyObject, allUsers });
+  useEffect(() => { offlineQueueRef.current = { sharedKeysCache, privateKeyObject, allUsers }; }, [sharedKeysCache, privateKeyObject, allUsers]);
   useEffect(() => {
     if (!currentUserKeys || !networkStatus.isSocketConnected || isFlushing.current) return;
     isFlushing.current = true;
@@ -1401,8 +1403,9 @@ export const App: React.FC = () => {
       senderId: currentUserKeys.userId,
       socket,
       token: getJwtToken() || '',
-      sharedKeysCache, privateKey: privateKeyObject,
-      activeUsers: allUsers,
+      sharedKeysCache: offlineQueueRef.current.sharedKeysCache,
+      privateKey: offlineQueueRef.current.privateKeyObject,
+      activeUsers: offlineQueueRef.current.allUsers,
       onMessageFlushed: () => {},
       onQueueEmpty: () => { isFlushing.current = false; }
     });
