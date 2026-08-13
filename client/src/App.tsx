@@ -985,7 +985,7 @@ export const App: React.FC = () => {
       }
 
       // 1. Emit delivery receipt back to server
-      socket.emit('message:delivered', { messageId: payload.id, senderId: payload.senderId });
+      socket.emit('message:delivered', { messageId: payload.id, tempId: payload.tempId, senderId: payload.senderId });
 
       // Play notification sound if not the active conversation
       if (selectedPeerRef.current?.userId !== payload.senderId) {
@@ -1019,8 +1019,10 @@ export const App: React.FC = () => {
       await updateMessageStatus(tempId, status, serverId);
     };
 
-    const onMessageDeliveredAck = async ({ id }: { id: string }) => {
-      await updateMessageStatus(id, 'delivered');
+    const onMessageDeliveredAck = async ({ id, tempId }: { id: string; tempId?: string }) => {
+      // Use tempId for lookup if available (message may still have tempId as id before onMessageAck)
+      const lookupId = tempId || id;
+      await updateMessageStatus(lookupId, 'delivered');
     };
 
     const onMessageReadAck = async ({ conversationId }: { conversationId: string }) => {
@@ -1290,6 +1292,8 @@ export const App: React.FC = () => {
     if (!currentUserKeys) return;
     const myId = currentUserKeys.userId;
     const computeUnread = async () => {
+      const activePeerId = selectedPeerRef.current?.userId;
+      const activeChannelId = selectedChannelRef.current?.id;
       // Only fetch messages where senderId is NOT me (incoming messages only)
       // Use two targeted queries instead of loading entire table
       const incomingDMs = await db.messages.where('recipientId').equals(myId).toArray();
@@ -1300,6 +1304,7 @@ export const App: React.FC = () => {
       const latestMsgs: Record<string, { text: string; timestamp: number; fromMe: boolean }> = {};
       for (const msg of incoming) {
         if (msg.channelId) {
+          if (msg.channelId === activeChannelId) continue;
           const lastViewed = lastViewedChannelsRef.current[msg.channelId] || 0;
           if (msg.timestamp > lastViewed) {
             channelCounts[msg.channelId] = (channelCounts[msg.channelId] || 0) + 1;
@@ -1307,6 +1312,14 @@ export const App: React.FC = () => {
         } else {
           const partnerId = msg.senderId;
           if (!partnerId) continue;
+          if (partnerId === activePeerId) {
+            // Still track latest message for preview even in open DM
+            const existing = latestMsgs[partnerId];
+            if (!existing || msg.timestamp > existing.timestamp) {
+              latestMsgs[partnerId] = { text: msg.text || '📎 Attachment', timestamp: msg.timestamp, fromMe: false };
+            }
+            continue;
+          }
           const lastViewed = lastViewedDmsRef.current[partnerId] || 0;
           if (msg.timestamp > lastViewed) {
             dmCounts[partnerId] = (dmCounts[partnerId] || 0) + 1;

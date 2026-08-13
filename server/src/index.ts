@@ -1291,10 +1291,10 @@ io.on('connection', (socket) => {
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
-  socket.on('message:delivered', (data: { messageId: string; senderId: string }) => {
+  socket.on('message:delivered', (data: { messageId: string; tempId?: string; senderId: string }) => {
     const sender = activeUsers.get(data.senderId);
     if (sender) {
-      io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId });
+      io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
     }
   });
 
