@@ -783,6 +783,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={inspectedUser}
           currentUserId={currentUserId}
           onClose={() => setInspectedUser(null)}
+          onImageClick={(url, name) => setActiveLightbox({ url, name })}
         />
       )}
 
@@ -791,6 +792,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={selectedUser}
           currentUserId={currentUserId}
           onClose={() => setShowProfileModal(false)}
+          onImageClick={(url, name) => setActiveLightbox({ url, name })}
         />
       )}
 
