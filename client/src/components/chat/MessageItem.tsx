@@ -17,7 +17,7 @@ const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) 
   if (status === 'read') {
     return (
       <span title="Seen by recipient">
-        <CheckCheck className="w-3 h-3 text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.6)]" />
+        <CheckCheck className="w-3 h-3 text-sky-500 drop-shadow-[0_0_6px_rgba(56,189,248,0.6)]" />
       </span>
     );
   }
