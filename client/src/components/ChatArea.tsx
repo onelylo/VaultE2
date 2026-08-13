@@ -106,6 +106,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Cleanup voice recorder on unmount
   useEffect(() => {
@@ -441,7 +442,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </>
           ) : selectedUser ? (
             <>
-              <div className="relative flex-shrink-0" style={{ cursor: 'default' }}>
+              <div
+                className="relative flex-shrink-0 cursor-pointer"
+                onClick={() => setShowProfileModal(true)}
+              >
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0"
                   style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)', color: 'var(--accent-primary)' }}>
                   {selectedUser.username.substring(0, 2).toUpperCase()}
@@ -450,7 +454,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   <img
                     src={selectedUser.avatarUrl}
                     alt={selectedUser.username}
-                    className="w-9 h-9 rounded-lg absolute inset-0 object-cover cursor-zoom-in"
+                    className="w-9 h-9 rounded-lg absolute inset-0 object-cover"
                     style={{ opacity: 0.9 }}
                     onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '0.9'; }}
@@ -458,9 +462,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   />
                 )}
               </div>
-              <div className="min-w-0 ml-3">
+              <div className="min-w-0 ml-3 cursor-pointer" onClick={() => setShowProfileModal(true)}>
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-main)' }}>
+                  <span className="font-semibold text-sm truncate hover:underline" style={{ color: 'var(--text-main)' }}>
                     {selectedUser.fullName || selectedUser.username}
                   </span>
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedUser.isOnline ? '#34d399' : 'var(--text-muted)', boxShadow: selectedUser.isOnline ? '0 0 6px #34d399' : 'none' }} />
@@ -765,6 +769,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={inspectedUser}
           currentUserId={currentUserId}
           onClose={() => setInspectedUser(null)}
+        />
+      )}
+
+      {showProfileModal && selectedUser && (
+        <ProfileModal
+          user={selectedUser}
+          currentUserId={currentUserId}
+          onClose={() => setShowProfileModal(false)}
         />
       )}
 
