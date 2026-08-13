@@ -23,6 +23,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stayLoggedIn, setStayLoggedIn] = useState(() => {
+    try { return localStorage.getItem('vaultchat_stayLoggedIn') !== 'false'; } catch { return true; }
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +225,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
                 <Lock className="w-3.5 h-3.5 absolute right-2.5 top-2.5" style={{ color: 'var(--text-muted)' }} />
               </div>
             </div>
+
+            {/* Stay logged in */}
+            {!isRegister && (
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={stayLoggedIn}
+                    onChange={e => {
+                      setStayLoggedIn(e.target.checked);
+                      localStorage.setItem('vaultchat_stayLoggedIn', String(e.target.checked));
+                    }}
+                    className="w-3.5 h-3.5 rounded accent-[var(--accent-primary)]"
+                  />
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>Stay logged in</span>
+                </label>
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                  {stayLoggedIn ? '30 days' : 'This session only'}
+                </span>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

@@ -67,6 +67,25 @@ import type {
 } from './types/chat';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
+
+// ── JWT Storage Helpers ────────────────────────────────────────────────────
+function getJwtToken(): string | null {
+  const token = localStorage.getItem('vaultchat_jwt');
+  if (token) return token;
+  return sessionStorage.getItem('vaultchat_jwt');
+}
+function setJwtToken(token: string) {
+  const stayLoggedIn = localStorage.getItem('vaultchat_stayLoggedIn') !== 'false';
+  if (stayLoggedIn) {
+    localStorage.setItem('vaultchat_jwt', token);
+  } else {
+    sessionStorage.setItem('vaultchat_jwt', token);
+  }
+}
+function removeJwtToken() {
+  removeJwtToken();
+  sessionStorage.removeItem('vaultchat_jwt');
+}
 import { AuthModal } from './components/AuthModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { ProfileDrawer } from './components/ProfileDrawer';
@@ -198,7 +217,7 @@ export const App: React.FC = () => {
 
   // ── On-Demand Public Key Fetch ───────────────────────────────────────────────
   const fetchUserPublicKey = useCallback(async (userId: string): Promise<string | null> => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return null;
     try {
       const res = await fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
@@ -250,7 +269,7 @@ export const App: React.FC = () => {
       }
 
       // 2. Fetch encrypted channel key envelope from server
-      const token = localStorage.getItem('vaultchat_jwt');
+      const token = getJwtToken();
       if (token && currentUserKeys) {
         const res = await fetch(`${API_BASE}/api/channels/${channelId}/key`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -504,7 +523,7 @@ export const App: React.FC = () => {
       );
       const vault = await encryptKeyVaultPair(newPrivJwk, newSignPrivJwk, password);
 
-      const token = localStorage.getItem('vaultchat_jwt');
+      const token = getJwtToken();
       const res = await fetch(`${API_BASE}/api/auth/rotate-key`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -553,7 +572,7 @@ export const App: React.FC = () => {
   // ── Profile Update ────────────────────────────────────────────────────────────
   const handleUpdateProfile = useCallback(async (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string }) => {
     if (!currentUserKeys) return;
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     try {
       const res = await fetch(`${API_BASE}/api/auth/profile`, {
         method: 'PUT',
@@ -603,7 +622,7 @@ export const App: React.FC = () => {
   // ── Session Rehydration on Page Refresh ──────────────────────────────────────
   useEffect(() => {
     const rehydrate = async () => {
-      const token = localStorage.getItem('vaultchat_jwt');
+      const token = getJwtToken();
       if (!token) { setIsRehydrating(false); return; }
       try {
         const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
@@ -637,7 +656,7 @@ export const App: React.FC = () => {
             console.log(`[Rehydration] Session restored for ${enrichedKeyPair.username}`);
           }
         } else {
-          localStorage.removeItem('vaultchat_jwt');
+          removeJwtToken();
         }
       } catch (e) {
         console.error('[Rehydration] Error:', e);
@@ -652,7 +671,7 @@ export const App: React.FC = () => {
   // Runs after login AND after a server restart + browser refresh.
   useEffect(() => {
     if (!currentUserKeys) return;
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (token) fetchAllHistory(token);
   }, [currentUserKeys, fetchAllHistory]);
 
@@ -707,7 +726,7 @@ export const App: React.FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-      localStorage.setItem('vaultchat_jwt', data.token);
+      setJwtToken(data.token);
       const fp = await getFingerprint(pubKeyBase64);
       setPrivateKeyObject(privKey);
       const registeredKeyPair: UserKeyPair = {
@@ -839,7 +858,7 @@ export const App: React.FC = () => {
         });
       }
 
-      localStorage.setItem('vaultchat_jwt', data.token);
+      setJwtToken(data.token);
       const fp = await getFingerprint(pubKeyBase64);
       setPrivateKeyObject(privKey);
       const enrichedKeyPair: UserKeyPair = {
@@ -867,7 +886,7 @@ export const App: React.FC = () => {
   };
 
   const handleLogoutConfirm = () => {
-    localStorage.removeItem('vaultchat_jwt');
+    removeJwtToken();
     setCurrentUserKeys(null);
     setPrivateKeyObject(null);
     setSelectedPeer(null);
@@ -889,7 +908,7 @@ export const App: React.FC = () => {
 
   // ── Admin RBAC Handlers ──────────────────────────────────────────────────────
   const fetchAdminUsers = useCallback(async (): Promise<AdminUser[]> => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return [];
     try {
       const res = await fetch(`${API_BASE}/api/admin/users`, {
@@ -908,7 +927,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleAdminSetRole = useCallback(async (userId: string, role: UserRole) => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return false;
     try {
       const res = await fetch(`${API_BASE}/api/admin/users/${userId}/role`, {
@@ -929,7 +948,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleAdminDeleteUser = useCallback(async (userId: string): Promise<boolean> => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return false;
     try {
       const res = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
@@ -1027,15 +1046,18 @@ export const App: React.FC = () => {
 
     const onMessageReadAck = async ({ conversationId }: { conversationId: string }) => {
       // Sender's copy: upgrade messages sent to this conversation to 'read' status
-      const allMsgs = await db.messages.toArray();
-      // Filter for messages sent by ME to this recipient OR this channel
-      const unreadSent = allMsgs.filter(m => 
-        (m.recipientId === conversationId || m.channelId === conversationId) && 
-        m.senderId === currentUserKeys?.userId && 
+      const myId = currentUserKeys?.userId;
+      if (!myId) return;
+      // Use targeted query: only messages I sent to this recipient/channel that aren't read yet
+      const sentMsgs = await db.messages.where('senderId').equals(myId).toArray();
+      const unreadSent = sentMsgs.filter(m => 
+        m.recipientId === conversationId && 
         m.status !== 'read'
       );
       if (unreadSent.length > 0) {
-        await bulkUpdateMessageStatus(unreadSent.map(m => m.id), 'read');
+        for (const m of unreadSent) {
+          await db.messages.update(m.id, { status: 'read' });
+        }
       }
     };
 
@@ -1062,7 +1084,7 @@ export const App: React.FC = () => {
 
     // Reactive roster: a new user just registered — refresh the directory.
     const onUserRegistered = async () => {
-      const token = localStorage.getItem('vaultchat_jwt');
+      const token = getJwtToken();
       if (token) await fetchUserDirectory(token);
     };
 
@@ -1091,7 +1113,7 @@ export const App: React.FC = () => {
       });
       // If a user came online but we don't have their full data, fetch the directory
       if (data.isOnline && !allUsersRef.current.find(u => u.userId === data.userId)) {
-        const token = localStorage.getItem('vaultchat_jwt');
+        const token = getJwtToken();
         if (token) fetchUserDirectory(token);
       }
     };
@@ -1363,7 +1385,7 @@ export const App: React.FC = () => {
     processOfflineQueue({
       senderId: currentUserKeys.userId,
       socket,
-      token: localStorage.getItem('vaultchat_jwt') || '',
+      token: getJwtToken() || '',
       sharedKeysCache, privateKey: privateKeyObject,
       activeUsers: allUsers,
       onMessageFlushed: () => {},
@@ -1398,7 +1420,7 @@ export const App: React.FC = () => {
     const fp = await getFingerprint(user.publicKey);
     setPeerFingerprint(fp);
 
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (token) {
       try {
         const res = await fetch(`${API_BASE}/api/messages/direct/${user.userId}`, {
@@ -1494,7 +1516,7 @@ export const App: React.FC = () => {
     setChannelKeysCache(prev => new Map(prev).set(channelId, channelKeyObj));
 
     // 2. Encrypt channel key for selected members (or all for official channels)
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     const keyEnvelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
     
     // Determine which members to encrypt for
@@ -1541,7 +1563,7 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateChannel = async (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles'>>) => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return;
     try {
       const res = await fetch(`${API_BASE}/api/channels/${id}`, {
@@ -1572,7 +1594,7 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteChannel = async (id: string) => {
-    const token = localStorage.getItem('vaultchat_jwt');
+    const token = getJwtToken();
     if (!token) return;
     try {
       const res = await fetch(`${API_BASE}/api/channels/${id}`, {
@@ -1687,7 +1709,7 @@ export const App: React.FC = () => {
     }
     if (!keyObj) return;
 
-    const token = localStorage.getItem('vaultchat_jwt') || '';
+    const token = getJwtToken() || '';
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
