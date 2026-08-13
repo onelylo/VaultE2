@@ -24,11 +24,13 @@ const VAULT_THEMES = [
   { id: 'neon-pulse', label: 'Neon Pulse', icon: Moon, color: 'bg-pink-500' },
   { id: 'shadow-purple', label: 'Shadow Purple', icon: Moon, color: 'bg-purple-500' },
   { id: 'midnight-teal', label: 'Midnight Teal', icon: Moon, color: 'bg-teal-500' },
+  { id: 'carbon-black', label: 'Carbon Black', icon: Moon, color: 'bg-neutral-900' },
   { id: 'clean-light', label: 'Clean Light', icon: Sun, color: 'bg-gray-200' },
   { id: 'amber-light', label: 'Cream Light', icon: Sun, color: 'bg-amber-200' },
   { id: 'mint-fresh', label: 'Mint Fresh', icon: Sun, color: 'bg-emerald-400' },
   { id: 'ocean-mist', label: 'Ocean Mist', icon: Sun, color: 'bg-blue-400' },
   { id: 'rose-garden', label: 'Rose Garden', icon: Sun, color: 'bg-pink-400' },
+  { id: 'lavender', label: 'Lavender', icon: Sun, color: 'bg-violet-400' },
 ];
 
 type TabId = 'profile' | 'appearance' | 'notifications' | 'security';
@@ -167,7 +169,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-4xl h-[85vh] max-h-[700px] flex rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-2xl text-[var(--text-main)] overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-5xl h-[85vh] max-h-[700px] flex rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-2xl text-[var(--text-main)] overflow-hidden animate-scaleIn mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar Navigation — Discord-style */}
@@ -298,7 +300,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xs font-bold text-[var(--text-muted)] mb-4 tracking-wide">THEME</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {VAULT_THEMES.map((t) => {
                       const Icon = t.icon;
                       const isActive = theme === t.id;

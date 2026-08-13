@@ -176,6 +176,40 @@
   --glow-color: rgba(38, 166, 154, 0.35);
 }
 
+/* 11. CARBON BLACK (AMOLED) */
+[data-theme="carbon-black"] {
+  --bg-app: #000000;
+  --bg-sidebar: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-card: #1a1a1a;
+  --bg-input: #050505;
+  --text-main: #e5e5e5;
+  --text-muted: #737373;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --hover-color: rgba(255, 255, 255, 0.06);
+  --accent-primary: #f43f5e;
+  --accent-hover: #e11d48;
+  --accent-text: #ffffff;
+  --glow-color: rgba(244, 63, 94, 0.35);
+}
+
+/* 12. LAVENDER */
+[data-theme="lavender"] {
+  --bg-app: #f5f3ff;
+  --bg-sidebar: #ede9fe;
+  --bg-surface: #f5f3ff;
+  --bg-card: #ddd6fe;
+  --bg-input: #ddd6fe;
+  --text-main: #2e1065;
+  --text-muted: #6d28d9;
+  --border-color: #c4b5fd;
+  --hover-color: #ede9fe;
+  --accent-primary: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-text: #ffffff;
+  --glow-color: rgba(124, 58, 237, 0.2);
+}
+
 /* GLOBAL BASE APPLIANCE */
 body, #root {
   background-color: var(--bg-app) !important;

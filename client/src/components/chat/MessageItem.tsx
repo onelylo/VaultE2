@@ -86,10 +86,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // Long-press support for mobile action menu
   const [showActions, setShowActions] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextClick = useRef(false);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    suppressNextClick.current = false;
     longPressTimer.current = setTimeout(() => {
       setShowActions(true);
+      suppressNextClick.current = true;
     }, 500);
   }, []);
 
@@ -137,7 +140,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
-      onClick={() => { if (showActions) setShowActions(false); }}
+      onClick={() => {
+        if (suppressNextClick.current) { suppressNextClick.current = false; return; }
+        if (showActions) setShowActions(false);
+      }}
     >
       {/* Message Bubble Container */}
       <div

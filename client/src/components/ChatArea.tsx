@@ -2,9 +2,8 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import {
-  Lock, Shield, Check, CheckCheck, Clock, ShieldAlert, X,
-  Edit2, Trash2, Trash, Paperclip, Send, FileText, Loader2, Smile, Reply,
-  Search, Menu, Info, ShieldCheck, Camera, Mic, Pencil, ArrowDown,
+  Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
+  Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText,
 } from 'lucide-react';
 import type { User, Channel, LocalMessage, UserKeyPair } from '../types/chat';
 import { AttachmentMessage } from './AttachmentMessage';
@@ -105,6 +104,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
+
+  // Cleanup voice recorder on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      }
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+    };
+  }, []);
 
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();

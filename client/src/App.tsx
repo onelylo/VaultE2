@@ -14,7 +14,6 @@ import {
   computePublicKeyFingerprint,
   generateChannelSymmetricKey,
   importSymmetricKeyFromJwk,
-  encryptPrivateKeyVault,
   decryptPrivateKeyVault,
   encryptKeyVaultPair,
   unwrapKeyVault,
@@ -996,10 +995,17 @@ export const App: React.FC = () => {
 
     const onMessageEdited = async ({ id, newCiphertext, newIv }: { id: string; newCiphertext: string; newIv: string }) => {
       let decryptedText = '🔒 Unable to decrypt edited message';
-      const peer = selectedPeerRef.current;
-      if (peer?.publicKey) {
-        const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
-        if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
+      // Check if this is a channel message
+      const existing = await db.messages.get(id);
+      if (existing?.channelId) {
+        const channelKey = await getOrGenerateChannelKey(existing.channelId);
+        if (channelKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, channelKey); } catch {} }
+      } else {
+        const peer = selectedPeerRef.current;
+        if (peer?.publicKey) {
+          const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
+          if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
+        }
       }
       await editMessageLocally(id, decryptedText, newCiphertext, newIv);
     };
@@ -1038,14 +1044,9 @@ export const App: React.FC = () => {
         return next;
       });
       // If a user came online but we don't have their full data, fetch the directory
-      if (data.isOnline) {
-        setAllUsers(prev => {
-          if (!prev.find(u => u.userId === data.userId)) {
-            const token = localStorage.getItem('vaultchat_jwt');
-            if (token) fetchUserDirectory(token);
-          }
-          return prev;
-        });
+      if (data.isOnline && !allUsersRef.current.find(u => u.userId === data.userId)) {
+        const token = localStorage.getItem('vaultchat_jwt');
+        if (token) fetchUserDirectory(token);
       }
     };
 
