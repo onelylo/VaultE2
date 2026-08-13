@@ -124,9 +124,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // Close action menu when clicking anywhere else
   React.useEffect(() => {
     if (!showActions) return;
-    const handler = () => setShowActions(false);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const handler = (e: MouseEvent) => {
+      // Don't close if clicking inside the menu or the 3-dot button
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-action-menu]')) {
+        setShowActions(false);
+      }
+    };
+    // Use mousedown so it fires before click handlers
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [showActions]);
 
   const senderName = isSelf
@@ -319,7 +326,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
         {/* 3-dot menu button */}
         {!msg.isDeleted && (
-          <div className="relative">
+          <div className="relative" data-action-menu>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); checkMenuPosition(); setShowActions(!showActions); }}
@@ -333,6 +340,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             {/* Dropdown menu — opens upward if near bottom */}
             {showActions && (
               <div
+                data-action-menu
                 className={`absolute right-0 ${menuUp ? 'bottom-full mb-1' : 'top-full mt-1'} bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[140px] overflow-hidden z-30`}
                 style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
               >
