@@ -111,6 +111,9 @@ export const App: React.FC = () => {
       if (saved && saved !== 'undefined') {
         document.documentElement.setAttribute('data-theme', saved);
         setTheme(saved);
+        // Add transition class for smooth theme change
+        document.documentElement.classList.add('theme-transition-active');
+        setTimeout(() => document.documentElement.classList.remove('theme-transition-active'), 300);
       }
     }
   }, [currentUserKeys?.userId]);

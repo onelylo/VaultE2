@@ -447,6 +447,11 @@ input, select {
   border-color: var(--border-color) !important;
 }
 
+/* Theme transition animation */
+.theme-transition-active {
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
 /* Textarea base styling - transparent by default, forms handle background */
 textarea {
   background-color: transparent !important;
