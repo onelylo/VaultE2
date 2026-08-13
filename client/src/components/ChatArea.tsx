@@ -129,6 +129,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return map;
   }, [allUsers]);
 
+  // Lazy loading: start with 50 messages, load more on scroll to top
+  const INITIAL_LOAD = 50;
+  const [loadCount, setLoadCount] = useState(INITIAL_LOAD);
+  const [allMessages, setAllMessages] = useState<LocalMessage[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Fetch all messages for current conversation
   const messages = useLiveQuery(
     async () => {
       if (selectedChannel) {
@@ -136,7 +143,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         return msgs.sort((a, b) => a.timestamp - b.timestamp);
       }
       if (selectedUser && currentUserId) {
-        // Use compound index [senderId+recipientId] for fast DM lookup
         const [sent, received] = await Promise.all([
           db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
           db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
@@ -149,6 +155,30 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     undefined
   );
 
+  // Reset load count when switching conversations
+  useEffect(() => {
+    setLoadCount(INITIAL_LOAD);
+    setAllMessages([]);
+  }, [selectedUser?.userId, selectedChannel?.id]);
+
+  // Update allMessages when messages change
+  useEffect(() => {
+    if (messages) setAllMessages(messages);
+  }, [messages]);
+
+  // Visible messages (lazy loaded)
+  const visibleMessages = allMessages.slice(-loadCount);
+
+  // Load more when scrolling to top
+  const handleScrollTop = useCallback(() => {
+    if (loadingMore || !allMessages || loadCount >= allMessages.length) return;
+    setLoadingMore(true);
+    setTimeout(() => {
+      setLoadCount(prev => Math.min(prev + 50, allMessages.length));
+      setLoadingMore(false);
+    }, 200);
+  }, [loadingMore, loadCount, allMessages]);
+
   // Track whether user is near bottom for smart auto-scroll
   const isNearBottomRef = useRef(true);
   // Track whether we just switched conversations (for scroll-to-bottom)
@@ -160,7 +190,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isNearBottomRef.current = distFromBottom < 200;
     setShowScrollDown(distFromBottom >= 200);
-  }, []);
+    // Load more messages when scrolling near top
+    if (el.scrollTop < 100) handleScrollTop();
+  }, [handleScrollTop]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -175,20 +207,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [selectedUser?.userId, selectedChannel?.id]);
 
   useEffect(() => {
-    if (scrollRef.current && messages !== undefined) {
+    if (scrollRef.current && visibleMessages !== undefined) {
       if (justSwitchedRef.current) {
         // Just switched conversation — force to bottom instantly
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         justSwitchedRef.current = false;
         isNearBottomRef.current = true;
-      } else if (isNearBottomRef.current && messages && messages.length > 0) {
+      } else if (isNearBottomRef.current && visibleMessages && visibleMessages.length > 0) {
         // New message arrived while near bottom — smooth scroll
         scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
       } else {
         setShowScrollDown(true);
       }
     }
-  }, [messages?.length]);
+  }, [visibleMessages?.length]);
 
   // Textarea auto-resize
   const autoResize = useCallback(() => {
@@ -533,11 +565,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 font-sans relative">
-        {messages === undefined ? (
+        {allMessages === undefined ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-6 h-6 animate-spin text-[var(--text-muted)]" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : allMessages.length === 0 ? (
           <div className="text-center my-12 text-[var(--text-muted)] font-mono text-xs space-y-2">
             <Lock className="w-8 h-8 text-[var(--text-muted)]/40 mx-auto" />
             <p className="text-[var(--text-muted)] font-bold">END-TO-END ENCRYPTED CHANNEL READY</p>
@@ -546,14 +578,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </p>
           </div>
         ) : (
-          messages.map(msg => (
+          visibleMessages.map(msg => (
             <MessageItem
               key={msg.id}
               msg={msg}
               currentUserId={currentUserId}
               selectedUser={selectedUser}
               selectedChannel={selectedChannel}
-              messages={messages}
+              messages={visibleMessages}
               userLookup={userLookup}
               chatType={selectedChannel ? 'channel' : 'dm'}
               editingMsgId={editingMsgId}
@@ -570,7 +602,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             />
           ))
         )}
-        {showScrollDown && messages && messages.length > 0 && (
+        {showScrollDown && allMessages && allMessages.length > 0 && (
           <button
             onClick={() => {
               scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
