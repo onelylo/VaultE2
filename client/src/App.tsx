@@ -685,9 +685,11 @@ export const App: React.FC = () => {
   // Restore full chat history from PostgreSQL once the session is established.
   // Runs after login AND after a server restart + browser refresh.
   useEffect(() => {
-    if (!currentUserKeys) return;
-    const token = getJwtToken();
-    if (token) fetchAllHistory(token);
+    if (currentUserKeys && !historyFetchedRef.current) {
+      historyFetchedRef.current = true;
+      const token = getJwtToken();
+      if (token) fetchAllHistory(token);
+    }
   }, [currentUserKeys, fetchAllHistory]);
 
   // ── Authentication ────────────────────────────────────────────────────────────
@@ -1651,6 +1653,7 @@ export const App: React.FC = () => {
   useEffect(() => { lastViewedChannelsRef.current = lastViewedChannels; }, [lastViewedChannels]);
 
   const computeUnreadRef = useRef<(() => Promise<void>) | null>(null);
+  const historyFetchedRef = useRef(false);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
