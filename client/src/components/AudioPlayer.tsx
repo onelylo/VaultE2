@@ -17,6 +17,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
@@ -25,7 +26,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
     if (!audio) return;
 
     const handleEnded = () => { setIsPlaying(false); setCurrentTime(0); };
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleTimeUpdate = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
     const handleLoadedMetadata = () => setDuration(audio.duration);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
@@ -44,7 +45,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
     };
-  }, [src]);
+  }, [src, isDragging]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -55,14 +56,29 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
     }
   };
 
-  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const seekTo = useCallback((clientX: number) => {
     const bar = progressRef.current;
     const audio = audioRef.current;
     if (!bar || !audio || !duration) return;
     const rect = bar.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     audio.currentTime = pct * duration;
+    setCurrentTime(pct * duration);
   }, [duration]);
+
+  const handleSeekStart = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    seekTo(e.clientX);
+
+    const handleMove = (ev: MouseEvent) => seekTo(ev.clientX);
+    const handleUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  }, [seekTo]);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -76,18 +92,24 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
         {isPlaying ? <Pause className="w-4 h-4"/> : <Play className="w-4 h-4 ml-0.5"/>}
       </button>
 
-      <div className="flex-1 flex flex-col gap-1">
+      <div className="flex-1 flex flex-col gap-1.5">
         <span className="text-xs font-medium text-[var(--text-main)] truncate max-w-[160px]">
           {fileName || 'Voice Message'}
         </span>
         <div
           ref={progressRef}
-          onClick={handleSeek}
-          className="w-full h-1.5 bg-[var(--border-color)] rounded-full overflow-hidden cursor-pointer group"
+          onMouseDown={handleSeekStart}
+          className="relative w-full h-2 bg-[var(--border-color)] rounded-full cursor-pointer group"
         >
+          {/* Filled track */}
           <div
-            className="h-full bg-[var(--accent-primary)] transition-[width] duration-100 group-hover:brightness-110"
+            className="absolute inset-y-0 left-0 bg-[var(--accent-primary)] rounded-full transition-[width] duration-75"
             style={{ width: `${progress}%` }}
+          />
+          {/* Thumb */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-md border-2 border-[var(--accent-primary)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            style={{ left: `calc(${progress}% - 7px)` }}
           />
         </div>
         <span className="text-[10px] text-[var(--text-muted)] font-mono">

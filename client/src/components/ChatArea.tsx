@@ -190,9 +190,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('[data-emoji-picker]')) {
-        setShowEmojiPicker(false);
-      }
+      const target = e.target as HTMLElement;
+      // Don't close if clicking the emoji button or inside the picker
+      if (target.closest('[data-emoji-btn]') || target.closest('[data-emoji-picker]')) return;
+      setShowEmojiPicker(false);
     };
     if (showEmojiPicker) {
       document.addEventListener('mousedown', handleClick);
@@ -643,6 +644,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           <div className="relative" data-emoji-picker>
             <button
               type="button"
+              data-emoji-btn
               onClick={() => setShowEmojiPicker(prev => !prev)}
               className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card)] active:scale-95 transition-all"
               title="Emoji"

@@ -522,7 +522,7 @@ export const App: React.FC = () => {
       console.log(`[KeyRotation] Rotated identity key → ${fp} (server v${data.keyVersion})`);
       alert(`🔑 Identity key rotated successfully. New fingerprint: ${fp}`);
     } catch (e: any) {
-      console.error('[KeyRotation] Failed:', e);
+      console.error('[KeyRotation] Failed:', e?.message || 'unknown');
       alert(`Key rotation failed: ${e?.message || 'unknown error'}`);
     }
   }, [currentUserKeys, privateKeyObject]);
@@ -545,7 +545,7 @@ export const App: React.FC = () => {
         if (data.fullName) updated.fullName = data.fullName;
         if (data.email) updated.email = data.email;
         if (data.avatar) updated.avatarUrl = data.avatar;
-        if (data.statusMessage !== undefined) (updated as any).statusMessage = data.statusMessage;
+        if (data.statusMessage !== undefined) updated.statusMessage = data.statusMessage;
         return updated;
       });
       if (data.fullName && socket.connected) {
@@ -774,7 +774,7 @@ export const App: React.FC = () => {
           await saveUserKeyPair(keyPair);
           console.log(`[KeyVault] Successfully synchronized key pair from vault!`);
         } catch (e) {
-          console.error('[KeyVault] Failed to decrypt private key vault:', e);
+          console.error('[KeyVault] Failed to decrypt private key vault');
           throw new Error('Key Vault decryption failed. Check password.');
         }
       } else {
@@ -1093,7 +1093,7 @@ export const App: React.FC = () => {
           ...prev,
           fullName: data.fullName ?? prev.fullName,
           avatarUrl: data.avatarUrl ?? prev.avatarUrl,
-          statusMessage: data.statusMessage !== undefined ? data.statusMessage : (prev as any).statusMessage,
+          statusMessage: data.statusMessage !== undefined ? data.statusMessage : prev.statusMessage,
         } : prev);
       }
     };
