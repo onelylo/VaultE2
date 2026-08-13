@@ -154,6 +154,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Track whether user is near bottom for smart auto-scroll
   const isNearBottomRef = useRef(true);
+  // Track whether we just switched conversations (for scroll-to-bottom)
+  const justSwitchedRef = useRef(false);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -172,16 +174,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Force scroll to bottom when switching conversations
   useEffect(() => {
-    if (scrollRef.current) {
-      // Reset to bottom immediately (no animation) when switching conversations
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      isNearBottomRef.current = true;
-    }
+    justSwitchedRef.current = true;
   }, [selectedUser?.userId, selectedChannel?.id]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      if (isNearBottomRef.current) {
+    if (scrollRef.current && messages !== undefined) {
+      if (justSwitchedRef.current) {
+        // Just switched conversation — force to bottom instantly
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        justSwitchedRef.current = false;
+        isNearBottomRef.current = true;
+      } else if (isNearBottomRef.current && messages && messages.length > 0) {
+        // New message arrived while near bottom — smooth scroll
         scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
       } else {
         setShowScrollDown(true);
