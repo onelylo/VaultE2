@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 
 const EMOJI_CATEGORIES: Record<string, { label: string; emojis: string[] }> = {
   'Smileys': {
@@ -46,25 +46,16 @@ const EMOJI_CATEGORIES: Record<string, { label: string; emojis: string[] }> = {
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
   isOpen: boolean;
-  onClose: () => void;
 }
 
-export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen, onClose }) => {
+export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('Smileys');
   const ref = useRef<HTMLDivElement>(null);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    window.addEventListener('mousedown', handleClick);
-    return () => window.removeEventListener('mousedown', handleClick);
-  }, [isOpen, onClose]);
+  // Click-outside is handled by ChatArea via data-emoji-btn / data-emoji-picker attributes.
+  // No local handler needed — avoids race with the toggle button's onClick.
 
   const filteredEmojis = useMemo(() => {
     if (!search.trim()) return null;
@@ -138,6 +129,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen, onCl
                 key={`${emoji}-${i}`}
                 onClick={() => { onSelect(emoji); setSearch(''); }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-base transition-smooth hover:scale-125"
+                style={{ fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif' }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
@@ -161,6 +153,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen, onCl
                     key={`${emoji}-${i}`}
                     onClick={() => { onSelect(emoji); setSearch(''); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-base transition-smooth hover:scale-125"
+                    style={{ fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif' }}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >

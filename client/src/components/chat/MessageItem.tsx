@@ -290,8 +290,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </button>
         )}
 
-        {/* Edit (Sent messages ONLY, NO attachments/voice, within 5m) */}
-        {isSelf && !hasAttachment && !msg.isDeleted && editingMsgId !== msg.id && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
+        {/* Edit (Sent messages ONLY, not voice, within 5m) — allows editing text on attachment messages */}
+        {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
           <button
             type="button"
             onClick={() => handleStartEdit(msg)}

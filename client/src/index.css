@@ -214,7 +214,13 @@
 body, #root {
   background-color: var(--bg-app) !important;
   color: var(--text-main) !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Emoji", Roboto, sans-serif;
+}
+
+/* Ensure emoji render with color font */
+button[class*="emoji"],
+[class*="emoji"] button {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Segoe UI", sans-serif;
 }
 
 /* EXPLICIT NON-TRANSPARENT SIDEBAR ENFORCEMENT */

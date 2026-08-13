@@ -193,13 +193,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Don't close if clicking the emoji button or inside the picker
       if (target.closest('[data-emoji-btn]') || target.closest('[data-emoji-picker]')) return;
       setShowEmojiPicker(false);
     };
     if (showEmojiPicker) {
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
     }
   }, [showEmojiPicker]);
 
@@ -658,7 +657,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 <EmojiPicker
                   onSelect={handleEmojiSelect}
                   isOpen={showEmojiPicker}
-                  onClose={() => setShowEmojiPicker(false)}
                 />
               </div>
             )}

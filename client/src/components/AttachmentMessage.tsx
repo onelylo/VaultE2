@@ -60,30 +60,39 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
     }
   };
 
+  const decryptAndOpen = async () => {
+    const token = localStorage.getItem('vaultchat_jwt');
+    const key = await resolveKey(message);
+    if (!token || !key || !message.attachment) {
+      setError('Decryption key unavailable');
+      return;
+    }
+    try {
+      setIsPreparing(true);
+      const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
+      const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
+      const blob = new Blob([decrypted], { type: inferredMimeType });
+      const url = trackUrl(URL.createObjectURL(blob));
+      if (isAudio) {
+        setAudioUrl(url);
+      } else {
+        onImageClick(url, meta?.fileName);
+      }
+    } catch (e) {
+      console.error('[Attachment] Decrypt error:', e);
+      setError('Failed to decrypt attachment locally.');
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
   if (!meta) {
     const fileName = 'attachment';
 
     return (
       <div className="relative group/att">
         <button
-          onClick={async () => {
-            const token = localStorage.getItem('vaultchat_jwt');
-            const key = await resolveKey(message);
-            if (!token || !key || !message.attachment) {
-              setError('Decryption key unavailable');
-              return;
-            }
-            try {
-              const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-              const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-              const blob = new Blob([decrypted], { type: inferredMimeType });
-              const url = URL.createObjectURL(blob);
-              onImageClick(url, fileName);
-            } catch (e) {
-              console.error('[Attachment] Decrypt error:', e);
-              setError('Failed to decrypt attachment locally.');
-            }
-          }}
+          onClick={decryptAndOpen}
           className="max-w-[300px] rounded-lg p-6 flex flex-col items-center space-y-2 transition-smooth cursor-pointer"
           style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-muted)' }}
           onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
@@ -95,24 +104,7 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
         </button>
         
         <button
-          onClick={async () => {
-            const token = localStorage.getItem('vaultchat_jwt');
-            const key = await resolveKey(message);
-            if (!token || !key || !message.attachment) {
-              setError('Decryption key unavailable');
-              return;
-            }
-            try {
-              const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-              const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-              const blob = new Blob([decrypted], { type: inferredMimeType });
-              const url = URL.createObjectURL(blob);
-              onImageClick(url, fileName);
-            } catch (e) {
-              console.error('[Attachment] Decrypt error:', e);
-              setError('Failed to decrypt attachment locally.');
-            }
-          }}
+          onClick={decryptAndOpen}
           disabled={isPreparing}
           title="Download decrypted file"
           className="absolute top-1.5 right-1.5 p-1.5 rounded-lg opacity-0 group-hover/att:opacity-100 transition-all disabled:opacity-30"
@@ -140,48 +132,14 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
           <img
             src={meta.thumbnailDataUrl}
             alt={meta.fileName}
-            onClick={async () => {
-              const token = localStorage.getItem('vaultchat_jwt');
-              const key = await resolveKey(message);
-              if (!token || !key || !message.attachment) {
-                setError('Decryption key unavailable');
-                return;
-              }
-              try {
-                const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-                const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-                const blob = new Blob([decrypted], { type: inferredMimeType });
-                const url = URL.createObjectURL(blob);
-                onImageClick(url, meta?.fileName);
-              } catch (e) {
-                console.error('[Attachment] Decrypt error:', e);
-                setError('Failed to decrypt attachment locally.');
-              }
-            }}
+            onClick={decryptAndOpen}
             title="Click to decrypt & view full image"
             className="max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-zoom-in"
             style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
           />
-        ) : (
+) : (
           <button
-            onClick={async () => {
-              const token = localStorage.getItem('vaultchat_jwt');
-              const key = await resolveKey(message);
-              if (!token || !key || !message.attachment) {
-                setError('Decryption key unavailable');
-                return;
-              }
-              try {
-                const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-                const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-                const blob = new Blob([decrypted], { type: inferredMimeType });
-                const url = URL.createObjectURL(blob);
-                onImageClick(url, meta?.fileName);
-              } catch (e) {
-                console.error('[Attachment] Decrypt error:', e);
-                setError('Failed to decrypt attachment locally.');
-              }
-            }}
+            onClick={decryptAndOpen}
             className="max-w-[300px] rounded-lg p-6 flex flex-col items-center space-y-2 transition-smooth"
             style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-muted)' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
@@ -193,24 +151,7 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
         )}
 
         <button
-          onClick={async () => {
-            const token = localStorage.getItem('vaultchat_jwt');
-            const key = await resolveKey(message);
-            if (!token || !key || !message.attachment) {
-              setError('Decryption key unavailable');
-              return;
-            }
-            try {
-              const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-              const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-              const blob = new Blob([decrypted], { type: inferredMimeType });
-              const url = URL.createObjectURL(blob);
-              onImageClick(url, meta?.fileName);
-            } catch (e) {
-              console.error('[Attachment] Decrypt error:', e);
-              setError('Failed to decrypt attachment locally.');
-            }
-          }}
+          onClick={decryptAndOpen}
           disabled={isPreparing}
           title="Download decrypted file"
           className="absolute top-1.5 right-1.5 p-1.5 rounded-lg opacity-0 group-hover/att:opacity-100 transition-all disabled:opacity-30"
@@ -238,26 +179,7 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
           <AudioPlayer src={audioUrl} fileName={meta.fileName} />
         ) : (
           <button
-            onClick={async () => {
-              const token = localStorage.getItem('vaultchat_jwt');
-              const key = await resolveKey(message);
-              if (!token || !key || !message.attachment) {
-                setError('Decryption key unavailable');
-                return;
-              }
-              try {
-                setIsPreparing(true);
-                const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-                const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-                const blob = new Blob([decrypted], { type: inferredMimeType });
-                setAudioUrl(trackUrl(URL.createObjectURL(blob)));
-              } catch (e) {
-                console.error('[Audio] Decrypt error:', e);
-                setError('Failed to decrypt audio.');
-              } finally {
-                setIsPreparing(false);
-              }
-            }}
+            onClick={decryptAndOpen}
             disabled={isPreparing}
             className="flex items-center space-x-3 rounded-xl p-3 min-w-[240px] max-w-[300px] transition-smooth"
             style={{ backgroundColor: 'color-mix(in srgb, var(--bg-app) 60%, transparent)', border: '1px solid var(--border-color)' }}
@@ -307,24 +229,7 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
           )}
         </div>
         <button
-          onClick={async () => {
-            const token = localStorage.getItem('vaultchat_jwt');
-            const key = await resolveKey(message);
-            if (!token || !key || !message.attachment) {
-              setError('Decryption key unavailable');
-              return;
-            }
-            try {
-              const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
-              const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
-              const blob = new Blob([decrypted], { type: inferredMimeType });
-              const url = URL.createObjectURL(blob);
-              onImageClick(url, meta?.fileName);
-            } catch (e) {
-              console.error('[Attachment] Decrypt error:', e);
-              setError('Failed to decrypt attachment locally.');
-            }
-          }}
+          onClick={decryptAndOpen}
           disabled={isPreparing}
           title="Decrypt & download"
           className="p-2 rounded-lg flex-shrink-0 transition-smooth"
