@@ -18,6 +18,12 @@
 - Message pinning in channels
 - Typing indicators
 - Reply threading with quoted messages
+- Shared media gallery in profile (WhatsApp-style: images, audio, video, docs with date grouping)
+- WhatsApp-style contextual message menu (Reply, Edit, Copy, Delete)
+- Image lightbox with zoom, slide-down-to-close, and title auto-hide
+- "Take me there" jump-to-message from profile media gallery
+- "Stay logged in" option with session persistence control
+- DM message previews in sidebar
 - Emoji picker
 - 12 custom themes (6 dark, 6 light)
 - TOFU (Trust On First Use) key verification
@@ -83,6 +89,15 @@
 | 2026-08-13 | `a06ce98` | Profile modal on click (username/avatar in DM header) | `client/ChatArea.tsx`, `client/ProfileModal.tsx` |
 | 2026-08-13 | `5dc2a52` | "Stay logged in" option on login page | `client/AuthModal.tsx`, `client/App.tsx` |
 | 2026-08-13 | `4351cff` | DM message preview in sidebar | `client/Sidebar.tsx`, `client/App.tsx` |
+| 2026-08-13 | `b6bc1b9` | Shared media gallery in profile modal (images/audio/docs tabs) | `client/ProfileModal.tsx` |
+| 2026-08-13 | `0eb0dcc` | Enhanced profile media gallery (date grouping, video tab, media stats) | `client/ProfileModal.tsx` |
+| 2026-08-13 | `d5e49a5` | Clickable attachments + "Take me there" jump-to-message | `client/ProfileModal.tsx`, `client/ChatArea.tsx` |
+| 2026-08-13 | `2fe595c` | ProfileModal rewrite (fixed black screen crash, clean MediaItem component) | `client/ProfileModal.tsx` |
+| 2026-08-13 | `99207c0` | WhatsApp-style contextual message menu (Reply, Edit, 3-dot for Copy/Delete) | `client/MessageItem.tsx` |
+| 2026-08-13 | `ef812bf` | Message actions side-by-side + spatial awareness dropdown | `client/MessageItem.tsx` |
+| 2026-08-13 | `ce6e692` | Action menu closes on outside click and when another 3-dot is clicked | `client/MessageItem.tsx` |
+| 2026-08-13 | `e76d732` | Reduced enlarged avatar size from 90vw to 50vw | `client/ProfileModal.tsx` |
+| 2026-08-13 | `e76d732` | Image lightbox: hide title/X when zoomed, slide-down-to-close gesture | `client/modals/ImageLightboxModal.tsx` |
 
 ---
 
