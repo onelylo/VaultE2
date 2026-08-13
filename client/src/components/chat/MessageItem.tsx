@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
-  Camera, Mic, Paperclip,
+  Camera, Mic, Paperclip, Copy, ChevronRight,
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
@@ -276,53 +276,82 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         )}
       </div>
 
-      {/* FLOATING ACTION MENU — Positioned outside on the side, never clipping */}
-      <div className={`${showActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-150 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-lg px-1.5 py-1 flex items-center gap-1 z-20 shrink-0`}>
-        {/* Reply */}
-        {!msg.isDeleted && editingMsgId !== msg.id && (
-          <button
-            type="button"
-            onClick={() => handleStartReply(msg)}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--hover-color)] transition-colors"
-            title="Reply"
-          >
-            <Reply className="w-4 h-4"/>
-          </button>
-        )}
-
-        {/* Edit (Sent messages ONLY, not voice, within 5m) — allows editing text on attachment messages */}
-        {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
-          <button
-            type="button"
-            onClick={() => handleStartEdit(msg)}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--hover-color)] transition-colors"
-            title="Edit"
-          >
-            <Pencil className="w-4 h-4"/>
-          </button>
-        )}
-
-        {/* Delete For Me — visible on ALL messages including deleted */}
-        <button
-          type="button"
-          onClick={() => setPendingDeleteForMeId(msg.id)}
-          className="p-1.5 rounded-lg text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-          title="Delete for me"
+      {/* CONTEXTUAL ACTION MENU */}
+      <div
+        className={`${showActions ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'} transition-all duration-150 z-20 shrink-0`}
+      >
+        <div
+          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[160px] overflow-hidden"
+          style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
         >
-          <Trash2 className="w-4 h-4"/>
-        </button>
+          {/* Reply */}
+          {!msg.isDeleted && editingMsgId !== msg.id && (
+            <button
+              type="button"
+              onClick={() => { handleStartReply(msg); setShowActions(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+              style={{ color: 'var(--text-main)' }}
+            >
+              <Reply className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+              <span>Reply</span>
+            </button>
+          )}
 
-        {/* Delete For Everyone — sent messages only, not deleted */}
-        {isSelf && !msg.isDeleted && (
+          {/* Copy Text */}
+          {!msg.isDeleted && msg.text && (
+            <button
+              type="button"
+              onClick={() => { navigator.clipboard.writeText(msg.text); setShowActions(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+              style={{ color: 'var(--text-main)' }}
+            >
+              <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+              <span>Copy</span>
+            </button>
+          )}
+
+          {/* Edit — own messages only, within 5m, not audio */}
+          {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
+            <button
+              type="button"
+              onClick={() => { handleStartEdit(msg); setShowActions(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+              style={{ color: 'var(--text-main)' }}
+            >
+              <Pencil className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+              <span>Edit</span>
+            </button>
+          )}
+
+          {/* Divider before destructive actions */}
+          {(isSelf || !msg.isDeleted) && (
+            <div className="mx-2 my-0.5" style={{ borderTop: '1px solid var(--border-color)' }} />
+          )}
+
+          {/* Delete For Me — always visible */}
           <button
             type="button"
-            onClick={() => setPendingDeleteEveryoneId(msg.id)}
-            className="p-1.5 rounded-lg text-red-500/70 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-            title="Delete for everyone"
+            onClick={() => { setPendingDeleteForMeId(msg.id); setShowActions(false); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-amber-500/10 transition-colors text-left"
+            style={{ color: '#f59e0b' }}
           >
-            <Trash className="w-4 h-4"/>
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete for me</span>
           </button>
-        )}
+
+          {/* Delete For Everyone — own messages only, not deleted */}
+          {isSelf && !msg.isDeleted && (
+            <button
+              type="button"
+              onClick={() => { setPendingDeleteEveryoneId(msg.id); setShowActions(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-red-500/10 transition-colors text-left"
+              style={{ color: '#ef4444' }}
+            >
+              <Trash className="w-3.5 h-3.5" />
+              <span>Delete for everyone</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
