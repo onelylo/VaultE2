@@ -15,82 +15,40 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   onClose,
   fileName,
 }) => {
-  const [zoomed, setZoomed] = useState(false);
   const [translateY, setTranslateY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartY = useRef(0);
-  const imgRef = useRef<HTMLImageElement>(null);
 
   // Keyboard handling
   useEffect(() => {
     if (!isOpen) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (zoomed) setZoomed(false);
-        else onClose();
-      }
-    };
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [isOpen, zoomed, onClose]);
+  }, [isOpen, onClose]);
 
   // Reset state when closing
   useEffect(() => {
-    if (!isOpen) {
-      setZoomed(false);
-      setTranslateY(0);
-    }
+    if (!isOpen) setTranslateY(0);
   }, [isOpen]);
 
-  // Swipe down to close
+  // Touch-only swipe down to close
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (zoomed) return;
     dragStartY.current = e.touches[0].clientY;
     setIsDragging(true);
-  }, [zoomed]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDragging || zoomed) return;
+    if (!isDragging) return;
     const delta = e.touches[0].clientY - dragStartY.current;
-    if (delta > 0) {
-      setTranslateY(delta);
-    }
-  }, [isDragging, zoomed]);
+    if (delta > 0) setTranslateY(delta);
+  }, [isDragging]);
 
   const handleTouchEnd = useCallback(() => {
     setIsDragging(false);
-    if (translateY > 150) {
-      onClose();
-    } else {
-      setTranslateY(0);
-    }
+    if (translateY > 120) onClose();
+    else setTranslateY(0);
   }, [translateY, onClose]);
-
-  // Mouse drag down to close
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoomed) return;
-    if ((e.target as HTMLElement).closest('button')) return;
-    dragStartY.current = e.clientY;
-    setIsDragging(true);
-  }, [zoomed]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging || zoomed) return;
-    const delta = e.clientY - dragStartY.current;
-    if (delta > 0) {
-      setTranslateY(delta);
-    }
-  }, [isDragging, zoomed]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    if (translateY > 150) {
-      onClose();
-    } else {
-      setTranslateY(0);
-    }
-  }, [isDragging, translateY, onClose]);
 
   if (!isOpen || !imageUrl) return null;
 
@@ -104,34 +62,30 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   };
 
   const bgOpacity = Math.max(0, 1 - translateY / 400);
+  const imgOpacity = Math.max(0, 1 - translateY / 250);
 
   return createPortal(
     <div
-      id="image-lightbox-portal"
       role="dialog"
       aria-modal="true"
       aria-label={fileName || 'Image preview'}
       className="fixed inset-0 w-screen h-screen flex items-center justify-center m-0 p-0 select-none"
       style={{
         zIndex: 999999,
-        backgroundColor: `rgba(0,0,0,${0.9 * bgOpacity})`,
-        backdropFilter: `blur(${Math.max(0, 8 - translateY / 20)}px)`,
+        backgroundColor: `rgba(0,0,0,${0.92 * bgOpacity})`,
+        backdropFilter: `blur(${Math.max(0, 12 - translateY / 15)}px)`,
         transition: isDragging ? 'none' : 'background-color 0.3s, backdrop-filter 0.3s',
-        cursor: isDragging ? 'grabbing' : 'default',
       }}
       onClick={onClose}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={() => { setIsDragging(false); setTranslateY(0); }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Top Header — hides when zoomed */}
+      {/* Top Header — always visible, never affected by drag/zoom */}
       <div
-        className={`absolute top-0 left-0 right-0 h-16 px-6 flex items-center justify-between text-white z-[1000000] transition-opacity duration-200 ${zoomed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)' }}
+        className="absolute top-0 left-0 right-0 h-16 px-6 flex items-center justify-between text-white"
+        style={{ zIndex: 1000001, background: 'linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)' }}
+        onClick={(e) => e.stopPropagation()}
       >
         <span className="text-sm font-medium text-slate-200 truncate">{fileName || 'Media Preview'}</span>
         <div className="flex items-center gap-2">
@@ -151,19 +105,16 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         </div>
       </div>
 
-      {/* Image */}
+      {/* Image — only this element transforms */}
       <img
-        ref={imgRef}
         src={imageUrl}
         alt={fileName || 'Enlarged media'}
         className="max-w-[75vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl select-none"
         style={{
-          transform: `scale(${zoomed ? 2.5 : 1.05}) translateY(${translateY}px)`,
-          transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
-          opacity: bgOpacity,
-          cursor: zoomed ? 'zoom-out' : 'zoom-in',
+          transform: `translateY(${translateY}px)`,
+          transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s',
+          opacity: imgOpacity,
         }}
-        onClick={(e) => { e.stopPropagation(); setZoomed(!zoomed); }}
       />
     </div>,
     document.body
