@@ -374,7 +374,7 @@ export const App: React.FC = () => {
       text,
       ciphertext: payload.ciphertext,
       iv: payload.iv,
-      timestamp: payload.timestamp,
+      timestamp: payload.timestamp || Date.now(),
       status: 'received' as const,
       isDecrypted,
       isEdited: payload.isEdited,

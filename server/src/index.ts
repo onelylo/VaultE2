@@ -1131,7 +1131,7 @@ io.on('connection', (socket) => {
     if (recipientId) {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
-        io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId });
+        io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId, timestamp: payload.timestamp || Date.now() });
         console.log(`[DM] Relayed to ${recipient.username} (${recipient.socketId})`);
       } else {
         console.log(`[DM] Recipient ${recipientId} offline — stored in PostgreSQL for later fetch`);
@@ -1197,7 +1197,7 @@ io.on('connection', (socket) => {
     });
 
     // Broadcast to all other connected clients
-    socket.broadcast.emit('channel:message:receive', { ...payload, id: messageId });
+    socket.broadcast.emit('channel:message:receive', { ...payload, id: messageId, timestamp: payload.timestamp || Date.now() });
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
