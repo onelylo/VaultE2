@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Download, X, Loader2, ImageIcon, File as FileIcon, AlertTriangle } from 'lucide-react';
+import { FileText, Download, X, Loader2, ImageIcon, File as FileIcon, AlertTriangle, Play } from 'lucide-react';
 import type { LocalMessage } from '../types/chat';
 import {
   downloadEncryptedAttachment,
   formatFileSize,
 } from '../lib/attachments';
 import { decryptBinaryData } from '../lib/crypto';
+import { AudioPlayer } from './AudioPlayer';
 
 interface AttachmentMessageProps {
   message: LocalMessage;
@@ -17,6 +18,7 @@ interface AttachmentMessageProps {
 export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, isMe, resolveKey, onImageClick }) => {
   const [isPreparing, setIsPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const createdUrls = useRef<Set<string>>(new Set());
 
   const meta = message.attachmentMeta;
@@ -28,6 +30,8 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
      fileName.toLowerCase().endsWith('.webp') ? 'image/webp' :
      'application/octet-stream');
   const isImage = inferredMimeType.startsWith('image/');
+  const isAudio = inferredMimeType.startsWith('audio/') ||
+    /\.(mp3|wav|m4a|ogg|webm)$/i.test(fileName);
 
   const trackUrl = (url: string) => {
     createdUrls.current.add(url);
@@ -216,6 +220,61 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
         >
           <Download className="w-3.5 h-3.5" />
         </button>
+
+        {error && (
+          <p className="mt-1 text-[10px] flex items-center space-x-1" style={{ color: '#f87171' }}>
+            <AlertTriangle className="w-3 h-3" />
+            <span>{error}</span>
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (isAudio) {
+    return (
+      <div className="relative group/att">
+        {audioUrl ? (
+          <AudioPlayer src={audioUrl} fileName={meta.fileName} />
+        ) : (
+          <button
+            onClick={async () => {
+              const token = localStorage.getItem('vaultchat_jwt');
+              const key = await resolveKey(message);
+              if (!token || !key || !message.attachment) {
+                setError('Decryption key unavailable');
+                return;
+              }
+              try {
+                setIsPreparing(true);
+                const ciphertext = await downloadEncryptedAttachment(token, message.attachment.attachmentId);
+                const decrypted = await decryptBinaryData(ciphertext, message.attachment.binaryIv, key);
+                const blob = new Blob([decrypted], { type: inferredMimeType });
+                setAudioUrl(trackUrl(URL.createObjectURL(blob)));
+              } catch (e) {
+                console.error('[Audio] Decrypt error:', e);
+                setError('Failed to decrypt audio.');
+              } finally {
+                setIsPreparing(false);
+              }
+            }}
+            disabled={isPreparing}
+            className="flex items-center space-x-3 rounded-xl p-3 min-w-[240px] max-w-[300px] transition-smooth"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--bg-app) 60%, transparent)', border: '1px solid var(--border-color)' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+          >
+            <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)' }}>
+              {isPreparing ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--accent-primary)' }} /> : <Play className="w-5 h-5 ml-0.5" style={{ color: 'var(--accent-primary)' }} />}
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                {formatFileSize(meta.fileSize)} · Click to play
+              </p>
+            </div>
+          </button>
+        )}
 
         {error && (
           <p className="mt-1 text-[10px] flex items-center space-x-1" style={{ color: '#f87171' }}>

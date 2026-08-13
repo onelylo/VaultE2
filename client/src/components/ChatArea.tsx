@@ -3,14 +3,16 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import {
   Lock, Shield, Check, CheckCheck, Clock, ShieldAlert, X,
-  MoreVertical, Edit2, Trash2, Paperclip, Send, FileText, Loader2, Smile, Reply,
-  Search, Menu, Info, ShieldCheck, Camera,
+  Edit2, Trash2, Trash, Paperclip, Send, FileText, Loader2, Smile, Reply,
+  Search, Menu, Info, ShieldCheck, Camera, Mic, Pencil,
 } from 'lucide-react';
 import type { User, Channel, LocalMessage, UserKeyPair } from '../types/chat';
 import { AttachmentMessage } from './AttachmentMessage';
 import { EmojiPicker } from './EmojiPicker';
 import { ImageLightboxModal } from './modals/ImageLightboxModal';
+import { ConfirmModal } from './modals/ConfirmModal';
 import { ProfileModal } from './ProfileModal';
+import { MessageItem } from './chat/MessageItem';
 import { MAX_ATTACHMENT_BYTES, formatFileSize, generateImageThumbnail } from '../lib/attachments';
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -46,35 +48,6 @@ interface ChatAreaProps {
   onToggleSidebar?: () => void;
 }
 
-const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) => {
-  if (status === 'pending_sync') {
-    return (
-      <span title="Queued locally — will send when online">
-        <Clock className="w-3 h-3 text-slate-500" />
-      </span>
-    );
-  }
-  if (status === 'read') {
-    return (
-      <span title="Seen by recipient">
-        <CheckCheck className="w-3 h-3 text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.6)]" />
-      </span>
-    );
-  }
-  if (status === 'delivered') {
-    return (
-      <span title="Delivered to recipient device">
-        <CheckCheck className="w-3 h-3 text-slate-400" />
-      </span>
-    );
-  }
-  return (
-    <span title="Sent to server relay">
-      <Check className="w-3 h-3 text-slate-500" />
-    </span>
-  );
-};
-
 export const ChatArea: React.FC<ChatAreaProps> = ({
   selectedUser,
   selectedChannel,
@@ -109,8 +82,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
 
@@ -124,6 +95,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string } | null>(null);
   const [inspectedUser, setInspectedUser] = useState<User | null>(null);
+  const [pendingDeleteForMeId, setPendingDeleteForMeId] = useState<string | null>(null);
+  const [pendingDeleteEveryoneId, setPendingDeleteEveryoneId] = useState<string | null>(null);
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -160,14 +139,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages?.length]);
-
-  useEffect(() => {
-    const handleOutsideClick = () => setActiveMenuId(null);
-    if (activeMenuId) {
-      window.addEventListener('click', handleOutsideClick);
-      return () => window.removeEventListener('click', handleOutsideClick);
-    }
-  }, [activeMenuId]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -249,6 +220,74 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     textareaRef.current?.focus();
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = new File([blob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
+        onSendFiles([file]);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
+    } catch (err) {
+      console.error('[Voice] Mic access denied:', err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    audioChunksRef.current = [];
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
+
+  const handleConfirmDeleteForMe = async () => {
+    if (!pendingDeleteForMeId) return;
+    const targetId = pendingDeleteForMeId;
+    if (db?.messages) await db.messages.delete(targetId);
+    setPendingDeleteForMeId(null);
+  };
+
+  const handleConfirmDeleteEveryone = () => {
+    if (!pendingDeleteEveryoneId) return;
+    onDeleteForEveryone?.(pendingDeleteEveryoneId);
+    setPendingDeleteEveryoneId(null);
+  };
+
   const handleStartReply = (msg: LocalMessage) => {
     const senderName = msg.senderId === currentUserId
       ? 'You'
@@ -256,25 +295,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       ? selectedUser.fullName || selectedUser.username
       : userLookup.get(msg.senderId) || msg.senderId;
     setActiveReply({ msgId: msg.id, senderName, text: msg.text });
-    setActiveMenuId(null);
     textareaRef.current?.focus();
-  };
-
-  const handleToggleMenu = (e: React.MouseEvent, msgId: string) => {
-    e.stopPropagation();
-    if (activeMenuId === msgId) {
-      setActiveMenuId(null);
-    } else {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-      setActiveMenuId(msgId);
-    }
   };
 
   const handleStartEdit = (msg: LocalMessage) => {
     setEditingMsgId(msg.id);
     setEditText(msg.text);
-    setActiveMenuId(null);
   };
 
   const handleSaveEdit = (msgId: string) => {
@@ -290,9 +316,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const isReadOnly = isAnnouncementChannel && userRole === 'MEMBER';
   const canSend = !disabled && !isPreparing && !isReadOnly && (text.trim() || selectedFile);
   const placeholderText = disabled ? 'Select a conversation to start messaging...' : 'Type a message...';
-
-  const activeMsg = messages?.find(m => m.id === activeMenuId);
-  const canEditActive = activeMsg && activeMsg.senderId === currentUserId && !activeMsg.isDeleted && (Date.now() - activeMsg.timestamp <= FIVE_MINUTES_MS);
 
   if (!selectedUser && !selectedChannel) {
     return (
@@ -445,191 +468,31 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </p>
           </div>
         ) : (
-          messages.map(msg => {
-            const isMe = msg.senderId === currentUserId;
-            const timeStr = new Date(msg.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            });
-            const senderName = isMe
-              ? 'YOU'
-              : selectedUser
-              ? selectedUser.fullName || selectedUser.username
-              : userLookup.get(msg.senderId) || msg.senderId;
-
-            const replyToMsg = msg.replyTo ? messages.find(m => m.id === msg.replyTo) : null;
-            const replyToSenderName = replyToMsg
-              ? replyToMsg.senderId === currentUserId
-                ? 'You'
-                : selectedUser
-                ? selectedUser.fullName || selectedUser.username
-                : userLookup.get(replyToMsg.senderId) || replyToMsg.senderId
-              : null;
-
-            return (
-              <div
-                key={msg.id}
-                id={`msg-${msg.id}`}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-xl ${
-                  isMe ? 'ml-auto' : 'mr-auto'
-                } relative group`}
-              >
-                <div className="flex items-center space-x-2 mb-1 px-1 font-mono text-[10px] text-[var(--text-muted)]">
-                  <span className="font-semibold text-[var(--text-muted)]">{senderName}</span>
-                  <span>&middot;</span>
-                  <span>{timeStr}</span>
-                </div>
-
-                <div className="relative flex items-center space-x-1">
-                  {!msg.isDeleted && editingMsgId !== msg.id && (
-                    <button
-                      onClick={() => handleStartReply(msg)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-opacity"
-                      title="Reply"
-                    >
-                      <Reply className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {isMe && !msg.isDeleted && (
-                    <button
-                      onClick={(e) => handleToggleMenu(e, msg.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-opacity"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-
-                  <div
-                    className={`relative px-4 py-3 rounded-2xl border text-sm shadow-md leading-relaxed max-w-full ${
-                      msg.isDeleted
-                        ? 'bg-[var(--bg-surface)]/60 border-[var(--border-color)] text-[var(--text-muted)] italic'
-                        : isMe
-                        ? 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-main)] rounded-tr-sm'
-                        : 'bg-[var(--bg-card)] border-[var(--bg-surface)] text-[var(--text-main)] rounded-tl-sm'
-                    } ${msg.status === 'pending_sync' ? 'opacity-70' : 'opacity-100'}`}
-                  >
-                    {editingMsgId === msg.id ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={editText}
-                          onChange={e => setEditText(e.target.value)}
-                          className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg p-2 text-xs text-[var(--text-main)] focus:outline-none font-sans"
-                          rows={2}
-                        />
-                        <div className="flex justify-end space-x-2 font-mono text-xs">
-                          <button
-                            onClick={() => setEditingMsgId(null)}
-                            className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleSaveEdit(msg.id)}
-                            className="px-3 py-1 bg-[var(--accent-primary)] text-[var(--accent-text)] font-bold rounded-md"
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {replyToMsg && replyToSenderName && (
-                          <div
-                            onClick={() => {
-                              const el = document.getElementById(`msg-${replyToMsg.id}`);
-                              if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                el.classList.add('ring-2', 'ring-[var(--accent-primary)]', 'transition-all');
-                                setTimeout(() => el.classList.remove('ring-2', 'ring-[var(--accent-primary)]'), 1500);
-                              }
-                            }}
-                            className="p-2.5 rounded-lg bg-[var(--bg-app)]/80 border-l-4 border-[var(--accent-primary)] text-xs cursor-pointer hover:bg-[var(--hover-color)] transition-colors mb-2 select-none"
-                          >
-                            <span className="font-semibold text-[var(--accent-primary)] block mb-0.5">
-                              {replyToSenderName}
-                            </span>
-                            <p className="text-[var(--text-muted)] line-clamp-2 break-all flex items-center gap-1">
-                              {(replyToMsg.attachment as any)?.type?.startsWith('image/') ? (
-                                <span className="flex items-center gap-1"><Camera className="w-3 h-3"/> Photo</span>
-                              ) : replyToMsg.attachment ? (
-                                <span className="flex items-center gap-1"><Paperclip className="w-3 h-3"/> Attachment</span>
-                              ) : null}
-                              <span>{replyToMsg.text || (replyToMsg.attachment as any)?.name}</span>
-                            </p>
-                          </div>
-                        )}
-
-                        {!msg.isDeleted && msg.attachment && (
-                          <div className={msg.text ? 'mb-2' : ''}>
-                            <AttachmentMessage
-                              message={msg}
-                              isMe={isMe}
-                              resolveKey={resolveMessageKey}
-                              onImageClick={(url, name) => setActiveLightbox({ url, name })}
-                            />
-                          </div>
-                        )}
-
-                        {(msg.text || !msg.attachment) && (
-                          <p className="break-words whitespace-pre-wrap">
-                            {msg.isDecrypted ? msg.text : 'Unable to decrypt message'}
-                          </p>
-                        )}
-
-                        {msg.isEdited && !msg.isDeleted && (
-                          <span className="ml-2 text-[10px] font-mono text-[var(--text-muted)] italic">
-                            (edited)
-                          </span>
-                        )}
-
-                        <div className="mt-1.5 flex items-center justify-end space-x-1.5">
-                          <Lock className="w-2.5 h-2.5 text-emerald-500/60" />
-                          {isMe && <DeliveryIcon status={msg.status} />}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            );
-          })
+          messages.map(msg => (
+            <MessageItem
+              key={msg.id}
+              msg={msg}
+              currentUserId={currentUserId}
+              selectedUser={selectedUser}
+              selectedChannel={selectedChannel}
+              messages={messages}
+              userLookup={userLookup}
+              chatType={selectedChannel ? 'channel' : 'dm'}
+              editingMsgId={editingMsgId}
+              editText={editText}
+              setEditText={setEditText}
+              setEditingMsgId={setEditingMsgId}
+              handleSaveEdit={handleSaveEdit}
+              handleStartReply={handleStartReply}
+              handleStartEdit={handleStartEdit}
+              setPendingDeleteForMeId={setPendingDeleteForMeId}
+              setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
+              resolveKey={resolveMessageKey}
+              onImageClick={(url, name) => setActiveLightbox({ url, name })}
+            />
+          ))
         )}
       </div>
-
-      {activeMenuId && activeMsg && (
-        <div
-          style={{ top: `${menuPos.top}px`, right: `${menuPos.right}px` }}
-          className="fixed w-44 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-2xl z-[9999] p-1 font-mono text-xs space-y-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {canEditActive && (
-            <button
-              onClick={() => handleStartEdit(activeMsg)}
-              className="w-full text-left px-3 py-2 text-[var(--text-main)] hover:bg-[var(--bg-card)] rounded-lg flex items-center space-x-2"
-            >
-              <Edit2 className="w-3.5 h-3.5 text-sky-400" />
-              <span>Edit Message (5m)</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => { onDeleteForMe(activeMsg.id); setActiveMenuId(null); }}
-            className="w-full text-left px-3 py-2 text-[var(--text-main)] hover:bg-[var(--bg-card)] rounded-lg flex items-center space-x-2"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-            <span>Delete for Me</span>
-          </button>
-
-          <button
-            onClick={() => { onDeleteForEveryone(activeMsg.id); setActiveMenuId(null); }}
-            className="w-full text-left px-3 py-2 text-rose-400 hover:bg-rose-500/10 rounded-lg flex items-center space-x-2"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-            <span>Delete for Everyone</span>
-          </button>
-        </div>
-      )}
 
       <div className="mx-4 mb-4">
         {activeReply && (
@@ -726,6 +589,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <Paperclip className="h-5 w-5" />
           </button>
 
+          {!isReadOnly && !isRecording && (
+            <button
+              type="button"
+              onClick={startRecording}
+              className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card)] active:scale-95 transition-all"
+              title="Record voice message"
+            >
+              <Mic className="h-5 w-5" />
+            </button>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -734,7 +608,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           />
 
           <div className="flex-1 min-w-0">
-            {isReadOnly ? (
+            {isRecording ? (
+              <div className="flex items-center gap-3 py-2.5 px-3">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-sm font-mono text-[var(--text-main)]">
+                  {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+                </span>
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                  title="Cancel recording"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : isReadOnly ? (
               <div className="py-2.5 px-3 text-sm text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] text-center">
                 Only Admins and Supervisors can post in this announcement channel.
               </div>
@@ -752,14 +641,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
 
           {!isReadOnly && (
-            <button
-              type="submit"
-              disabled={!canSend}
-              className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-[var(--accent-primary)] hover:opacity-90 text-[var(--accent-text)] font-bold active:scale-95 disabled:opacity-30 transition-all"
-              title={canSend ? (selectedFile ? 'Send file' : 'Send message') : 'Type a message to send'}
-            >
-              <Send className="h-5 w-5" />
-            </button>
+            isRecording ? (
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold active:scale-95 transition-all animate-pulse"
+                title="Stop recording"
+              >
+                <Mic className="h-5 w-5" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSend}
+                className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-[var(--accent-primary)] hover:opacity-90 text-[var(--accent-text)] font-bold active:scale-95 disabled:opacity-30 transition-all"
+                title={canSend ? (selectedFile ? 'Send file' : 'Send message') : 'Type a message to send'}
+              >
+                <Send className="h-5 w-5" />
+              </button>
+            )
           )}
         </form>
 
@@ -784,6 +684,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           onClose={() => setInspectedUser(null)}
         />
       )}
+
+      <ConfirmModal
+        isOpen={!!pendingDeleteForMeId}
+        title="Delete message for yourself?"
+        description="This message will be removed permanently from your local device. Other participants will still see it."
+        confirmLabel="Delete for me"
+        isDangerous={true}
+        onConfirm={handleConfirmDeleteForMe}
+        onClose={() => setPendingDeleteForMeId(null)}
+      />
+
+      <ConfirmModal
+        isOpen={!!pendingDeleteEveryoneId}
+        title="Delete message for everyone?"
+        description="This message will be permanently deleted for all participants in this chat. This action cannot be undone."
+        confirmLabel="Delete for everyone"
+        isDangerous={true}
+        onConfirm={handleConfirmDeleteEveryone}
+        onClose={() => setPendingDeleteEveryoneId(null)}
+      />
     </div>
   );
 };

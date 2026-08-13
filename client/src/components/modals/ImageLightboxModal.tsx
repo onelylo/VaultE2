@@ -48,15 +48,15 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         </button>
       </div>
 
-      {/* Centered Image */}
+      {/* Centered Image Container with Balanced Bounds */}
       <div
-        className="relative w-full h-full flex items-center justify-center p-4"
+        className="relative max-w-4xl max-h-[80vh] flex items-center justify-center p-4 transition-transform duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <img
           src={imageUrl}
           alt={fileName || 'Enlarged media'}
-          className="max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain rounded-lg shadow-2xl border border-white/10 select-none"
+          className="max-w-[75vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl border border-white/10 select-none ring-1 ring-black/50"
         />
       </div>
     </div>,

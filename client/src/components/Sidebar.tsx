@@ -50,6 +50,7 @@ interface SidebarProps {
   onOpenChannelSettings: (channel: Channel) => void;
   unreadDMs?: Record<string, number>;
   unreadChannels?: Record<string, number>;
+  recentDMs?: User[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -75,6 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenChannelSettings,
   unreadDMs = {},
   unreadChannels = {},
+  recentDMs = [],
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
@@ -92,7 +94,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : otherUsers.filter(u => activeDMPartners.includes(u.userId));
+    : (() => {
+        // Merge recentDMs (instant) with activeDMPartners (Dexie-backed)
+        const recentIds = new Set(recentDMs.map(u => u.userId));
+        const dexieMatches = otherUsers.filter(u => activeDMPartners.includes(u.userId) && !recentIds.has(u.userId));
+        // recentDMs first (already ordered by most recent), then Dexie matches
+        return [...recentDMs.filter(u => otherUsers.some(o => o.userId === u.userId)), ...dexieMatches];
+      })();
 
   const filteredChannels = channels.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())

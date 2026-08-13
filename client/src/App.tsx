@@ -163,7 +163,13 @@ export const App: React.FC = () => {
 
   // ── Directory & Presence ─────────────────────────────────────────────────────
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const allUsersRef = useRef<User[]>([]);
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+
+  // Always keep allUsersRef synchronized with latest state
+  useEffect(() => {
+    allUsersRef.current = allUsers;
+  }, [allUsers]);
 
   // ── Navigation & Workspace State ──────────────────────────────────────────────
   const [activeView, setActiveView] = useState<'channels' | 'dms'>('dms');
@@ -199,6 +205,44 @@ export const App: React.FC = () => {
   const networkStatus = useNetworkStatus(socket, currentUserKeys?.userId);
   const { isOffline, pendingCount } = networkStatus;
   const isFlushing = useRef(false);
+
+  // ── Recent DMs (instant sidebar updates) ─────────────────────────────────────
+  const [recentDMs, setRecentDMs] = useState<User[]>([]);
+
+  const upsertDMConversation = useCallback((peer: User, lastMessageText: string) => {
+    setRecentDMs(prev => {
+      const filtered = prev.filter(u => u.userId !== peer.userId);
+      const updatedUser: User = {
+        ...peer,
+        isOnline: onlineIds.has(peer.userId),
+      };
+      return [updatedUser, ...filtered];
+    });
+  }, [onlineIds]);
+
+  // ── On-Demand Public Key Fetch ───────────────────────────────────────────────
+  const fetchUserPublicKey = useCallback(async (userId: string): Promise<string | null> => {
+    const token = localStorage.getItem('vaultchat_jwt');
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const freshUsers: User[] = data.users || [];
+      setAllUsers(prev => {
+        const merged = [...prev];
+        for (const u of freshUsers) {
+          const idx = merged.findIndex(m => m.userId === u.userId);
+          if (idx >= 0) merged[idx] = { ...merged[idx], ...u };
+          else merged.push(u);
+        }
+        return merged;
+      });
+      return freshUsers.find(u => u.userId === userId)?.publicKey || null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // ── Helpers: Derive Shared ECDH Key for DMs ──────────────────────────────────
   const getOrDeriveSharedKey = useCallback(
@@ -272,7 +316,7 @@ export const App: React.FC = () => {
   // ── Helper: Decrypt an EncryptedPayload into a LocalMessage ─────────────────
   const decryptPayload = useCallback(async (payload: EncryptedPayload, usersSource?: User[]): Promise<LocalMessage | null> => {
     if (!currentUserKeys) return null;
-    const directory = usersSource || allUsers;
+    const directory = usersSource || allUsersRef.current;
     let key: CryptoKey | null = null;
 
     if (payload.channelId) {
@@ -280,10 +324,20 @@ export const App: React.FC = () => {
     } else {
       const peerId = payload.senderId === currentUserKeys.userId ? payload.recipientId : payload.senderId;
       if (!peerId) return null;
-      const peerPublicKey = peerId === currentUserKeys.userId
+      let peerPublicKey = peerId === currentUserKeys.userId
         ? currentUserKeys.publicKeyBase64
         : directory.find(u => u.userId === peerId)?.publicKey;
+
+      // FALLBACK: If user or public key is missing from state, fetch directly from API
+      if (!peerPublicKey && peerId !== currentUserKeys.userId) {
+        const fetched = await fetchUserPublicKey(peerId);
+        if (fetched) peerPublicKey = fetched;
+      }
+
       if (peerPublicKey) key = await getOrDeriveSharedKey(peerId, peerPublicKey);
+      else if (peerId !== currentUserKeys.userId) {
+        console.error(`[E2EE] Cannot decrypt: missing public key for ${peerId}`);
+      }
     }
     if (!key) return null;
 
@@ -328,7 +382,7 @@ export const App: React.FC = () => {
       attachment: payload.attachment,
       attachmentMeta,
     };
-  }, [currentUserKeys, allUsers, getOrDeriveSharedKey, getOrGenerateChannelKey]);
+  }, [currentUserKeys, getOrDeriveSharedKey, getOrGenerateChannelKey, fetchUserPublicKey]);
 
   // ── Helper: Resolve the AES-GCM key for a stored local message (for attachments)
   const resolveMessageKey = useCallback(async (msg: LocalMessage): Promise<CryptoKey | null> => {
@@ -336,17 +390,17 @@ export const App: React.FC = () => {
     if (msg.channelId) return await getOrGenerateChannelKey(msg.channelId);
     const peerId = msg.senderId === currentUserKeys.userId ? msg.recipientId : msg.senderId;
     if (!peerId) return null;
-    const peer = allUsers.find(u => u.userId === peerId);
+    const peer = allUsersRef.current.find(u => u.userId === peerId);
     if (!peer?.publicKey) return null;
     return await getOrDeriveSharedKey(peerId, peer.publicKey);
-  }, [currentUserKeys, privateKeyObject, allUsers, getOrDeriveSharedKey, getOrGenerateChannelKey]);
+  }, [currentUserKeys, privateKeyObject, getOrDeriveSharedKey, getOrGenerateChannelKey]);
 
   // ── Full History Rehydration (GET /api/messages) ────────────────────────────
   const fetchAllHistory = useCallback(async (token: string) => {
     if (!currentUserKeys) return;
     try {
       // Fetch the directory fresh so decryption doesn't depend on UI state timing
-      let usersSource: User[] = allUsers;
+      let usersSource: User[] = allUsersRef.current;
       try {
         const usersRes = await fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
         if (usersRes.ok) {
@@ -378,7 +432,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error('[History] Global history fetch error:', e);
     }
-  }, [currentUserKeys, allUsers, decryptPayload]);
+  }, [currentUserKeys, decryptPayload]);
 
   // ── TOFU Key Pinning & Signed Rotation Chain Verification ────────────────────
   const validatePeerKeyTofu = useCallback(async (peer: User): Promise<boolean> => {
@@ -926,6 +980,12 @@ export const App: React.FC = () => {
       if (!localMsg) return;
       await saveMessage(localMsg);
 
+      // Instant DM list update — move sender to top of sidebar
+      const senderUser = allUsersRef.current.find(u => u.userId === payload.senderId);
+      if (senderUser) {
+        upsertDMConversation(senderUser, localMsg.text || 'Attachment');
+      }
+
       // 1. Emit delivery receipt back to server
       socket.emit('message:delivered', { messageId: payload.id, senderId: payload.senderId });
 
@@ -976,8 +1036,9 @@ export const App: React.FC = () => {
 
     const onMessageEdited = async ({ id, newCiphertext, newIv }: { id: string; newCiphertext: string; newIv: string }) => {
       let decryptedText = '🔒 Unable to decrypt edited message';
-      if (selectedPeer?.publicKey) {
-        const sharedKey = await getOrDeriveSharedKey(selectedPeer.userId, selectedPeer.publicKey);
+      const peer = selectedPeerRef.current;
+      if (peer?.publicKey) {
+        const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
         if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
       }
       await editMessageLocally(id, decryptedText, newCiphertext, newIv);
@@ -993,6 +1054,21 @@ export const App: React.FC = () => {
       if (token) await fetchUserDirectory(token);
     };
 
+    // Reactive roster: a user just came online — add their full data to allUsers
+    // so E2EE decryption works for messages and attachments
+    const onUserOnline = (user: User) => {
+      setAllUsers(prev => {
+        const existing = prev.find(u => u.userId === user.userId);
+        if (existing) {
+          // Update existing user with fresh data (public key may have changed)
+          return prev.map(u => u.userId === user.userId ? { ...u, ...user, isOnline: true } : u);
+        }
+        // New user — add them
+        return [...prev, { ...user, isOnline: true }];
+      });
+      setOnlineIds(prev => new Set([...prev, user.userId]));
+    };
+
     // Reactive roster: presence changed — update online set instantly.
     const onUserStatusChange = (data: { userId: string; isOnline: boolean }) => {
       setOnlineIds(prev => {
@@ -1001,6 +1077,16 @@ export const App: React.FC = () => {
         else next.delete(data.userId);
         return next;
       });
+      // If a user came online but we don't have their full data, fetch the directory
+      if (data.isOnline) {
+        setAllUsers(prev => {
+          if (!prev.find(u => u.userId === data.userId)) {
+            const token = localStorage.getItem('vaultchat_jwt');
+            if (token) fetchUserDirectory(token);
+          }
+          return prev;
+        });
+      }
     };
 
     // Peer rotated their identity key — re-validate the signed chain locally.
@@ -1088,6 +1174,7 @@ export const App: React.FC = () => {
     socket.on('message:edited', onMessageEdited);
     socket.on('message:deleted', onMessageDeleted);
     socket.on('user:registered', onUserRegistered);
+    socket.on('user:online', onUserOnline);
     socket.on('user:status_change', onUserStatusChange);
     socket.on('user:key_rotated', onUserKeyRotated);
     socket.on('user:removed', onUserRemoved);
@@ -1158,6 +1245,7 @@ export const App: React.FC = () => {
       socket.off('message:edited', onMessageEdited);
       socket.off('message:deleted', onMessageDeleted);
       socket.off('user:registered', onUserRegistered);
+      socket.off('user:online', onUserOnline);
       socket.off('user:status_change', onUserStatusChange);
       socket.off('user:key_rotated', onUserKeyRotated);
       socket.off('user:removed', onUserRemoved);
@@ -1169,7 +1257,7 @@ export const App: React.FC = () => {
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
     };
-  }, [currentUserKeys, privateKeyObject, allUsers, selectedPeer, getOrDeriveSharedKey, getOrGenerateChannelKey, decryptPayload, fetchUserDirectory, validatePeerKeyTofu]);
+  }, [currentUserKeys, privateKeyObject, getOrDeriveSharedKey, getOrGenerateChannelKey, decryptPayload, fetchUserDirectory, validatePeerKeyTofu]);
 
   // ── Ctrl+K Search Shortcut ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1523,6 +1611,8 @@ export const App: React.FC = () => {
       const { ciphertext, iv } = await encryptMessage(text, sharedKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
       await saveMessage(localMsg);
+      // Instant DM list update — move peer to top of sidebar
+      upsertDMConversation(selectedPeer, text);
       if (!isOffline) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, ciphertext, iv, timestamp, replyTo });
       }
@@ -1693,6 +1783,7 @@ export const App: React.FC = () => {
             onLogout={handleLogout}
             unreadDMs={unreadDMs}
             unreadChannels={unreadChannels}
+            recentDMs={recentDMs}
           />
           </div>
         </>

@@ -997,6 +997,20 @@ io.on('connection', (socket) => {
     const directory = await buildUserDirectory(data.userId).catch(() => []);
     socket.emit('users:directory', directory);
 
+    // Broadcast the new user's full data to ALL other connected clients
+    // so they have the public key for E2EE decryption
+    const fullUser = {
+      userId: activeUser.userId,
+      username: activeUser.username,
+      fullName: activeUser.fullName,
+      email: activeUser.email,
+      role: activeUser.role,
+      avatarUrl: activeUser.avatarUrl,
+      publicKey: activeUser.publicKey,
+      isOnline: true,
+    };
+    socket.broadcast.emit('user:online', fullUser);
+
     // Broadcast updated presence list to everyone
     const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true }));
     io.emit('users:presence', presence);
