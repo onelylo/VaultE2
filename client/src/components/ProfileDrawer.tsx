@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { UserKeyPair } from '../types/chat';
 import { ConfirmModal } from './modals/ConfirmModal';
+import { API_BASE } from '../lib/attachments';
 
 interface ProfileDrawerProps {
   currentUser: UserKeyPair;
@@ -116,7 +117,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       if (avatarUrl?.startsWith('data:')) {
         const token = localStorage.getItem('vaultchat_jwt');
         if (token) {
-          const res = await fetch('/api/users/me/avatar', {
+          const res = await fetch(`${API_BASE}/api/users/me/avatar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ avatarData: avatarUrl }),
@@ -146,7 +147,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     setPasswordSaving(true);
     try {
       const token = localStorage.getItem('vaultchat_jwt');
-      const res = await fetch('/api/auth/password', {
+      const res = await fetch(`${API_BASE}/api/auth/password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword, newPassword }),

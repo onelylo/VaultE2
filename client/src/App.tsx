@@ -83,7 +83,7 @@ function setJwtToken(token: string) {
   }
 }
 function removeJwtToken() {
-  removeJwtToken();
+  localStorage.removeItem('vaultchat_jwt');
   sessionStorage.removeItem('vaultchat_jwt');
 }
 import { AuthModal } from './components/AuthModal';
@@ -243,11 +243,13 @@ export const App: React.FC = () => {
   const getOrDeriveSharedKey = useCallback(
     async (peerUserId: string, peerPublicKeyBase64: string): Promise<CryptoKey | null> => {
       if (!privateKeyObject) return null;
-      if (sharedKeysCache.has(peerUserId)) return sharedKeysCache.get(peerUserId)!;
+      // Cache key by peerId + publicKey so key rotation invalidates the cache
+      const cacheKey = `${peerUserId}:${peerPublicKeyBase64.slice(0, 16)}`;
+      if (sharedKeysCache.has(cacheKey)) return sharedKeysCache.get(cacheKey)!;
       try {
         const peerPubKey = await importPublicKey(peerPublicKeyBase64);
         const derivedKey = await deriveSharedKey(privateKeyObject, peerPubKey);
-        setSharedKeysCache(prev => new Map(prev).set(peerUserId, derivedKey));
+        setSharedKeysCache(prev => new Map(prev).set(cacheKey, derivedKey));
         return derivedKey;
       } catch (err) {
         console.error('[E2EE] Failed to derive shared key:', err);
@@ -374,6 +376,7 @@ export const App: React.FC = () => {
       isDecrypted,
       isEdited: payload.isEdited,
       isDeleted: payload.isDeleted,
+      replyTo: payload.replyTo,
       attachment: payload.attachment,
       attachmentMeta,
     };
@@ -997,7 +1000,7 @@ export const App: React.FC = () => {
         upsertDMConversation(senderUser, localMsg.text || 'Attachment');
       } else {
         // Fallback: search the state directly if ref is stale, or create placeholder
-        const fallbackUser = allUsers.find(u => u.userId === payload.senderId);
+        const fallbackUser = allUsersRef.current.find(u => u.userId === payload.senderId);
         if (fallbackUser) {
           upsertDMConversation(fallbackUser, localMsg.text || 'Attachment');
         }

@@ -847,7 +847,7 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
   try {
     // M10: Verify uploader is a channel member
     const members = await getChannelMembers(channelId);
-    const isMember = members.some((m: any) => m.userId === userId);
+    const isMember = members.includes(userId);
     if (!isMember) {
       return res.status(403).json({ error: 'Not a channel member' });
     }
@@ -1373,30 +1373,38 @@ io.on('connection', (socket) => {
   });
 
   socket.on('message:unpin', async (data: { channelId: string; messageId: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
     await unpinMessage(data.channelId, data.messageId).catch(e => console.error('[Unpin] Error:', e));
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
     io.emit('channel:pinned', { channelId: data.channelId, pinned });
   });
 
-  // Typing Indicators
-  socket.on('user:typing', (data: { userId: string; username: string; channelId?: string; recipientId?: string }) => {
+  // Typing Indicators — use authenticated user, never trust client-supplied userId/username
+  socket.on('user:typing', (data: { channelId?: string; recipientId?: string }) => {
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    if (!authenticatedUserId) return;
+    const userData = { userId: authenticatedUserId, username: (socket as any).username || authenticatedUserId, channelId: data.channelId, recipientId: data.recipientId };
     if (data.channelId) {
-      socket.to(`channel:${data.channelId}`).emit('user:typing', data);
+      socket.to(`channel:${data.channelId}`).emit('user:typing', userData);
     } else if (data.recipientId) {
       const recipientSocketId = userToSocket.get(data.recipientId);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit('user:typing', data);
+        io.to(recipientSocketId).emit('user:typing', userData);
       }
     }
   });
 
-  socket.on('user:stop_typing', (data: { userId: string; channelId?: string; recipientId?: string }) => {
+  socket.on('user:stop_typing', (data: { channelId?: string; recipientId?: string }) => {
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    if (!authenticatedUserId) return;
+    const userData = { userId: authenticatedUserId, channelId: data.channelId, recipientId: data.recipientId };
     if (data.channelId) {
-      socket.to(`channel:${data.channelId}`).emit('user:stop_typing', data);
+      socket.to(`channel:${data.channelId}`).emit('user:stop_typing', userData);
     } else if (data.recipientId) {
       const recipientSocketId = userToSocket.get(data.recipientId);
       if (recipientSocketId) {
-        io.to(recipientSocketId).emit('user:stop_typing', data);
+        io.to(recipientSocketId).emit('user:stop_typing', userData);
       }
     }
   });
