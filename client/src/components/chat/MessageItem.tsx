@@ -121,20 +121,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     }
   }, []);
 
-  // Close action menu when clicking anywhere else
+  // Close action menu when clicking outside THIS message row
   React.useEffect(() => {
     if (!showActions) return;
     const handler = (e: MouseEvent) => {
-      // Don't close if clicking inside the menu or the 3-dot button
       const target = e.target as HTMLElement;
-      if (!target.closest('[data-action-menu]')) {
+      // Close if click is outside this message's row
+      if (!target.closest(`#msg-${msg.id}`)) {
         setShowActions(false);
       }
     };
-    // Use mousedown so it fires before click handlers
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showActions]);
+  }, [showActions, msg.id]);
 
   const senderName = isSelf
     ? 'YOU'
