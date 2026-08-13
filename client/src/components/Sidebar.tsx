@@ -48,8 +48,6 @@ interface SidebarProps {
   unreadDMs?: Record<string, number>;
   unreadChannels?: Record<string, number>;
   recentDMs?: User[];
-  dimmedDMId?: string | null;
-  onDimmedDMChange?: (id: string | null) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -76,8 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unreadDMs = {},
   unreadChannels = {},
   recentDMs = [],
-  dimmedDMId,
-  onDimmedDMChange,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
@@ -599,10 +595,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const fp = fingerprints[user.userId] || '...';
               const isOnline = user.isOnline ?? false;
               const unread = unreadDMs[user.userId] || 0;
-              const isDimmed = dimmedDMId === user.userId;
 
               return (
-                <button className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth animate-dimmer"
+                <button className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
                   style={{
                     backgroundColor: isSelected
                       ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)'
