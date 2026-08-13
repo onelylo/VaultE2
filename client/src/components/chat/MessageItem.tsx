@@ -85,16 +85,27 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   // Long-press support for mobile action menu
   const [showActions, setShowActions] = useState(false);
+  const [menuUp, setMenuUp] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressNextClick = useRef(false);
+
+  // Detect if message is near bottom of chat → open menu upward
+  const checkMenuPosition = useCallback(() => {
+    const el = document.getElementById(`msg-${msg.id}`);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    setMenuUp(rect.bottom > viewportH - 200);
+  }, [msg.id]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     suppressNextClick.current = false;
     longPressTimer.current = setTimeout(() => {
+      checkMenuPosition();
       setShowActions(true);
       suppressNextClick.current = true;
     }, 500);
-  }, []);
+  }, [checkMenuPosition]);
 
   const handleTouchEnd = useCallback(() => {
     if (longPressTimer.current) {
@@ -274,9 +285,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         )}
       </div>
 
-      {/* ACTION BUTTONS — Reply + Edit on side, 3-dot for more */}
+      {/* ACTION BUTTONS — Reply + Edit + 3-dot side by side */}
       <div
-        className={`flex flex-col gap-1 transition-all duration-150 z-20 shrink-0 ${
+        className={`flex flex-row gap-1 transition-all duration-150 z-20 shrink-0 ${
           showActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}
       >
@@ -311,7 +322,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           <div className="relative">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
+              onClick={(e) => { e.stopPropagation(); checkMenuPosition(); setShowActions(!showActions); }}
               className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
               style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
               title="More"
@@ -319,10 +330,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
 
-            {/* Dropdown menu */}
+            {/* Dropdown menu — opens upward if near bottom */}
             {showActions && (
               <div
-                className="absolute right-0 top-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[140px] overflow-hidden z-30"
+                className={`absolute right-0 ${menuUp ? 'bottom-full mb-1' : 'top-full mt-1'} bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[140px] overflow-hidden z-30`}
                 style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
               >
                 {/* Copy */}
