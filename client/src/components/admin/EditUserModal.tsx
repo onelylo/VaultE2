@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Shield, Key, UserCheck, AlertTriangle, Lock, RefreshCw } from 'lucide-react';
 
@@ -23,13 +23,24 @@ interface EditUserModalProps {
 }
 
 export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalProps) {
-  if (!isOpen || !user) return null;
-
-  const [role, setRole] = useState(user.role || 'MEMBER');
-  const [fullName, setFullName] = useState(user.fullName || '');
-  const [status, setStatus] = useState(user.status || 'ACTIVE');
+  const [role, setRole] = useState(user?.role || 'MEMBER');
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [status, setStatus] = useState(user?.status || 'ACTIVE');
   const [newPassword, setNewPassword] = useState('');
   const [revokeKeys, setRevokeKeys] = useState(false);
+
+  // Reset state when user prop changes
+  useEffect(() => {
+    if (user) {
+      setRole(user.role || 'MEMBER');
+      setFullName(user.fullName || '');
+      setStatus(user.status || 'ACTIVE');
+      setNewPassword('');
+      setRevokeKeys(false);
+    }
+  }, [user?.id]);
+
+  if (!isOpen || !user) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

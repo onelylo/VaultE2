@@ -268,9 +268,12 @@ async function hashPassword(pwd: string): Promise<string> {
 async function verifyPassword(pwd: string, hash: string): Promise<boolean> {
   // Check if hash is a legacy SHA-256 hash (64 hex chars, no $ prefix)
   if (hash.length === 64 && !hash.startsWith('$')) {
-    // Legacy SHA-256 hash — compare directly
+    // Legacy SHA-256 hash — use timing-safe comparison
     const legacyHash = crypto.createHash('sha256').update(pwd).digest('hex');
-    return legacyHash === hash;
+    const hashBuf = Buffer.from(legacyHash, 'hex');
+    const storedBuf = Buffer.from(hash, 'hex');
+    if (hashBuf.length !== storedBuf.length) return false;
+    return crypto.timingSafeEqual(hashBuf, storedBuf);
   }
   // Modern bcrypt hash
   return bcrypt.compare(pwd, hash);
@@ -1153,12 +1156,14 @@ io.on('connection', (socket) => {
   });
 
   // Channel CRUD
-  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; createdBy: string; isAnnouncement?: boolean; allowedRoles?: string[] }) => {
+  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[] }) => {
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    if (!authenticatedUserId) return;
     // Permission check: only ADMIN can create official/public/announcement channels
-    const creator = activeUsers.get(data.createdBy);
+    const creator = activeUsers.get(authenticatedUserId);
     const creatorRole = creator?.role || 'MEMBER';
     if ((data.type === 'official' || data.type === 'public' || data.isAnnouncement) && creatorRole !== 'ADMIN') {
-      console.log(`[Channel] Rejected: ${data.createdBy} tried to create ${data.type} channel (requires ADMIN)`);
+      console.log(`[Channel] Rejected: ${authenticatedUserId} tried to create ${data.type} channel (requires ADMIN)`);
       return;
     }
     
@@ -1170,7 +1175,7 @@ io.on('connection', (socket) => {
       name: data.name.toLowerCase(),
       description: data.description,
       type: data.type,
-      createdBy: data.createdBy,
+      createdBy: authenticatedUserId,
       createdAt: Date.now(),
       isAnnouncement: data.isAnnouncement || false,
       allowedRoles: data.allowedRoles || ['ADMIN', 'SUPERVISOR', 'MEMBER'],
@@ -1188,7 +1193,10 @@ io.on('connection', (socket) => {
 
   // Direct Message Send — persisted to PostgreSQL
   socket.on('message:send', async (payload: StoredMessage) => {
-    const { recipientId, senderId, ciphertext, tempId, id, attachment } = payload;
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    const { recipientId, ciphertext, tempId, id, attachment } = payload;
+    // Verify senderId matches authenticated user (prevent spoofing)
+    const senderId = authenticatedUserId;
     const messageId = id || `srv_${Date.now()}`;
     console.log(`[DM] ${senderId} → ${recipientId} | ${ciphertext.length} chars`);
 
@@ -1221,8 +1229,10 @@ io.on('connection', (socket) => {
 
   // Group Channel Message Send — persisted to PostgreSQL
   socket.on('channel:message:send', async (payload: StoredMessage) => {
-    const { channelId, senderId, ciphertext, tempId, id, attachment } = payload;
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    const { channelId, ciphertext, tempId, id, attachment } = payload;
     if (!channelId) return;
+    const senderId = authenticatedUserId;
     const messageId = id || `srv_${Date.now()}`;
     console.log(`[Channel] ${senderId} → #${channelId} | ${ciphertext.length} chars`);
 
@@ -1337,21 +1347,27 @@ io.on('connection', (socket) => {
   });
 
   // Reactions
-  socket.on('reaction:add', async (data: { messageId: string; emoji: string; userId: string }) => {
-    await addReaction(data.messageId, data.userId, data.emoji).catch(e => console.error('[Reaction] Add error:', e));
+  socket.on('reaction:add', async (data: { messageId: string; emoji: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
+    await addReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Add error:', e));
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
     io.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
-  socket.on('reaction:remove', async (data: { messageId: string; emoji: string; userId: string }) => {
-    await removeReaction(data.messageId, data.userId, data.emoji).catch(e => console.error('[Reaction] Remove error:', e));
+  socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
+    await removeReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Remove error:', e));
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
     io.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
   // Message Pinning
-  socket.on('message:pin', async (data: { channelId: string; messageId: string; userId: string }) => {
-    await pinMessage(data.channelId, data.messageId, data.userId).catch(e => console.error('[Pin] Error:', e));
+  socket.on('message:pin', async (data: { channelId: string; messageId: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
+    await pinMessage(data.channelId, data.messageId, userId).catch(e => console.error('[Pin] Error:', e));
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
     io.emit('channel:pinned', { channelId: data.channelId, pinned });
   });
