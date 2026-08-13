@@ -108,6 +108,7 @@ export async function updateMessageStatus(
   status: LocalMessage['status'],
   newId?: string
 ): Promise<void> {
+  // Try direct ID first
   const existing = await db.messages.get(id);
   if (existing) {
     if (newId && newId !== id) {
@@ -116,17 +117,26 @@ export async function updateMessageStatus(
     } else {
       await db.messages.update(id, { status });
     }
-  } else {
-    const byTemp = await db.messages.where('tempId').equals(id).first();
-    if (byTemp) {
-      if (newId && newId !== byTemp.id) {
-        await db.messages.delete(byTemp.id);
-        await db.messages.put({ ...byTemp, id: newId, status });
-      } else {
-        await db.messages.update(byTemp.id, { status });
-      }
+    return;
+  }
+  // Fallback: look up by tempId
+  const byTemp = await db.messages.where('tempId').equals(id).first();
+  if (byTemp) {
+    if (newId && newId !== byTemp.id) {
+      await db.messages.delete(byTemp.id);
+      await db.messages.put({ ...byTemp, id: newId, status });
+    } else {
+      await db.messages.update(byTemp.id, { status });
     }
   }
+}
+
+export async function bulkUpdateMessageStatus(
+  ids: string[],
+  status: LocalMessage['status']
+): Promise<void> {
+  const updates = ids.map(id => db.messages.update(id, { status }));
+  await Promise.all(updates);
 }
 
 export async function editMessageLocally(id: string, newText: string, newCiphertext: string, newIv: string): Promise<void> {

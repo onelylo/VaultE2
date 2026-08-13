@@ -40,6 +40,7 @@ import {
   getAnyUserKeyPair,
   saveMessage,
   updateMessageStatus,
+  bulkUpdateMessageStatus,
   editMessageLocally,
   deleteMessageLocally,
   markMessageDeletedLocally,
@@ -955,6 +956,12 @@ export const App: React.FC = () => {
       const senderUser = allUsersRef.current.find(u => u.userId === payload.senderId);
       if (senderUser) {
         upsertDMConversation(senderUser, localMsg.text || 'Attachment');
+      } else {
+        // Fallback: search the state directly if ref is stale, or create placeholder
+        const fallbackUser = allUsers.find(u => u.userId === payload.senderId);
+        if (fallbackUser) {
+          upsertDMConversation(fallbackUser, localMsg.text || 'Attachment');
+        }
       }
 
       // 1. Emit delivery receipt back to server
@@ -997,11 +1004,16 @@ export const App: React.FC = () => {
     };
 
     const onMessageReadAck = async ({ conversationId }: { conversationId: string }) => {
-      // Sender's copy: upgrade messages sent to conversationId to 'read' status
+      // Sender's copy: upgrade messages sent to this conversation to 'read' status
       const allMsgs = await db.messages.toArray();
-      const unreadSent = allMsgs.filter(m => m.recipientId === conversationId && m.senderId === currentUserKeys?.userId && m.status !== 'read');
-      for (const m of unreadSent) {
-        await updateMessageStatus(m.id, 'read');
+      // Filter for messages sent by ME to this recipient OR this channel
+      const unreadSent = allMsgs.filter(m => 
+        (m.recipientId === conversationId || m.channelId === conversationId) && 
+        m.senderId === currentUserKeys?.userId && 
+        m.status !== 'read'
+      );
+      if (unreadSent.length > 0) {
+        await bulkUpdateMessageStatus(unreadSent.map(m => m.id), 'read');
       }
     };
 
