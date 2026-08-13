@@ -48,6 +48,8 @@ interface SidebarProps {
   unreadDMs?: Record<string, number>;
   unreadChannels?: Record<string, number>;
   recentDMs?: User[];
+  dimmedDMId?: string | null;
+  onDimmedDMChange?: (id: string | null) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -74,6 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unreadDMs = {},
   unreadChannels = {},
   recentDMs = [],
+  dimmedDMId,
+  onDimmedDMChange,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
@@ -595,13 +599,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const fp = fingerprints[user.userId] || '...';
               const isOnline = user.isOnline ?? false;
               const unread = unreadDMs[user.userId] || 0;
+              const isDimmed = dimmedDMId === user.userId;
 
               return (
-                <button
-                  key={user.userId}
-                  onClick={() => handleSelectUserWrapper(user)}
-                  title={`${user.fullName || user.username} (${user.role})`}
-                  className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                <button className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth animate-dimmer"
                   style={{
                     backgroundColor: isSelected
                       ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)'
@@ -660,7 +661,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                     {!isCollapsed && unread > 0 && (
                       <span
-                        className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                        className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center animate-numberFade"
                         style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}
                       >
                         {unread > 99 ? '99+' : unread}

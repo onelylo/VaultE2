@@ -359,6 +359,24 @@ aside, .sidebar-container {
   animation: slideInTop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* DM interaction animations */
+.animate-dimmer {
+  animation: dimIn 0.15s ease-out forwards;
+}
+.animate-numberFade {
+  animation: numberFade 0.2s ease-out forwards;
+}
+
+/* Keyframes */
+@keyframes dimIn {
+  from { opacity: 1; }
+  to { opacity: 0.4; }
+}
+@keyframes numberFade {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.8); }
+}
+
 /* Typing indicator dots */
 .typing-dot {
   display: inline-block;

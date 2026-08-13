@@ -23,14 +23,14 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
   const [type, setType] = useState<'private' | 'team' | 'official'>('private');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const isAdminOrSupervisor = currentUser?.role === 'ADMIN';
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const channelType = isAdmin ? type : 'private';
+    const channelType = isAdminOrSupervisor ? type : 'private';
     onCreateChannel({
       name: name.trim(),
       description: description.trim(),
@@ -91,8 +91,8 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Channel Type</label>
-            <div className={`grid gap-3 ${isAdmin ? 'grid-cols-3' : 'grid-cols-1'}`}>
-              {channelTypes.filter(ct => isAdmin || ct.key === 'private').map(ct => {
+            <div className={`grid gap-3 ${isAdminOrSupervisor ? 'grid-cols-3' : 'grid-cols-1'}`}>
+              {channelTypes.filter(ct => isAdminOrSupervisor || ct.key === 'private').map(ct => {
                 const Icon = ct.icon;
                 const isSelected = type === ct.key;
                 return (
@@ -115,8 +115,8 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                 );
               })}
             </div>
-            {!isAdmin && (
-              <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>Only admins can create team and official channels.</p>
+            {!isAdminOrSupervisor && (
+              <p className="text-[10px] mt-2" style={{ color: 'var(--text-muted)' }}>Only admins can create official channels.</p>
             )}
           </div>
 

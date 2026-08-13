@@ -31,7 +31,7 @@ export function ChannelSettingsModal({
   const [hasChanges, setHasChanges] = useState(false);
 
   const canEditSettings = currentUser?.role === 'ADMIN' || channel.createdBy === currentUser?.userId;
-  const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private' || channel.type === 'public');
+  const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private');
 
   const currentMembers = useMemo(() => {
     return memberIds.map(id => allUsers.find(u => u.userId === id)).filter(Boolean) as User[];

@@ -151,6 +151,7 @@ export const App: React.FC = () => {
   const [lastViewedChannels, setLastViewedChannels] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('vaultchat_lastViewedChannels') || '{}'); } catch { return {}; }
   });
+  const [dimmedDMId, setDimmedDMId] = useState<string | null>(null);
   const [pinnedMessages, setPinnedMessages] = useState<Record<string, { messageId: string; pinnedBy: string; pinnedAt: number }[]>>({});
 
   // ── Security & Caches ─────────────────────────────────────────────────────────
@@ -1739,8 +1740,8 @@ export const App: React.FC = () => {
             userFingerprint={userFingerprint}
             isAdmin={currentUserKeys.role === 'ADMIN'}
             showAdmin={showAdmin}
-            onSelectView={(view) => { setShowAdmin(false); setActiveView(view); setMobileSidebarOpen(false); }}
-            onSelectUser={(user) => { setShowAdmin(false); handleSelectPeer(user); setMobileSidebarOpen(false); }}
+            onSelectView={(view) => { setShowAdmin(false); setActiveView(view); setMobileSidebarOpen(false); setDimmedDMId(null); }}
+            onSelectUser={(user) => { setShowAdmin(false); handleSelectPeer(user); setMobileSidebarOpen(false); setDimmedDMId(null); }}
             onSelectChannel={(ch) => { setShowAdmin(false); handleSelectChannel(ch); setMobileSidebarOpen(false); }}
             onCreateChannel={handleCreateChannel}
             onShowFingerprintModal={() => setShowFingerprintModal(true)}
@@ -1752,6 +1753,8 @@ export const App: React.FC = () => {
             unreadDMs={unreadDMs}
             unreadChannels={unreadChannels}
             recentDMs={recentDMs}
+            dimmedDMId={dimmedDMId}
+            onDimmedDMChange={setDimmedDMId}
           />
           </div>
         </>
