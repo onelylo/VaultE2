@@ -100,7 +100,6 @@ export const App: React.FC = () => {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
-  const [toast, setToast] = useState<{ open: boolean; message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [channelSettings, setChannelSettings] = useState<Channel | null>(null);
 
   // Apply user-specific theme when logged in
@@ -111,9 +110,6 @@ export const App: React.FC = () => {
       if (saved && saved !== 'undefined') {
         document.documentElement.setAttribute('data-theme', saved);
         setTheme(saved);
-        // Add transition class for smooth theme change
-        document.documentElement.classList.add('theme-transition-active');
-        setTimeout(() => document.documentElement.classList.remove('theme-transition-active'), 300);
       }
     }
   }, [currentUserKeys?.userId]);
@@ -967,7 +963,6 @@ export const App: React.FC = () => {
       // Play notification sound if not the active conversation
       if (selectedPeerRef.current?.userId !== payload.senderId) {
         playNotificationSound();
-        setToast({ open: true, message: 'New message from ' + (allUsersRef.current.find(u => u.userId === payload.senderId)?.fullName || payload.senderId), type: 'info' });
       }
 
       // 2. If recipient ALREADY has this conversation thread open, emit read receipt immediately!
@@ -1849,17 +1844,6 @@ export const App: React.FC = () => {
         onConfirm={handleLogoutConfirm}
         onClose={() => setIsLogoutOpen(false)}
       />
-
-      {/* Toast notification */}
-      {toast && (
-        <div
-          className="mb-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-2 flex items-center space-x-2 fade-in"
-          style={{ animationName: 'fadeIn', animationDuration: '0.25s', animationFillMode: 'forwards' }}
-        >
-          <div className="w-2 h-2 rounded-full bg-{toast.type === 'success' ? 'green-400' : toast.type === 'error' ? 'red-400' : 'blue-400'} flex-shrink-0" />
-          <span className="text-xs">{toast.message}</span>
-        </div>
-      )}
 
       {avatarMenu && (
         <UserAvatarMenu
