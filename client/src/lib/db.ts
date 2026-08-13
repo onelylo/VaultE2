@@ -82,25 +82,6 @@ export async function saveMessage(msg: LocalMessage): Promise<void> {
   await db.messages.put(msg);
 }
 
-export async function getConversationMessages(
-  currentUserId: string,
-  peerUserId: string
-): Promise<LocalMessage[]> {
-  const all = await db.messages.toArray();
-  return all
-    .filter(m =>
-      !m.channelId &&
-      ((m.senderId === currentUserId && m.recipientId === peerUserId) ||
-       (m.senderId === peerUserId    && m.recipientId === currentUserId))
-    )
-    .sort((a, b) => a.timestamp - b.timestamp);
-}
-
-export async function getChannelMessages(channelId: string): Promise<LocalMessage[]> {
-  const all = await db.messages.where('channelId').equals(channelId).toArray();
-  return all.sort((a, b) => a.timestamp - b.timestamp);
-}
-
 /** Returns unique userIds the current user has DM conversations with, sorted by most recent message */
 export async function getActiveDMPartners(currentUserId: string): Promise<string[]> {
   const allMsgs = await db.messages.toArray();

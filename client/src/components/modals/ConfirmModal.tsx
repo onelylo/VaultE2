@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -22,10 +22,28 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onClose,
 }) => {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      cancelRef.current?.focus();
+      const handleKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      document.addEventListener('keydown', handleKey);
+      return () => document.removeEventListener('keydown', handleKey);
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]"
+    >
       <div
         className="w-full max-w-sm rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] p-6 shadow-2xl flex flex-col gap-4 text-[var(--text-main)]"
         onClick={(e) => e.stopPropagation()}
@@ -35,7 +53,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <div className={`p-2.5 rounded-xl ${isDangerous ? 'bg-red-500/10 text-red-500' : 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'}`}>
               <AlertTriangle className="w-5 h-5"/>
             </div>
-            <h3 className="text-base font-bold">{title}</h3>
+            <h3 id="confirm-modal-title" className="text-base font-bold">{title}</h3>
           </div>
           <button
             type="button"
@@ -52,6 +70,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         <div className="flex items-center justify-end gap-2 mt-2">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold hover:bg-[var(--hover-color)] transition-colors"

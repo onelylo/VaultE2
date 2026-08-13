@@ -249,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col space-y-1.5 items-center">
             {[
               { view: 'dms' as const, icon: MessageSquare, title: 'Direct Messages', unread: Object.values(unreadDMs).reduce((a, b) => a + b, 0) },
-              { view: 'channels' as const, icon: Hash, title: 'Channels', unread: 0 },
+              { view: 'channels' as const, icon: Hash, title: 'Channels', unread: Object.values(unreadChannels).reduce((a, b) => a + b, 0) },
             ].map(({ view, icon: Icon, title, unread }) => (
               <button
                 key={view}

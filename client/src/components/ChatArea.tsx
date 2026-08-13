@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import {
   Lock, Shield, Check, CheckCheck, Clock, ShieldAlert, X,
   Edit2, Trash2, Trash, Paperclip, Send, FileText, Loader2, Smile, Reply,
-  Search, Menu, Info, ShieldCheck, Camera, Mic, Pencil,
+  Search, Menu, Info, ShieldCheck, Camera, Mic, Pencil, ArrowDown,
 } from 'lucide-react';
 import type { User, Channel, LocalMessage, UserKeyPair } from '../types/chat';
 import { AttachmentMessage } from './AttachmentMessage';
@@ -103,6 +103,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [micDenied, setMicDenied] = useState(false);
 
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -131,14 +133,48 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       return [];
     },
     [selectedUser?.userId, selectedChannel?.id, currentUserId],
-    []
+    undefined
   );
+
+  // Track whether user is near bottom for smart auto-scroll
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distFromBottom < 200;
+    setShowScrollDown(distFromBottom >= 200);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      scrollRef.current.addEventListener('scroll', handleScroll, { passive: true });
+      return () => scrollRef.current?.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll, selectedUser?.userId, selectedChannel?.id]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      if (isNearBottomRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      } else {
+        setShowScrollDown(true);
+      }
     }
   }, [messages?.length]);
+
+  // Textarea auto-resize
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+  }, []);
+
+  useEffect(() => {
+    autoResize();
+  }, [text, autoResize]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -178,6 +214,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && editingMsgId) {
+      e.preventDefault();
+      setEditingMsgId(null);
+      setEditText('');
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       doSend();
@@ -245,6 +287,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       recordingIntervalRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
     } catch (err) {
       console.error('[Voice] Mic access denied:', err);
+      setMicDenied(true);
+      setTimeout(() => setMicDenied(false), 4000);
     }
   };
 
@@ -459,8 +503,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 font-sans">
-        {messages.length === 0 ? (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 font-sans relative">
+        {messages === undefined ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-6 h-6 animate-spin text-[var(--text-muted)]" />
+          </div>
+        ) : messages.length === 0 ? (
           <div className="text-center my-12 text-[var(--text-muted)] font-mono text-xs space-y-2">
             <Lock className="w-8 h-8 text-[var(--text-muted)]/40 mx-auto" />
             <p className="text-[var(--text-muted)] font-bold">END-TO-END ENCRYPTED CHANNEL READY</p>
@@ -493,9 +541,28 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             />
           ))
         )}
+        {showScrollDown && messages && messages.length > 0 && (
+          <button
+            onClick={() => {
+              scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+              setShowScrollDown(false);
+              isNearBottomRef.current = true;
+            }}
+            className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10"
+            title="Scroll to latest messages"
+          >
+            <ArrowDown className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="mx-4 mb-4">
+        {micDenied && (
+          <div className="mb-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2 animate-[fadeIn_0.15s_ease-out]">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+            <span>Microphone access denied. Please allow microphone permission in your browser settings.</span>
+          </div>
+        )}
         {activeReply && (
           <div className="mb-2 flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-xs">
             <div className="flex items-center space-x-2 truncate">
@@ -632,8 +699,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               <textarea
                 ref={textareaRef}
                 value={text}
-                onChange={e => setText(e.target.value)}
+                onChange={e => { setText(e.target.value); autoResize(); }}
                 onKeyDown={handleKeyDown}
+                onInput={autoResize}
                 placeholder={placeholderText}
                 rows={1}
                 className="w-full bg-transparent py-2.5 px-2 text-sm text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none resize-none min-h-[40px] max-h-32 leading-relaxed items-center"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
   Camera, Mic, Paperclip,
@@ -83,6 +83,38 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     minute: '2-digit',
   });
 
+  // Long-press support for mobile action menu
+  const [showActions, setShowActions] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    longPressTimer.current = setTimeout(() => {
+      setShowActions(true);
+    }, 500);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  // Close action menu when clicking anywhere else
+  React.useEffect(() => {
+    if (!showActions) return;
+    const handler = () => setShowActions(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showActions]);
+
   const senderName = isSelf
     ? 'YOU'
     : selectedUser
@@ -102,6 +134,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     <div
       id={`msg-${msg.id}`}
       className={`relative group flex items-center gap-2 w-full max-w-lg ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
+      onClick={() => { if (showActions) setShowActions(false); }}
     >
       {/* Message Bubble Container */}
       <div
@@ -235,7 +271,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       </div>
 
       {/* FLOATING ACTION MENU — Positioned outside on the side, never clipping */}
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-lg px-1.5 py-1 flex items-center gap-1 z-20 shrink-0">
+      <div className={`${showActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-150 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-lg px-1.5 py-1 flex items-center gap-1 z-20 shrink-0`}>
         {/* Reply */}
         {!msg.isDeleted && editingMsgId !== msg.id && (
           <button

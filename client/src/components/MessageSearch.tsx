@@ -31,6 +31,23 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Highlight matching text in search results
+  const highlightMatch = (text: string, q: string): React.ReactNode => {
+    if (!q.trim()) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match = text.slice(idx, idx + q.length);
+    const after = text.slice(idx + q.length);
+    return (
+      <>
+        {before}
+        <mark className="bg-yellow-500/30 text-[var(--text-main)] rounded px-0.5">{match}</mark>
+        {after}
+      </>
+    );
+  };
+
   const userLookup = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const u of allUsers) {
@@ -56,17 +73,9 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
     }
   }, [isOpen]);
 
-  // Ctrl+K global shortcut
+  // Escape key to close
   useEffect(() => {
     const handleGlobalKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        if (isOpen) {
-          onClose();
-        } else {
-          // This is handled by the parent
-        }
-      }
       if (e.key === 'Escape' && isOpen) {
         onClose();
       }
@@ -223,7 +232,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
                   <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{formatTime(msg.timestamp)}</span>
                 </div>
                 <p className="text-xs truncate" style={{ color: 'var(--text-main)' }}>
-                  {msg.text}
+                  {highlightMatch(msg.text || '', query)}
                 </p>
               </div>
               <ArrowRight className="w-3.5 h-3.5 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100" style={{ color: 'var(--text-muted)' }} />

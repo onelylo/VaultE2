@@ -893,6 +893,8 @@ export const App: React.FC = () => {
     setShowAdmin(false);
     setAvatarMenu(null);
     if (socket.connected) socket.disconnect();
+    // Clear IndexedDB to prevent stale data across users
+    db.delete().catch(() => {});
   };
 
   // ── Admin RBAC Handlers ──────────────────────────────────────────────────────

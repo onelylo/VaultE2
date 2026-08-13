@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { Download } from 'lucide-react';
 
 interface ImageLightboxModalProps {
   imageUrl: string | null;
@@ -14,11 +15,34 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   onClose,
   fileName,
 }) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen || !imageUrl) return null;
+
+  const handleDownload = () => {
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = fileName || 'image';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   return createPortal(
     <div
       id="image-lightbox-portal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={fileName || 'Image preview'}
       className="fixed inset-0 w-screen h-screen flex items-center justify-center bg-black/90 backdrop-blur-md m-0 p-0"
       style={{
         position: 'fixed',
@@ -28,7 +52,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         bottom: 0,
         width: '100vw',
         height: '100vh',
-        zIndex: 999999, // Max explicit z-index to outrank fixed sidebar
+        zIndex: 999999,
         margin: 0,
         padding: 0
       }}
@@ -40,12 +64,21 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-sm font-medium text-slate-200 truncate">{fileName || 'Media Preview'}</span>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-white/10 rounded-full text-xl font-bold cursor-pointer transition-colors"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownload}
+            className="p-2 hover:bg-white/10 rounded-full text-sm cursor-pointer transition-colors"
+            title="Download"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-full text-xl font-bold cursor-pointer transition-colors"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Centered Image Container with Balanced Bounds */}
