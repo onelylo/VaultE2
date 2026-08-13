@@ -840,6 +840,7 @@ export const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    if (!window.confirm('Are you sure you want to log out?')) return;
     localStorage.removeItem('vaultchat_jwt');
     setCurrentUserKeys(null);
     setPrivateKeyObject(null);
