@@ -254,6 +254,13 @@ async function hashPassword(pwd: string): Promise<string> {
 }
 
 async function verifyPassword(pwd: string, hash: string): Promise<boolean> {
+  // Check if hash is a legacy SHA-256 hash (64 hex chars, no $ prefix)
+  if (hash.length === 64 && !hash.startsWith('$')) {
+    // Legacy SHA-256 hash — compare directly
+    const legacyHash = crypto.createHash('sha256').update(pwd).digest('hex');
+    return legacyHash === hash;
+  }
+  // Modern bcrypt hash
   return bcrypt.compare(pwd, hash);
 }
 
@@ -381,6 +388,7 @@ app.put('/api/auth/password', async (req, res) => {
     if (!await verifyPassword(currentPassword, user.passwordHash)) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
+    // Always store new passwords as bcrypt (even if old was SHA-256)
     await updateUserPassword(userId, await hashPassword(newPassword));
     console.log(`[Auth] Password changed for ${user.username}`);
     return res.json({ success: true });
@@ -450,6 +458,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     }
     if (!await verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+    // One-time migration: re-hash legacy SHA-256 passwords with bcrypt
+    if (user.passwordHash.length === 64 && !user.passwordHash.startsWith('$')) {
+      const newBcryptHash = await hashPassword(password);
+      await updateUserPassword(userId, newBcryptHash).catch(() => {});
+      console.log(`[Auth] Migrated ${user.username} password from SHA-256 to bcrypt`);
     }
     // Update vault keys if key rotation requested or missing
     if (forceKeyRotation && publicKey && encryptedPrivateKey && keySalt) {
