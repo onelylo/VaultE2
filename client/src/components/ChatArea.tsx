@@ -753,12 +753,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         )}
       </div>
 
-      <ImageLightboxModal
-        imageUrl={activeLightbox?.url ?? null}
-        isOpen={!!activeLightbox}
-        onClose={() => setActiveLightbox(null)}
-        fileName={activeLightbox?.name}
-      />
+<ImageLightboxModal
+          imageUrl={activeLightbox?.url ?? ''}
+          isOpen={!!activeLightbox}
+          onClose={() => setActiveLightbox(null)}
+          fileName={activeLightbox?.name ?? 'Media Preview'}
+        />
 
       {inspectedUser && (
         <ProfileModal
