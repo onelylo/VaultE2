@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { socket } from './lib/socket';
+import { socket, connectSocket } from './lib/socket';
 import { Loader2 } from 'lucide-react';
 import {
   generateKeyPair,
@@ -645,7 +645,7 @@ export const App: React.FC = () => {
             setCurrentUserKeys(enrichedKeyPair);
             setUserFingerprint(fp);
             setShowProfileDrawer(false);
-            if (!socket.connected) socket.connect();
+            if (!socket.connected) connectSocket();
             socket.emit('user:join', {
               userId: enrichedKeyPair.userId, username: enrichedKeyPair.username,
               fullName: enrichedKeyPair.fullName, role: enrichedKeyPair.role,
@@ -742,7 +742,7 @@ export const App: React.FC = () => {
       setUserFingerprint(fp);
       setShowProfileDrawer(false);
 
-      if (!socket.connected) socket.connect();
+      if (!socket.connected) connectSocket();
       socket.emit('user:join', { userId: registeredKeyPair.userId, username: registeredKeyPair.username, fullName: data.user.fullName, role: registeredKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: registeredKeyPair.signingPublicKeyBase64 });
       await fetchUserDirectory(data.token);
       socket.emit('channels:get');
@@ -874,7 +874,7 @@ export const App: React.FC = () => {
       setUserFingerprint(fp);
       setShowProfileDrawer(false);
 
-      if (!socket.connected) socket.connect();
+      if (!socket.connected) connectSocket();
       socket.emit('user:join', { userId: enrichedKeyPair.userId, username: enrichedKeyPair.username, fullName: serverUser.fullName || enrichedKeyPair.fullName, role: enrichedKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: enrichedKeyPair.signingPublicKeyBase64 });
 
       await fetchUserDirectory(data.token);

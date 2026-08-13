@@ -687,8 +687,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       <ConfirmModal
         isOpen={!!pendingDeleteForMeId}
-        title="Delete message for yourself?"
-        description="This message will be removed permanently from your local device. Other participants will still see it."
+        title="Delete message?"
+        description="This message will be deleted for you. Other chat participants will still see it."
         confirmLabel="Delete for me"
         isDangerous={true}
         onConfirm={handleConfirmDeleteForMe}
@@ -697,8 +697,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       <ConfirmModal
         isOpen={!!pendingDeleteEveryoneId}
-        title="Delete message for everyone?"
-        description="This message will be permanently deleted for all participants in this chat. This action cannot be undone."
+        title="Delete message?"
+        description="This message will be deleted for everyone in this chat. This action cannot be undone."
         confirmLabel="Delete for everyone"
         isDangerous={true}
         onConfirm={handleConfirmDeleteEveryone}

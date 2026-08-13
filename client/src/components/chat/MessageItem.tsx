@@ -98,9 +98,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       : userLookup.get(replyToMsg.senderId) || replyToMsg.senderId
     : null;
 
-  // Deleted messages — render nothing (remove residual bubble entirely)
-  if (msg.isDeleted) return null;
-
   return (
     <div
       id={`msg-${msg.id}`}
@@ -110,12 +107,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       <div
         data-bubble
         className={`rounded-2xl border p-3.5 shadow-sm max-w-[85%] leading-relaxed ${
-          isSelf
+          msg.isDeleted
+            ? 'bg-[var(--bg-surface)]/60 border-[var(--border-color)] text-[var(--text-muted)] italic'
+            : isSelf
             ? 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-main)] rounded-tr-sm'
             : 'bg-[var(--bg-card)] border-[var(--bg-surface)] text-[var(--text-main)] rounded-tl-sm'
         } ${msg.status === 'pending_sync' ? 'opacity-70' : 'opacity-100'}`}
       >
-        {editingMsgId === msg.id ? (
+        {msg.isDeleted ? (
+          <p className="text-xs text-[var(--text-muted)] italic">This message was deleted</p>
+        ) : editingMsgId === msg.id ? (
           <div className="space-y-2">
             <textarea
               value={editText}
@@ -241,7 +242,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             type="button"
             onClick={() => handleStartReply(msg)}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--hover-color)] transition-colors"
-            title="Reply to message"
+            title="Reply"
           >
             <Reply className="w-4 h-4"/>
           </button>
@@ -253,31 +254,31 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             type="button"
             onClick={() => handleStartEdit(msg)}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-primary)] hover:bg-[var(--hover-color)] transition-colors"
-            title="Edit message text"
+            title="Edit"
           >
             <Pencil className="w-4 h-4"/>
           </button>
         )}
 
-        {/* Delete For Me (UNIVERSAL - Distinct Amber Trash Icon) */}
+        {/* Delete For Me — visible on all messages */}
         {!msg.isDeleted && (
           <button
             type="button"
             onClick={() => setPendingDeleteForMeId(msg.id)}
             className="p-1.5 rounded-lg text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-            title="Delete for ME (Local only)"
+            title="Delete for me"
           >
             <Trash2 className="w-4 h-4"/>
           </button>
         )}
 
-        {/* Delete For Everyone (Sent messages ONLY - Distinct Red Trash Icon) */}
+        {/* Delete For Everyone — sent messages only */}
         {isSelf && !msg.isDeleted && (
           <button
             type="button"
             onClick={() => setPendingDeleteEveryoneId(msg.id)}
             className="p-1.5 rounded-lg text-red-500/70 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-            title="Delete for EVERYONE (Global)"
+            title="Delete for everyone"
           >
             <Trash className="w-4 h-4"/>
           </button>

@@ -7,17 +7,13 @@ export const socket: Socket = io(SERVER_URL, {
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
-  auth: () => ({
-    token: localStorage.getItem('vaultchat_jwt'),
-  }),
 });
 
-/** Re-attach the current JWT whenever the socket reconnects */
-socket.on('connect', () => {
-  socket.off('connect');
-  socket.on('disconnect', () => {
-    // Re-bind auth on next connect
-    socket.off('connect');
-    socket.on('connect', () => {});
-  });
-});
+/** Call this before each connect to ensure the latest JWT is sent */
+export function connectSocket() {
+  const token = localStorage.getItem('vaultchat_jwt');
+  socket.auth = { token };
+  if (!socket.connected) {
+    socket.connect();
+  }
+}
