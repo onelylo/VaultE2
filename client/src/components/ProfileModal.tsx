@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Copy, ShieldCheck, Image, Music, FileText, Camera, Mic, Paperclip, Film, Calendar } from 'lucide-react';
+import { X, Copy, ShieldCheck, Image, Music, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import type { User, LocalMessage } from '../types/chat';
@@ -11,6 +11,7 @@ interface ProfileModalProps {
   onStartDM?: () => void;
   onBlock?: () => void;
   onImageClick?: (url: string, name?: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 type MediaTab = 'all' | 'images' | 'audio' | 'video' | 'docs';
@@ -39,6 +40,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onStartDM,
   onBlock,
   onImageClick,
+  onJumpToMessage,
 }) => {
   const [showFullAvatar, setShowFullAvatar] = useState(false);
   const [activeTab, setActiveTab] = useState<MediaTab>('all');
@@ -288,11 +290,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                         {/* Items */}
                         {activeTab === 'images' || activeTab === 'video' ? (
                           <div className="grid grid-cols-3 gap-1.5">
-                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize))}
+                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize, onJumpToMessage))}
                           </div>
                         ) : (
                           <div className="space-y-1.5">
-                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize))}
+                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize, onJumpToMessage))}
                           </div>
                         )}
                       </div>
@@ -315,32 +317,40 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   );
 };
 
-function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: (url: string, name?: string) => void, formatSize?: (bytes: number) => string) {
+function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: (url: string, name?: string) => void, formatSize?: (bytes: number) => string, onJumpToMessage?: (messageId: string) => void) {
   const meta = msg.attachmentMeta!;
   const isImage = meta.mimeType?.startsWith('image/');
   const isAudio = meta.mimeType?.startsWith('audio/');
-  const isVideo = meta.mimeType?.startsWith('video/');
   const dateStr = new Date(msg.timestamp || 0).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   if (isImage || (activeTab === 'images' && meta.thumbnailDataUrl)) {
     return (
       <div key={msg.id}
-        className="aspect-square rounded-lg overflow-hidden cursor-pointer relative group"
+        className="aspect-square rounded-lg overflow-hidden relative group cursor-default"
         style={{ border: '1px solid var(--border-color)' }}
-        onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
         title={`${meta.fileName} • ${dateStr}`}>
-        {meta.thumbnailDataUrl ? (
-          <img src={meta.thumbnailDataUrl} alt={meta.fileName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"
-            style={{ backgroundColor: 'var(--bg-input)' }}>
-            <Camera className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
-          </div>
-        )}
-        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        {/* Thumbnail - click opens lightbox */}
+        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}>
+          {meta.thumbnailDataUrl ? (
+            <img src={meta.thumbnailDataUrl} alt={meta.fileName}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center"
+              style={{ backgroundColor: 'var(--bg-input)' }}>
+              <Camera className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+            </div>
+          )}
+        </div>
+        {/* Hover overlay with info + Take me there */}
+        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between"
           style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
-          <p className="text-[8px] text-white truncate">{meta.fileName}</p>
+          <p className="text-[8px] text-white truncate flex-1">{meta.fileName}</p>
+          {onJumpToMessage && (
+            <button onClick={(e) => { e.stopPropagation(); onJumpToMessage(msg.id); }}
+              className="text-[7px] text-sky-400 font-bold whitespace-nowrap ml-1 flex items-center gap-0.5 hover:text-sky-300">
+              Go <ArrowRight className="w-2 h-2" />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -349,27 +359,34 @@ function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: 
   if (isVideo) {
     return (
       <div key={msg.id}
-        className="aspect-video rounded-lg overflow-hidden cursor-pointer relative group"
+        className="aspect-video rounded-lg overflow-hidden relative group cursor-default"
         style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)' }}
-        onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
         title={`${meta.fileName} • ${dateStr}`}>
-        {meta.thumbnailDataUrl ? (
-          <img src={meta.thumbnailDataUrl} alt={meta.fileName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Film className="w-6 h-6" style={{ color: 'var(--text-muted)' }} />
-          </div>
-        )}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-0.5" />
+        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}>
+          {meta.thumbnailDataUrl ? (
+            <img src={meta.thumbnailDataUrl} alt={meta.fileName}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Film className="w-6 h-6" style={{ color: 'var(--text-muted)' }} />
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+              <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-0.5" />
+            </div>
           </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between"
           style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
-          <p className="text-[8px] text-white truncate">{meta.fileName} • {formatSize?.(meta.fileSize)}</p>
+          <p className="text-[8px] text-white truncate flex-1">{meta.fileName} • {formatSize?.(meta.fileSize)}</p>
+          {onJumpToMessage && (
+            <button onClick={(e) => { e.stopPropagation(); onJumpToMessage(msg.id); }}
+              className="text-[7px] text-sky-400 font-bold whitespace-nowrap ml-1 flex items-center gap-0.5 hover:text-sky-300">
+              Go <ArrowRight className="w-2 h-2" />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -378,18 +395,25 @@ function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: 
   if (isAudio) {
     return (
       <div key={msg.id}
-        className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+        className="flex items-center gap-2 p-2 rounded-lg group cursor-default"
         style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
-        onClick={() => onImageClick?.('', meta.fileName)}
         title={`${meta.fileName} • ${dateStr}`}>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer"
+          style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+          onClick={() => onImageClick?.('', meta.fileName)}>
           <Mic className="w-4 h-4" style={{ color: '#10b981' }} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
           <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize?.(meta.fileSize)} • {dateStr}</p>
         </div>
+        {onJumpToMessage && (
+          <button onClick={() => onJumpToMessage(msg.id)}
+            className="text-[8px] text-sky-400 font-bold whitespace-nowrap px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:text-sky-300"
+            style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)' }}>
+            Go <ArrowRight className="w-2 h-2 inline" />
+          </button>
+        )}
       </div>
     );
   }
@@ -397,10 +421,25 @@ function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: 
   // Document
   return (
     <div key={msg.id}
-      className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+      className="flex items-center gap-2 p-2 rounded-lg group cursor-default"
       style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
-      onClick={() => onImageClick?.('', meta.fileName)}
       title={`${meta.fileName} • ${dateStr}`}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer"
+        style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}
+        onClick={() => onImageClick?.('', meta.fileName)}>
+        <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize?.(meta.fileSize)} • {dateStr}</p>
+      </div>
+      {onJumpToMessage && (
+        <button onClick={() => onJumpToMessage(msg.id)}
+          className="text-[8px] text-sky-400 font-bold whitespace-nowrap px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:text-sky-300"
+          style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)' }}>
+          Go <ArrowRight className="w-2 h-2 inline" />
+        </button>
+      )}
       <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
         <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />

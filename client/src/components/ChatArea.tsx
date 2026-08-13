@@ -793,6 +793,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           currentUserId={currentUserId}
           onClose={() => setShowProfileModal(false)}
           onImageClick={(url, name) => setActiveLightbox({ url, name })}
+          onJumpToMessage={(messageId) => {
+            setShowProfileModal(false);
+            setTimeout(() => {
+              const el = document.getElementById(`msg-${messageId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const bubble = el.querySelector('[data-bubble]') as HTMLElement;
+                const target = bubble || el;
+                target.style.transition = 'box-shadow 0.5s ease, background-color 0.5s ease';
+                target.style.boxShadow = '0 0 20px 4px var(--accent-primary)';
+                target.style.backgroundColor = 'color-mix(in srgb, var(--accent-primary) 8%, transparent)';
+                target.style.borderRadius = '12px';
+                setTimeout(() => {
+                  target.style.boxShadow = 'none';
+                  target.style.backgroundColor = 'transparent';
+                }, 1500);
+              }
+            }, 100);
+          }}
         />
       )}
 
