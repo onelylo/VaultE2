@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { socket, connectSocket } from './lib/socket';
 import { Loader2 } from 'lucide-react';
+import { ConfirmModal } from './components/modals/ConfirmModal';
 import {
   generateKeyPair,
   exportPublicKey,
@@ -97,6 +98,7 @@ export const App: React.FC = () => {
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'infrastructure'>('overview');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
   const [channelSettings, setChannelSettings] = useState<Channel | null>(null);
 
@@ -840,7 +842,10 @@ export const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (!window.confirm('Are you sure you want to log out?')) return;
+    setIsLogoutOpen(true);
+  };
+
+  const handleLogoutConfirm = () => {
     localStorage.removeItem('vaultchat_jwt');
     setCurrentUserKeys(null);
     setPrivateKeyObject(null);
@@ -1816,7 +1821,7 @@ export const App: React.FC = () => {
         <AuthModal onAuthenticate={handleAuthenticate} error={authError} />
       )}
 
-      {showProfileDrawer && currentUserKeys && (
+{showProfileDrawer && currentUserKeys && (
         <ProfileDrawer
           currentUser={currentUserKeys}
           userFingerprint={userFingerprint}
@@ -1827,6 +1832,18 @@ export const App: React.FC = () => {
           onThemeChange={setTheme}
         />
       )}
+
+      {/* Logout confirmation modal */}
+      <ConfirmModal
+        isOpen={isLogoutOpen}
+        title="Log out?"
+        description="Are you sure you want to log out?"
+        confirmLabel="Log out"
+        cancelLabel="Stay signed in"
+        isDangerous={true}
+        onConfirm={handleLogoutConfirm}
+        onClose={() => setIsLogoutOpen(false)}
+      />
 
       {avatarMenu && (
         <UserAvatarMenu
@@ -1876,7 +1893,7 @@ export const App: React.FC = () => {
           selectedChannel={selectedChannel}
           currentUserId={currentUserKeys?.userId}
         />
-      </React.Suspense>
+</React.Suspense>
     </div>
   );
 };
