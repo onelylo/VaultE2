@@ -97,10 +97,11 @@ const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').th
 const MessageSearch = React.lazy(() => import('./components/MessageSearch').then(m => ({ default: m.MessageSearch })));
 
 export const App: React.FC = () => {
-  // Block Ctrl+scroll zoom on entire app EXCEPT when lightbox is open
+  // Block Ctrl+scroll zoom on entire app (lightbox handles its own zoom)
   useEffect(() => {
     const handler = (e: WheelEvent) => {
-      if (e.ctrlKey && !document.getElementById('image-lightbox-portal')) {
+      // Check if lightbox portal exists in DOM (rendered via createPortal into body)
+      if (e.ctrlKey && !document.querySelector('[data-lightbox-open]')) {
         e.preventDefault();
       }
     };
