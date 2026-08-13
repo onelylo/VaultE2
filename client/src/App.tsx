@@ -850,8 +850,14 @@ export const App: React.FC = () => {
     setShowAdmin(false);
     setAvatarMenu(null);
     if (socket.connected) socket.disconnect();
-    // Clear IndexedDB to prevent stale data across users
-    db.delete().catch(() => {});
+    // Clear IndexedDB tables (not db.delete() which closes Dexie permanently)
+    db.transaction('rw', [db.keys, db.messages, db.trustedKeys, db.channels, db.channelKeys], async () => {
+      await db.keys.clear();
+      await db.messages.clear();
+      await db.trustedKeys.clear();
+      await db.channels.clear();
+      await db.channelKeys.clear();
+    }).catch(() => {});
   };
 
   // ── Admin RBAC Handlers ──────────────────────────────────────────────────────
