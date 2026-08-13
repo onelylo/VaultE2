@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+﻿import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Download } from 'lucide-react';
 
@@ -28,20 +28,6 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
-
-  const [zoomed, setZoomed] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setZoomed(true);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setZoomed(false);
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -100,7 +86,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
             onClick={onClose}
             className="p-2 hover:bg-white/10 rounded-full text-xl font-bold cursor-pointer transition-colors"
           >
-            ✕
+            âœ•
           </button>
         </div>
       </div>
@@ -114,7 +100,6 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
           src={imageUrl}
           alt={fileName || 'Enlarged media'}
           className="max-w-[75vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl border border-white/10 select-none ring-1 ring-black/50 transition-transform duration-300 ease-out"
-          style={{ transform: zoomed ? 'scale(1.05)' : 'scale(1)' }}
           onClick={e => e.stopPropagation()}
         />
       </div>
