@@ -2,6 +2,16 @@ import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Download } from 'lucide-react';
 
+// Zoom animation keyframes
+const zoomInKeyframes = {
+  from: { transform: 'scale(1)', opacity: 0 },
+  to: { transform: 'scale(1.2)', opacity: 1 },
+};
+const zoomOutKeyframes = {
+  from: { transform: 'scale(1.2)', opacity: 1 },
+  to: { transform: 'scale(1)', opacity: 0 },
+};
+
 interface ImageLightboxModalProps {
   imageUrl: string | null;
   isOpen: boolean;
@@ -81,7 +91,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         </div>
       </div>
 
-      {/* Centered Image Container with Balanced Bounds */}
+      {/* Centered Image Container with Balanced Bounds and Zoom Animation */}
       <div
         className="relative max-w-4xl max-h-[80vh] flex items-center justify-center p-4 transition-transform duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -89,7 +99,8 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         <img
           src={imageUrl}
           alt={fileName || 'Enlarged media'}
-          className="max-w-[75vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl border border-white/10 select-none ring-1 ring-black/50"
+          className="max-w-[75vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl border border-white/10 select-none ring-1 ring-black/50 transition-transform duration-300 ease-out"
+          onClick={e => e.stopPropagation()}
         />
       </div>
     </div>,
