@@ -86,7 +86,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           style={{ backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(4px)' }}
           onClick={() => setShowFullAvatar(false)}>
           <img src={user.avatarUrl} alt="avatar"
-            className="max-w-[90vw] max-h-[90vh] rounded-xl object-cover"
+            className="max-w-[50vw] max-h-[50vh] rounded-xl object-cover"
             style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
             onClick={e => e.stopPropagation()} />
         </div>
