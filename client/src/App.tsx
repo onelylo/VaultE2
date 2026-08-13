@@ -1672,8 +1672,9 @@ export const App: React.FC = () => {
         console.log(`[Attachment] Uploaded ${file.name} (${file.size} bytes) encrypted.`);
       } catch (e) {
         setUploadProgress(null);
-        console.error('[Attachment] Upload failed:', e);
-        alert('Failed to upload encrypted attachment. It will retry automatically when reconnected.');
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('[Attachment] Upload failed:', msg);
+        alert(`Failed to upload attachment: ${msg}`);
       }
     }
   };

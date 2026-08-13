@@ -80,6 +80,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const onSendFilesRef = useRef(onSendFiles);
+  onSendFilesRef.current = onSendFiles;
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -291,7 +293,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const file = new File([blob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
-        onSendFiles([file]);
+        onSendFilesRef.current([file]);
       };
 
       mediaRecorder.start();

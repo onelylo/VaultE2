@@ -43,6 +43,7 @@ export async function uploadEncryptedAttachment(
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/api/attachments/upload`);
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.timeout = 120000;
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
           onProgress(Math.round((e.loaded / e.total) * 100));
@@ -54,13 +55,14 @@ export async function uploadEncryptedAttachment(
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(json.attachmentId as string);
           } else {
-            reject(new Error(json?.error || 'Attachment upload failed'));
+            reject(new Error(json?.error || `Server error (${xhr.status})`));
           }
         } catch {
-          reject(new Error('Attachment upload failed'));
+          reject(new Error(`Upload failed (HTTP ${xhr.status})`));
         }
       });
-      xhr.addEventListener('error', () => reject(new Error('Attachment upload failed')));
+      xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+      xhr.addEventListener('timeout', () => reject(new Error('Upload timed out')));
       xhr.send(form);
     });
   }
