@@ -1,0 +1,399 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================
+   VAULTCHAT CUSTOM THEME PRESETS
+   ========================================== */
+
+/* 1. VAULT DARK (Default) */
+[data-theme="vault-dark"] {
+  --bg-app: #0e131f;
+  --bg-sidebar: #151c2e;
+  --bg-surface: #1d263b;
+  --bg-card: #242f49;
+  --bg-input: #121827;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --hover-color: rgba(255, 255, 255, 0.06);
+  --accent-primary: #38bdf8;
+  --accent-hover: #0284c7;
+  --accent-text: #020617;
+  --glow-color: rgba(56, 189, 248, 0.35);
+}
+
+/* 2. SLATE FUSION */
+[data-theme="slate-fusion"] {
+  --bg-app: #18181b;
+  --bg-sidebar: #202023;
+  --bg-surface: #27272a;
+  --bg-card: #3f3f46;
+  --bg-input: #141416;
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --hover-color: rgba(255, 255, 255, 0.08);
+  --accent-primary: #818cf8;
+  --accent-hover: #4f46e5;
+  --accent-text: #ffffff;
+  --glow-color: rgba(129, 140, 248, 0.35);
+}
+
+/* 3. NEON PULSE */
+[data-theme="neon-pulse"] {
+  --bg-app: #0d0714;
+  --bg-sidebar: #130a1e;
+  --bg-surface: #1a0e28;
+  --bg-card: #26143b;
+  --bg-input: #08040d;
+  --text-main: #f5e6ff;
+  --text-muted: #a78bfa;
+  --border-color: rgba(236, 72, 153, 0.25);
+  --hover-color: rgba(236, 72, 153, 0.1);
+  --accent-primary: #ec4899;
+  --accent-hover: #db2777;
+  --accent-text: #ffffff;
+  --glow-color: rgba(236, 72, 153, 0.4);
+}
+
+/* 4. SHADOW PURPLE */
+[data-theme="shadow-purple"] {
+  --bg-app: #13111c;
+  --bg-sidebar: #1a1726;
+  --bg-surface: #221f30;
+  --bg-card: #2d293e;
+  --bg-input: #0c0a12;
+  --text-main: #f3f0ff;
+  --text-muted: #8b5cf6;
+  --border-color: rgba(167, 139, 250, 0.2);
+  --hover-color: rgba(167, 139, 250, 0.08);
+  --accent-primary: #a78bfa;
+  --accent-hover: #7c3aed;
+  --accent-text: #0f0d15;
+  --glow-color: rgba(167, 139, 250, 0.35);
+}
+
+/* 5. CLEAN LIGHT */
+[data-theme="clean-light"] {
+  --bg-app: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-card: #f1f5f9;
+  --bg-input: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --border-color: #cbd5e1;
+  --hover-color: #e2e8f0;
+  --accent-primary: #0284c7;
+  --accent-hover: #0369a1;
+  --accent-text: #ffffff;
+  --glow-color: rgba(2, 132, 199, 0.2);
+}
+
+/* 6. AMBER LIGHT */
+[data-theme="amber-light"] {
+  --bg-app: #fefce8;
+  --bg-sidebar: #fef9c3;
+  --bg-surface: #fefce8;
+  --bg-card: #fef08a;
+  --bg-input: #fde047;
+  --text-main: #422006;
+  --text-muted: #854d0e;
+  --border-color: #fef08a;
+  --hover-color: #fef9c3;
+  --accent-primary: #d97706;
+  --accent-hover: #b45309;
+  --accent-text: #ffffff;
+  --glow-color: rgba(217, 119, 6, 0.25);
+}
+
+/* GLOBAL BASE APPLIANCE */
+body, #root {
+  background-color: var(--bg-app) !important;
+  color: var(--text-main) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* EXPLICIT NON-TRANSPARENT SIDEBAR ENFORCEMENT */
+aside, .sidebar-container {
+  background-color: var(--bg-sidebar) !important;
+  color: var(--text-main) !important;
+}
+
+/* GLASS PANEL - Enhanced */
+.glass-panel {
+  background-color: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px var(--glow-color);
+}
+
+/* GLASS MODAL - For centered modals */
+.glass-modal {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px var(--glow-color);
+}
+
+/* PREMIUM GLOSSY & SHINY BUTTON SYSTEM */
+.btn-shiny {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
+  color: var(--accent-text);
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 15px -3px var(--glow-color), inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-shiny:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -2px var(--accent-primary), inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
+  filter: brightness(1.1);
+}
+
+.btn-shiny:active {
+  transform: translateY(0.5px);
+  filter: brightness(0.95);
+}
+
+/* Scrollbar hide for tab navigation */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@layer base {
+  body {
+    @apply font-sans;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+/* ==========================================
+   ANIMATIONS & TRANSITIONS
+   ========================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out;
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover lift effect */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Subtle hover background */
+.hover-bg {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Focus ring utility */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--accent-primary);
+}
+
+/* Text Selection - High contrast for both light and dark modes */
+::selection {
+  background-color: var(--accent-primary);
+  color: var(--accent-text);
+}
+
+/* Firefox */
+::-moz-selection {
+  background-color: var(--accent-primary);
+  color: var(--accent-text);
+}
+
+/* ==========================================
+   FORCE OPAQUE CONTAINERS & THEME ENFORCEMENT
+   ========================================== */
+
+/* Fix root HTML theme assignment */
+html, body, #root {
+  background-color: var(--bg-app) !important;
+  color: var(--text-main) !important;
+  min-height: 100vh;
+}
+
+/* Fix transparent Profile/Settings Drawer */
+.profile-drawer,
+[role="dialog"],
+aside,
+.sidebar-container {
+  background-color: var(--bg-sidebar) !important;
+  background: var(--bg-sidebar) !important;
+  color: var(--text-main) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+}
+
+/* Ensure inputs in drawer/forms are fully opaque and styled */
+input, select {
+  background-color: var(--bg-input) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Textarea base styling - transparent by default, forms handle background */
+textarea {
+  background-color: transparent !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Glass panel fallback overlay */
+.glass-panel {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* ==========================================
+   SEMANTIC THEME ACCENT TOKENS
+   Replace static yellow utility classes with
+   accent-aware semantic classes.
+   ========================================== */
+.theme-accent-bg {
+  background-color: var(--accent-primary) !important;
+  color: var(--accent-text) !important;
+}
+.theme-accent-bg\/10 {
+  background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent) !important;
+}
+.theme-accent-bg\/20 {
+  background-color: color-mix(in srgb, var(--accent-primary) 20%, transparent) !important;
+}
+.theme-accent-text {
+  color: var(--accent-primary) !important;
+}
+.theme-accent-border {
+  border-color: var(--accent-primary) !important;
+}
+.theme-accent-border\/30 {
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent) !important;
+}
+.theme-accent-glow {
+  box-shadow: 0 0 15px var(--glow-color) !important;
+}
+
+/* ==========================================
+   MOBILE RESPONSIVE LAYOUT
+   ========================================== */
+
+/* Desktop: sidebar renders normally, no transform overrides */
+.mobile-sidebar {
+  transition: width 0.3s ease;
+}
+
+/* Mobile backdrop overlay — hidden by default */
+.mobile-backdrop {
+  display: none;
+}
+
+/* Mobile: sidebar becomes a fixed overlay */
+@media (max-width: 767px) {
+  .mobile-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 50;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .mobile-sidebar.mobile-sidebar-open {
+    transform: translateX(0);
+  }
+  .mobile-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+    backdrop-filter: blur(4px);
+  }
+}
+
+/* Ensure touch-friendly tap targets on mobile */
+@media (max-width: 767px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

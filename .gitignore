@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+UsersLyloAppDataLocalTempopencodesrv-*
+task_list.md
+server/.pgdata/
+server/uploads/
+server/dist/
+client/dist/

@@ -1,0 +1,143 @@
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Shield, Key, UserCheck, AlertTriangle, Lock, RefreshCw } from 'lucide-react';
+
+interface EditUserModalProps {
+  user: {
+    id: string;
+    username: string;
+    fullName?: string;
+    role: string;
+    status?: string;
+  } | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updatedData: {
+    userId: string;
+    role: string;
+    fullName: string;
+    status: string;
+    newPassword?: string;
+    revokeKeys?: boolean;
+  }) => void;
+}
+
+export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalProps) {
+  if (!isOpen || !user) return null;
+
+  const [role, setRole] = useState(user.role || 'MEMBER');
+  const [fullName, setFullName] = useState(user.fullName || '');
+  const [status, setStatus] = useState(user.status || 'ACTIVE');
+  const [newPassword, setNewPassword] = useState('');
+  const [revokeKeys, setRevokeKeys] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      userId: user.id,
+      role,
+      fullName,
+      status,
+      newPassword: newPassword.trim() ? newPassword : undefined,
+      revokeKeys,
+    });
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fadeIn">
+      <div className="w-full max-w-md glass-modal rounded-2xl p-6 bg-[var(--bg-surface)] text-[var(--text-main)] border border-[var(--border-color)] shadow-2xl relative">
+        
+        <div className="flex items-center justify-between pb-4 border-b border-[var(--border-color)] mb-4">
+          <div className="flex items-center gap-2 text-[var(--accent-primary)] font-bold text-sm">
+            <Shield className="w-5 h-5"/>
+            <span>Manage User Account — @{user.username}</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[var(--hover-color)] text-[var(--text-muted)]">
+            <X className="w-5 h-5"/>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Full Legal Name */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Full Legal Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          {/* Role Assignment */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Assigned RBAC Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            >
+              <option value="MEMBER">MEMBER (Basic Chat & Channel Creation)</option>
+              <option value="SUPERVISOR">SUPERVISOR (Channel Management & Announcements)</option>
+              <option value="ADMIN">ADMIN (Full System Rights & User Control)</option>
+            </select>
+          </div>
+
+          {/* Account Status */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Account State</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            >
+              <option value="ACTIVE">ACTIVE (Authorized Access)</option>
+              <option value="SUSPENDED">SUSPENDED (Access Denied)</option>
+            </select>
+          </div>
+
+          {/* Emergency Password Override */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Force Password Reset</label>
+            <input
+              type="password"
+              placeholder="Enter new password to force update..."
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          {/* Revoke Key Material */}
+          <div className="pt-2">
+            <label className="flex items-center gap-3 p-3 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl cursor-pointer">
+              <input
+                type="checkbox"
+                checked={revokeKeys}
+                onChange={(e) => setRevokeKeys(e.target.checked)}
+                className="w-4 h-4 rounded accent-[var(--accent-primary)]"
+              />
+              <div className="text-xs">
+                <span className="font-bold text-[var(--text-main)] block">Revoke E2EE Public Key Material</span>
+                <span className="text-[var(--text-muted)]">Forces the user device to re-generate cryptography keys on next login.</span>
+              </div>
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
+            <button type="button" onClick={onClose} className="px-3 py-2 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-main)]">
+              CANCEL
+            </button>
+            <button type="submit" className="px-5 py-2.5 text-xs font-bold rounded-xl bg-[var(--accent-primary)] text-[var(--accent-text)] shadow-lg hover:opacity-90">
+              UPDATE USER ACCOUNT
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>,
+    document.body
+  );
+}
