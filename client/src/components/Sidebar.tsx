@@ -597,7 +597,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const unread = unreadDMs[user.userId] || 0;
 
               return (
-                <button className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                <button
+                  key={user.userId}
+                  onClick={() => handleSelectUserWrapper(user)}
+                  title={`${user.fullName || user.username} (${user.role})`}
+                  className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
                   style={{
                     backgroundColor: isSelected
                       ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)'
