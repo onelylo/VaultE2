@@ -170,6 +170,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [handleScroll, selectedUser?.userId, selectedChannel?.id]);
 
+  // Force scroll to bottom when switching conversations
+  useEffect(() => {
+    if (scrollRef.current) {
+      // Reset to bottom immediately (no animation) when switching conversations
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      isNearBottomRef.current = true;
+    }
+  }, [selectedUser?.userId, selectedChannel?.id]);
+
   useEffect(() => {
     if (scrollRef.current) {
       if (isNearBottomRef.current) {
