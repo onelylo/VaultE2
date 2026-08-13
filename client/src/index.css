@@ -91,21 +91,89 @@
   --glow-color: rgba(2, 132, 199, 0.2);
 }
 
-/* 6. AMBER LIGHT */
+/* 6. CREAM LIGHT (was Amber Light) */
 [data-theme="amber-light"] {
-  --bg-app: #fefce8;
-  --bg-sidebar: #fef9c3;
-  --bg-surface: #fefce8;
-  --bg-card: #fef08a;
-  --bg-input: #fde047;
-  --text-main: #422006;
-  --text-muted: #854d0e;
-  --border-color: #fef08a;
-  --hover-color: #fef9c3;
-  --accent-primary: #d97706;
-  --accent-hover: #b45309;
+  --bg-app: #faf8f5;
+  --bg-sidebar: #f5f0e8;
+  --bg-surface: #faf8f5;
+  --bg-card: #efe8db;
+  --bg-input: #e8e0d0;
+  --text-main: #3d3425;
+  --text-muted: #7a6d5a;
+  --border-color: #e0d5c0;
+  --hover-color: #f0e8d8;
+  --accent-primary: #a67c52;
+  --accent-hover: #8b6540;
   --accent-text: #ffffff;
-  --glow-color: rgba(217, 119, 6, 0.25);
+  --glow-color: rgba(166, 124, 82, 0.2);
+}
+
+/* 7. MINT FRESH */
+[data-theme="mint-fresh"] {
+  --bg-app: #f0fdf8;
+  --bg-sidebar: #e6faf2;
+  --bg-surface: #f0fdf8;
+  --bg-card: #d1fae5;
+  --bg-input: #bbf7d0;
+  --text-main: #064e3b;
+  --text-muted: #047857;
+  --border-color: #a7f3d0;
+  --hover-color: #d1fae5;
+  --accent-primary: #059669;
+  --accent-hover: #047857;
+  --accent-text: #ffffff;
+  --glow-color: rgba(5, 150, 105, 0.2);
+}
+
+/* 8. OCEAN MIST */
+[data-theme="ocean-mist"] {
+  --bg-app: #f0f7ff;
+  --bg-sidebar: #e0eef9;
+  --bg-surface: #f0f7ff;
+  --bg-card: #d0e4f7;
+  --bg-input: #bdd8f0;
+  --text-main: #0c2d48;
+  --text-muted: #1e5a8a;
+  --border-color: #b0d4f1;
+  --hover-color: #d0e8fa;
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-text: #ffffff;
+  --glow-color: rgba(37, 99, 235, 0.2);
+}
+
+/* 9. ROSE GARDEN */
+[data-theme="rose-garden"] {
+  --bg-app: #fdf2f8;
+  --bg-sidebar: #fce7f3;
+  --bg-surface: #fdf2f8;
+  --bg-card: #fbcfe8;
+  --bg-input: #f9a8d4;
+  --text-main: #4a1942;
+  --text-muted: #9d174d;
+  --border-color: #f9a8d4;
+  --hover-color: #fce7f3;
+  --accent-primary: #ec4899;
+  --accent-hover: #db2777;
+  --accent-text: #ffffff;
+  --glow-color: rgba(236, 72, 153, 0.2);
+}
+
+/* 10. MIDNIGHT TEAL */
+[data-theme="midnight-teal"] {
+  --bg-app: #0f1a1e;
+  --bg-sidebar: #142228;
+  --bg-surface: #1a2c33;
+  --bg-card: #243b44;
+  --bg-input: #0b1316;
+  --text-main: #e0f2f1;
+  --text-muted: #80cbc4;
+  --border-color: rgba(128, 203, 196, 0.2);
+  --hover-color: rgba(128, 203, 196, 0.08);
+  --accent-primary: #26a69a;
+  --accent-hover: #00897b;
+  --accent-text: #0f1a1e;
+  --glow-color: rgba(38, 166, 154, 0.35);
 }
 
 /* GLOBAL BASE APPLIANCE */

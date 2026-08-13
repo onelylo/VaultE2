@@ -45,8 +45,12 @@ const VAULT_THEMES = [
   { id: 'slate-fusion', label: 'Slate Fusion', icon: Monitor, color: 'bg-indigo-500' },
   { id: 'neon-pulse', label: 'Neon Pulse', icon: Zap, color: 'bg-pink-500' },
   { id: 'shadow-purple', label: 'Shadow Purple', icon: Moon, color: 'bg-purple-500' },
+  { id: 'midnight-teal', label: 'Midnight Teal', icon: Moon, color: 'bg-teal-500' },
   { id: 'clean-light', label: 'Clean Light', icon: Sun, color: 'bg-gray-200' },
-  { id: 'amber-light', label: 'Amber Light', icon: Sun, color: 'bg-amber-400' },
+  { id: 'amber-light', label: 'Cream Light', icon: Sun, color: 'bg-amber-200' },
+  { id: 'mint-fresh', label: 'Mint Fresh', icon: Sun, color: 'bg-emerald-400' },
+  { id: 'ocean-mist', label: 'Ocean Mist', icon: Sun, color: 'bg-blue-400' },
+  { id: 'rose-garden', label: 'Rose Garden', icon: Sun, color: 'bg-pink-400' },
 ];
 
 export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
