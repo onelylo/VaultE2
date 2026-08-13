@@ -202,24 +202,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [handleScroll, selectedUser?.userId, selectedChannel?.id]);
 
   // Force scroll to bottom when switching conversations
-  useEffect(() => {
-    justSwitchedRef.current = true;
-  }, [selectedUser?.userId, selectedChannel?.id]);
+  const switchKey = `${selectedUser?.userId || ''}-${selectedChannel?.id || ''}`;
+  const prevSwitchKey = useRef(switchKey);
 
   useEffect(() => {
-    if (scrollRef.current && visibleMessages !== undefined) {
-      if (justSwitchedRef.current) {
-        // Just switched conversation — force to bottom instantly
+    if (switchKey !== prevSwitchKey.current) {
+      prevSwitchKey.current = switchKey;
+      justSwitchedRef.current = true;
+    }
+  }, [switchKey]);
+
+  useEffect(() => {
+    if (!justSwitchedRef.current || !scrollRef.current) return;
+    // Scroll to bottom after a short delay to ensure DOM is updated
+    const timer = setTimeout(() => {
+      if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         justSwitchedRef.current = false;
         isNearBottomRef.current = true;
-      } else if (isNearBottomRef.current && visibleMessages && visibleMessages.length > 0) {
-        // New message arrived while near bottom — smooth scroll
-        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-      } else {
-        setShowScrollDown(true);
       }
-    }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [visibleMessages?.length]);
 
   // Textarea auto-resize

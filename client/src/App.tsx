@@ -97,6 +97,17 @@ const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').th
 const MessageSearch = React.lazy(() => import('./components/MessageSearch').then(m => ({ default: m.MessageSearch })));
 
 export const App: React.FC = () => {
+  // Block Ctrl+scroll zoom on entire app EXCEPT when lightbox is open
+  useEffect(() => {
+    const handler = (e: WheelEvent) => {
+      if (e.ctrlKey && !document.getElementById('image-lightbox-portal')) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('wheel', handler, { passive: false });
+    return () => document.removeEventListener('wheel', handler);
+  }, []);
+
   // ── Auth & Keys ──────────────────────────────────────────────────────────────
   const [currentUserKeys, setCurrentUserKeys] = useState<UserKeyPair | null>(null);
   const [privateKeyObject, setPrivateKeyObject] = useState<CryptoKey | null>(null);
