@@ -1853,10 +1853,10 @@ export const App: React.FC = () => {
       {/* Toast notification */}
       {toast && (
         <div
-          className={`mb-2 px-3 py-2 rounded-xl bg-[var(--bg-surface)] border-l-4 border-${toast.type === 'success' ? 'green-500' : toast.type === 'error' ? 'red-500' : 'blue-500'}/50 text-[var(--text-main)] flex items-center space-x-2 animate-toastIn`}
-          style={{ animationDuration: '0.25s' }}
+          className="mb-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-2 flex items-center space-x-2 fade-in"
+          style={{ animationName: 'fadeIn', animationDuration: '0.25s', animationFillMode: 'forwards' }}
         >
-          <div className="w-3 h-3 rounded-full bg-{toast.type === 'success' ? 'green-400' : toast.type === 'error' ? 'red-400' : 'blue-400'} flex-shrink-0" />
+          <div className="w-2 h-2 rounded-full bg-{toast.type === 'success' ? 'green-400' : toast.type === 'error' ? 'red-400' : 'blue-400'} flex-shrink-0" />
           <span className="text-xs">{toast.message}</span>
         </div>
       )}
