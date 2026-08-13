@@ -154,6 +154,7 @@ export const App: React.FC = () => {
   const [lastViewedChannels, setLastViewedChannels] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('vaultchat_lastViewedChannels') || '{}'); } catch { return {}; }
   });
+  const [latestDMMessages, setLatestDMMessages] = useState<Record<string, string>>({});
   const [pinnedMessages, setPinnedMessages] = useState<Record<string, { messageId: string; pinnedBy: string; pinnedAt: number }[]>>({});
 
   // ── Security & Caches ─────────────────────────────────────────────────────────
@@ -1277,25 +1278,46 @@ export const App: React.FC = () => {
       const allMsgs = await db.messages.toArray();
       const dmCounts: Record<string, number> = {};
       const channelCounts: Record<string, number> = {};
+      const latestMsgs: Record<string, { text: string; timestamp: number; fromMe: boolean }> = {};
       for (const msg of allMsgs) {
-        if (msg.senderId === myId) continue;
         if (msg.channelId) {
+          if (msg.senderId === myId) continue;
           const lastViewed = lastViewedChannelsRef.current[msg.channelId] || 0;
           if (msg.timestamp > lastViewed) {
             channelCounts[msg.channelId] = (channelCounts[msg.channelId] || 0) + 1;
           }
         } else {
-          if (msg.recipientId !== myId) continue;
-          const partnerId = msg.senderId;
-          const lastViewed = lastViewedDmsRef.current[partnerId] || 0;
-          if (msg.timestamp > lastViewed) {
-            dmCounts[partnerId] = (dmCounts[partnerId] || 0) + 1;
+          const partnerId = msg.senderId === myId ? msg.recipientId : msg.senderId;
+          if (!partnerId) continue;
+          const fromMe = msg.senderId === myId;
+          // Only count incoming messages as unread
+          if (!fromMe) {
+            const lastViewed = lastViewedDmsRef.current[partnerId] || 0;
+            if (msg.timestamp > lastViewed) {
+              dmCounts[partnerId] = (dmCounts[partnerId] || 0) + 1;
+            }
+          }
+          // Track latest message per partner
+          const existing = latestMsgs[partnerId];
+          if (!existing || msg.timestamp > existing.timestamp) {
+            latestMsgs[partnerId] = {
+              text: fromMe ? `You: ${msg.text || '📎 Attachment'}` : (msg.text || '📎 Attachment'),
+              timestamp: msg.timestamp,
+              fromMe,
+            };
           }
         }
       }
       setUnreadDMs(dmCounts);
       setUnreadChannels(channelCounts);
+      // Convert to string map for sidebar
+      const previewMap: Record<string, string> = {};
+      for (const [partnerId, latest] of Object.entries(latestMsgs)) {
+        previewMap[partnerId] = latest.text;
+      }
+      setLatestDMMessages(previewMap);
     };
+    computeUnreadRef.current = computeUnread;
     computeUnread();
     const interval = setInterval(computeUnread, 5000);
     return () => clearInterval(interval);
@@ -1333,6 +1355,9 @@ export const App: React.FC = () => {
     setLastViewedDms(prev => ({ ...prev, [user.userId]: now }));
     lastViewedDmsRef.current = { ...lastViewedDmsRef.current, [user.userId]: now };
 
+    // Immediately recompute unread counts so badge clears instantly
+    computeUnreadRef.current?.();
+
     // Emit read receipt for this DM thread
     socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: user.userId });
 
@@ -1366,6 +1391,7 @@ export const App: React.FC = () => {
     const now = Date.now();
     setLastViewedChannels(prev => ({ ...prev, [channel.id]: now }));
     lastViewedChannelsRef.current = { ...lastViewedChannelsRef.current, [channel.id]: now };
+    computeUnreadRef.current?.();
     await getOrGenerateChannelKey(channel.id);
 
     // Emit read receipt for this channel
@@ -1550,6 +1576,8 @@ export const App: React.FC = () => {
 
   const lastViewedChannelsRef = useRef(lastViewedChannels);
   useEffect(() => { lastViewedChannelsRef.current = lastViewedChannels; }, [lastViewedChannels]);
+
+  const computeUnreadRef = useRef<(() => Promise<void>) | null>(null);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -1783,6 +1811,7 @@ export const App: React.FC = () => {
             unreadDMs={unreadDMs}
             unreadChannels={unreadChannels}
             recentDMs={recentDMs}
+            latestDMMessages={latestDMMessages}
           />
           </div>
         </>

@@ -48,6 +48,7 @@ interface SidebarProps {
   unreadDMs?: Record<string, number>;
   unreadChannels?: Record<string, number>;
   recentDMs?: User[];
+  latestDMMessages?: Record<string, string>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -74,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unreadDMs = {},
   unreadChannels = {},
   recentDMs = [],
+  latestDMMessages = {},
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
@@ -652,8 +654,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             {user.fullName || user.username}
                           </span>
                         </div>
-                        {user.statusMessage && (
-                          <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{user.statusMessage}</p>
+                        {latestDMMessages[user.userId] && (
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{latestDMMessages[user.userId]}</p>
                         )}
                       </div>
                     )}

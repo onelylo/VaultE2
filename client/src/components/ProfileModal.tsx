@@ -114,12 +114,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </h3>
               <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>@{user.username}</span>
             </div>
-
-            {user.statusMessage && (
-              <p className="text-[11px] text-center px-2" style={{ color: 'var(--text-muted)' }}>
-                {user.statusMessage}
-              </p>
-            )}
           </div>
 
           {/* Role + Online status */}
