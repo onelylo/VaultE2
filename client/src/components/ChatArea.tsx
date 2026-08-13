@@ -136,15 +136,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         return msgs.sort((a, b) => a.timestamp - b.timestamp);
       }
       if (selectedUser && currentUserId) {
-        // Two targeted queries instead of loading entire table
+        // Use compound index [senderId+recipientId] for fast DM lookup
         const [sent, received] = await Promise.all([
-          db.messages.where('senderId').equals(currentUserId).toArray(),
-          db.messages.where('senderId').equals(selectedUser.userId).toArray(),
+          db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
+          db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
         ]);
-        return sent
-          .filter(m => m.recipientId === selectedUser.userId)
-          .concat(received.filter(m => m.recipientId === currentUserId))
-          .sort((a, b) => a.timestamp - b.timestamp);
+        return [...sent, ...received].sort((a, b) => a.timestamp - b.timestamp);
       }
       return [];
     },
