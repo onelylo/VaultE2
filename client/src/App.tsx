@@ -444,7 +444,11 @@ export const App: React.FC = () => {
       }
       setMitmWarnings(prev => ({ ...prev, [peer.userId]: true }));
       return false;
-    } catch { return true; }
+    } catch (e) {
+      console.error('[TOFU] Validation error — blocking by default:', e);
+      setMitmWarnings(prev => ({ ...prev, [peer.userId]: true }));
+      return false;
+    }
   }, []);
 
   const handleTrustNewKey = async (peer: User) => {

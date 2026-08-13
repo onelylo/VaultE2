@@ -171,7 +171,7 @@ function getPool(): pg.Pool {
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
-const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, deleted_at, created_at';
+const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, deleted_at, created_at';
 
 function mapUserRow(row: any): DbUser {
   return {
@@ -260,7 +260,7 @@ export async function rotateUserKeys(
   );
 }
 
-export async function updateUserRole(userId: string, role: 'ADMIN' | 'MEMBER'): Promise<void> {
+export async function updateUserRole(userId: string, role: 'ADMIN' | 'SUPERVISOR' | 'MEMBER'): Promise<void> {
   await getPool().query(`UPDATE users SET role = $2 WHERE id = $1`, [userId, role]);
 }
 
@@ -507,7 +507,10 @@ export async function getMessageById(id: string): Promise<DbMessage | undefined>
 export async function getMessagesForUser(userId: string): Promise<DbMessage[]> {
   const res = await getPool().query(
     `SELECT ${MSG_COLS} FROM messages
-     WHERE (sender_id = $1 OR recipient_id = $1) OR channel_id IS NOT NULL
+     WHERE (sender_id = $1 OR recipient_id = $1)
+        OR (channel_id IS NOT NULL AND channel_id IN (
+              SELECT channel_id FROM channel_members WHERE user_id = $1
+            ))
      ORDER BY created_at ASC`,
     [userId]
   );

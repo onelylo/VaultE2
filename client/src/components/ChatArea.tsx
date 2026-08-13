@@ -572,7 +572,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       <div className="mx-4 mb-4">
         {micDenied && (
-          <div className="mb-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2 animate-toastIn">
+          <div className="mb-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2 animate-slideDown">
             <ShieldAlert className="w-4 h-4 flex-shrink-0" />
             <span>Microphone access denied. Please allow microphone permission in your browser settings.</span>
           </div>

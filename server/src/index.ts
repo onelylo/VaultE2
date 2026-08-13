@@ -1416,7 +1416,7 @@ async function boot() {
   server.listen(PORT, () => {
     console.log(`\n================================================`);
     console.log(`  VaultChat Enterprise E2EE — Port ${PORT}`);
-    console.log(`  Roles: ADMIN | MEMBER`);
+    console.log(`  Roles: ADMIN | SUPERVISOR | MEMBER`);
     console.log(`  Database: PostgreSQL (persistent)`);
     console.log(`  APIs: /api/users  /api/messages  /api/messages/direct/:id`);
     console.log(`  Attachments: /api/attachments/upload | /api/attachments/:id`);

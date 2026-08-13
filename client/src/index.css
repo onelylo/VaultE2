@@ -355,7 +355,7 @@ aside, .sidebar-container {
 .animate-messageIn {
   animation: fadeInUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.animate-toastIn {
+.animate-slideDown {
   animation: slideInTop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
