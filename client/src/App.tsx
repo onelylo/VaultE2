@@ -1328,8 +1328,10 @@ export const App: React.FC = () => {
     setSelectedPeer(user);
     if (!currentUserKeys) return;
 
-    // Mark DM as viewed
-    setLastViewedDms(prev => ({ ...prev, [user.userId]: Date.now() }));
+    // Mark DM as viewed — update both state (for persistence) and ref (for immediate use by computeUnread)
+    const now = Date.now();
+    setLastViewedDms(prev => ({ ...prev, [user.userId]: now }));
+    lastViewedDmsRef.current = { ...lastViewedDmsRef.current, [user.userId]: now };
 
     // Emit read receipt for this DM thread
     socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: user.userId });
@@ -1361,7 +1363,9 @@ export const App: React.FC = () => {
   const handleSelectChannel = async (channel: Channel) => {
     setSelectedPeer(null);
     setSelectedChannel(channel);
-    setLastViewedChannels(prev => ({ ...prev, [channel.id]: Date.now() }));
+    const now = Date.now();
+    setLastViewedChannels(prev => ({ ...prev, [channel.id]: now }));
+    lastViewedChannelsRef.current = { ...lastViewedChannelsRef.current, [channel.id]: now };
     await getOrGenerateChannelKey(channel.id);
 
     // Emit read receipt for this channel
@@ -1730,6 +1734,11 @@ export const App: React.FC = () => {
 
   const usersWithPresence: User[] = allUsers.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) }));
 
+  // Live version of selectedPeer that updates when onlineIds changes
+  const selectedPeerWithPresence = selectedPeer
+    ? usersWithPresence.find(u => u.userId === selectedPeer.userId) || selectedPeer
+    : null;
+
   if (isRehydrating) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center" style={{ backgroundColor: 'var(--bg-app)', color: 'var(--text-muted)' }}>
@@ -1799,7 +1808,7 @@ export const App: React.FC = () => {
         <div className="flex-1 flex overflow-hidden relative">
           <div className="flex-1 flex flex-col h-full overflow-hidden relative">
             <ChatArea
-              selectedUser={selectedPeer}
+              selectedUser={selectedPeerWithPresence}
               selectedChannel={selectedChannel}
               currentUserId={currentUserKeys?.userId || ''}
               currentUserKeys={currentUserKeys}
