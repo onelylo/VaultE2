@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Copy, ShieldCheck, Image, Music, FileText, Camera, Mic, Paperclip } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { X, Copy, ShieldCheck, Image, Music, FileText, Camera, Mic, Paperclip, Film, Calendar } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import type { User, LocalMessage } from '../types/chat';
@@ -13,7 +13,24 @@ interface ProfileModalProps {
   onImageClick?: (url: string, name?: string) => void;
 }
 
-type MediaTab = 'all' | 'images' | 'audio' | 'docs';
+type MediaTab = 'all' | 'images' | 'audio' | 'video' | 'docs';
+
+function getDateGroup(timestamp: number): string {
+  const now = new Date();
+  const msgDate = new Date(timestamp);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
+
+  if (msgDate >= today) return 'Today';
+  if (msgDate >= yesterday) return 'Yesterday';
+  if (msgDate >= weekAgo) return 'This Week';
+  return 'Earlier';
+}
+
+function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   user,
@@ -24,7 +41,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onImageClick,
 }) => {
   const [showFullAvatar, setShowFullAvatar] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<MediaTab>('all');
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -51,24 +67,43 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   }, [currentUserId, user.userId]);
 
-  // Categorize
-  const images = sharedMessages?.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/')) || [];
-  const audio = sharedMessages?.filter(m => m.attachmentMeta?.mimeType?.startsWith('audio/')) || [];
-  const docs = sharedMessages?.filter(m =>
+  // Categorize by type
+  const images = useMemo(() => sharedMessages?.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/')) || [], [sharedMessages]);
+  const audio = useMemo(() => sharedMessages?.filter(m => m.attachmentMeta?.mimeType?.startsWith('audio/')) || [], [sharedMessages]);
+  const video = useMemo(() => sharedMessages?.filter(m => m.attachmentMeta?.mimeType?.startsWith('video/')) || [], [sharedMessages]);
+  const docs = useMemo(() => sharedMessages?.filter(m =>
     m.attachmentMeta?.mimeType &&
     !m.attachmentMeta.mimeType.startsWith('image/') &&
-    !m.attachmentMeta.mimeType.startsWith('audio/')
-  ) || [];
+    !m.attachmentMeta.mimeType.startsWith('audio/') &&
+    !m.attachmentMeta.mimeType.startsWith('video/')
+  ) || [], [sharedMessages]);
   const allMedia = sharedMessages || [];
 
-  const currentList = activeTab === 'all' ? allMedia : activeTab === 'images' ? images : activeTab === 'audio' ? audio : docs;
-  const tabCounts = { all: allMedia.length, images: images.length, audio: audio.length, docs: docs.length };
+  const currentList = activeTab === 'all' ? allMedia
+    : activeTab === 'images' ? images
+    : activeTab === 'audio' ? audio
+    : activeTab === 'video' ? video
+    : docs;
 
-  const handleCopyUserId = () => {
-    navigator.clipboard.writeText(user.userId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const tabCounts = { all: allMedia.length, images: images.length, audio: audio.length, video: video.length, docs: docs.length };
+
+  // Total storage used
+  const totalSize = useMemo(() => allMedia.reduce((sum, m) => sum + (m.attachmentMeta?.fileSize || 0), 0), [allMedia]);
+
+  // Group current list by date
+  const grouped = useMemo(() => {
+    const groups: { label: string; items: LocalMessage[] }[] = [];
+    let lastGroup = '';
+    for (const msg of currentList) {
+      const group = getDateGroup(msg.timestamp || 0);
+      if (group !== lastGroup) {
+        groups.push({ label: group, items: [] });
+        lastGroup = group;
+      }
+      groups[groups.length - 1].items.push(msg);
+    }
+    return groups;
+  }, [currentList]);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -79,6 +114,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const tabs: { id: MediaTab; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: 'All', icon: <FileText className="w-3 h-3" /> },
     { id: 'images', label: 'Photos', icon: <Image className="w-3 h-3" /> },
+    { id: 'video', label: 'Video', icon: <Film className="w-3 h-3" /> },
     { id: 'audio', label: 'Audio', icon: <Mic className="w-3 h-3" /> },
     { id: 'docs', label: 'Docs', icon: <Paperclip className="w-3 h-3" /> },
   ];
@@ -132,32 +168,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 onClick={() => user.avatarUrl && setShowFullAvatar(true)}
               >
                 {user.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt="avatar"
-                    className="w-20 h-20 rounded-2xl object-cover"
-                    style={{ border: '3px solid var(--border-color)' }}
-                  />
+                  <img src={user.avatarUrl} alt="avatar" className="w-20 h-20 rounded-2xl object-cover"
+                    style={{ border: '3px solid var(--border-color)' }} />
                 ) : (
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
                     style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '3px solid var(--border-color)', color: 'var(--accent-primary)' }}>
                     {user.username.substring(0, 2).toUpperCase()}
                   </div>
                 )}
-                <span
-                  className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2"
-                  style={{
-                    borderColor: 'var(--bg-surface)',
-                    backgroundColor: user.isOnline ? '#34d399' : 'var(--text-muted)',
-                    boxShadow: user.isOnline ? '0 0 8px #34d399' : 'none',
-                  }}
-                />
+                <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2"
+                  style={{ borderColor: 'var(--bg-surface)', backgroundColor: user.isOnline ? '#34d399' : 'var(--text-muted)', boxShadow: user.isOnline ? '0 0 8px #34d399' : 'none' }} />
               </div>
 
               <div className="text-center">
-                <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>
-                  {user.fullName || user.username}
-                </h3>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</h3>
                 <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>@{user.username}</span>
               </div>
             </div>
@@ -193,15 +217,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             {/* Actions */}
             <div className="flex flex-wrap gap-2 mb-4">
               {onStartDM && (
-                <button onClick={onStartDM}
-                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-smooth"
+                <button onClick={onStartDM} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-smooth"
                   style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}>
                   MESSAGE
                 </button>
               )}
               {onBlock && (
-                <button onClick={onBlock}
-                  className="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-smooth"
+                <button onClick={onBlock} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-smooth"
                   style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f87171' }}>
                   BLOCK
                 </button>
@@ -211,31 +233,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             {/* Shared Media */}
             {allMedia.length > 0 && (
               <div>
+                {/* Header with stats */}
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>
                     SHARED MEDIA
                   </h4>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
-                    style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}>
-                    {allMedia.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                      {formatSize(totalSize)}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                      style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}>
+                      {allMedia.length}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Tabs */}
                 <div className="flex gap-1 mb-3 p-0.5 rounded-lg"
                   style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
                   {tabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                       className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[9px] font-bold transition-all"
                       style={{
                         backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent',
                         color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)',
-                      }}
-                    >
+                      }}>
                       {tab.icon}
-                      {tab.label}
+                      <span className="hidden sm:inline">{tab.label}</span>
                       {tabCounts[tab.id] > 0 && (
                         <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>
                       )}
@@ -244,75 +269,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
 
                 {/* Media Grid */}
-                {currentList.length > 0 ? (
-                  <div className={activeTab === 'images' ? 'grid grid-cols-3 gap-1.5' : 'space-y-1.5'}>
-                    {currentList.map(msg => {
-                      const meta = msg.attachmentMeta!;
-                      const isImage = meta.mimeType?.startsWith('image/');
-                      const isAudio = meta.mimeType?.startsWith('audio/');
-
-                      if (isImage) {
-                        return (
-                          <div
-                            key={msg.id}
-                            className="aspect-square rounded-lg overflow-hidden cursor-pointer relative group"
-                            style={{ border: '1px solid var(--border-color)' }}
-                            onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
-                          >
-                            {meta.thumbnailDataUrl ? (
-                              <img src={meta.thumbnailDataUrl} alt={meta.fileName}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center"
-                                style={{ backgroundColor: 'var(--bg-input)' }}>
-                                <Camera className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      if (isAudio) {
-                        return (
-                          <div key={msg.id}
-                            className="flex items-center gap-2 p-2 rounded-lg cursor-pointer"
-                            style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
-                            onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
-                          >
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                              style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                              <Mic className="w-4 h-4" style={{ color: '#10b981' }} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
-                              <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(meta.fileSize)}</p>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      // Document
-                      return (
-                        <div key={msg.id}
-                          className="flex items-center gap-2 p-2 rounded-lg cursor-pointer"
-                          style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
-                          onClick={() => onImageClick?.('', meta.fileName)}
-                        >
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-                            <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
-                            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(meta.fileSize)}</p>
-                          </div>
+                {grouped.length > 0 ? (
+                  <div className="space-y-3">
+                    {grouped.map(group => (
+                      <div key={group.label}>
+                        {/* Date header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                          <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>
+                            {group.label}
+                          </span>
+                          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                          </span>
                         </div>
-                      );
-                    })}
+
+                        {/* Items */}
+                        {activeTab === 'images' || activeTab === 'video' ? (
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize))}
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {group.items.map(msg => renderMediaItem(msg, activeTab, onImageClick, formatSize))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <div className="text-center py-4">
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No {activeTab !== 'all' ? tabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} shared yet</p>
+                  <div className="text-center py-6">
+                    <Paperclip className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      No {activeTab !== 'all' ? tabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} shared yet
+                    </p>
                   </div>
                 )}
               </div>
@@ -323,3 +314,101 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     </>
   );
 };
+
+function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: (url: string, name?: string) => void, formatSize?: (bytes: number) => string) {
+  const meta = msg.attachmentMeta!;
+  const isImage = meta.mimeType?.startsWith('image/');
+  const isAudio = meta.mimeType?.startsWith('audio/');
+  const isVideo = meta.mimeType?.startsWith('video/');
+  const dateStr = new Date(msg.timestamp || 0).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  if (isImage || (activeTab === 'images' && meta.thumbnailDataUrl)) {
+    return (
+      <div key={msg.id}
+        className="aspect-square rounded-lg overflow-hidden cursor-pointer relative group"
+        style={{ border: '1px solid var(--border-color)' }}
+        onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
+        title={`${meta.fileName} • ${dateStr}`}>
+        {meta.thumbnailDataUrl ? (
+          <img src={meta.thumbnailDataUrl} alt={meta.fileName}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--bg-input)' }}>
+            <Camera className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+          </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+          <p className="text-[8px] text-white truncate">{meta.fileName}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <div key={msg.id}
+        className="aspect-video rounded-lg overflow-hidden cursor-pointer relative group"
+        style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)' }}
+        onClick={() => onImageClick?.(msg.attachmentMeta?.thumbnailDataUrl || '', meta.fileName)}
+        title={`${meta.fileName} • ${dateStr}`}>
+        {meta.thumbnailDataUrl ? (
+          <img src={meta.thumbnailDataUrl} alt={meta.fileName}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Film className="w-6 h-6" style={{ color: 'var(--text-muted)' }} />
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+            <div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-0.5" />
+          </div>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+          <p className="text-[8px] text-white truncate">{meta.fileName} • {formatSize?.(meta.fileSize)}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAudio) {
+    return (
+      <div key={msg.id}
+        className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+        onClick={() => onImageClick?.('', meta.fileName)}
+        title={`${meta.fileName} • ${dateStr}`}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+          <Mic className="w-4 h-4" style={{ color: '#10b981' }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+          <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize?.(meta.fileSize)} • {dateStr}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Document
+  return (
+    <div key={msg.id}
+      className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+      style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+      onClick={() => onImageClick?.('', meta.fileName)}
+      title={`${meta.fileName} • ${dateStr}`}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+        <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize?.(meta.fileSize)} • {dateStr}</p>
+      </div>
+    </div>
+  );
+}
