@@ -61,9 +61,11 @@ CREATE TABLE IF NOT EXISTS messages (
   status       TEXT NOT NULL DEFAULT 'sent',
   is_edited    BOOLEAN NOT NULL DEFAULT FALSE,
   is_deleted   BOOLEAN NOT NULL DEFAULT FALSE,
-  reply_to     TEXT,
   created_at   BIGINT NOT NULL
 );
+
+-- Migrations for existing databases
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_messages_dm      ON messages (sender_id, recipient_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages (channel_id, created_at);

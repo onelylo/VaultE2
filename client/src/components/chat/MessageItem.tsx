@@ -98,6 +98,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       : userLookup.get(replyToMsg.senderId) || replyToMsg.senderId
     : null;
 
+  // Deleted messages — render nothing (remove residual bubble entirely)
+  if (msg.isDeleted) return null;
+
   return (
     <div
       id={`msg-${msg.id}`}
@@ -107,9 +110,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       <div
         data-bubble
         className={`rounded-2xl border p-3.5 shadow-sm max-w-[85%] leading-relaxed ${
-          msg.isDeleted
-            ? 'bg-[var(--bg-surface)]/60 border-[var(--border-color)] text-[var(--text-muted)] italic'
-            : isSelf
+          isSelf
             ? 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-main)] rounded-tr-sm'
             : 'bg-[var(--bg-card)] border-[var(--bg-surface)] text-[var(--text-main)] rounded-tl-sm'
         } ${msg.status === 'pending_sync' ? 'opacity-70' : 'opacity-100'}`}
