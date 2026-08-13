@@ -135,14 +135,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         const msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
         return msgs.sort((a, b) => a.timestamp - b.timestamp);
       }
-      if (selectedUser) {
-        const all = await db.messages.toArray();
-        return all
-          .filter(
-            m =>
-              (!m.channelId && m.senderId === currentUserId && m.recipientId === selectedUser.userId) ||
-              (!m.channelId && m.senderId === selectedUser.userId && m.recipientId === currentUserId)
-          )
+      if (selectedUser && currentUserId) {
+        // Two targeted queries instead of loading entire table
+        const [sent, received] = await Promise.all([
+          db.messages.where('senderId').equals(currentUserId).toArray(),
+          db.messages.where('senderId').equals(selectedUser.userId).toArray(),
+        ]);
+        return sent
+          .filter(m => m.recipientId === selectedUser.userId)
+          .concat(received.filter(m => m.recipientId === currentUserId))
           .sort((a, b) => a.timestamp - b.timestamp);
       }
       return [];

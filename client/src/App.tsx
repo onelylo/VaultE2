@@ -173,18 +173,17 @@ export const App: React.FC = () => {
 
   // Load recent DM partners from IndexedDB on mount so sidebar order persists across refresh
   useEffect(() => {
-    if (!currentUserKeys) return;
+    if (!currentUserKeys || allUsers.length === 0) return;
     (async () => {
       const partnerIds = await getActiveDMPartners(currentUserKeys.userId);
-      const users = allUsersRef.current;
       const ordered = partnerIds
-        .map(id => users.find(u => u.userId === id))
+        .map(id => allUsers.find(u => u.userId === id))
         .filter(Boolean) as User[];
       if (ordered.length > 0) {
         setRecentDMs(ordered.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) })));
       }
     })();
-  }, [currentUserKeys]);
+  }, [currentUserKeys, allUsers.length]);
 
   const upsertDMConversation = useCallback((peer: User, lastMessageText: string) => {
     setRecentDMs(prev => {
@@ -1291,42 +1290,47 @@ export const App: React.FC = () => {
     if (!currentUserKeys) return;
     const myId = currentUserKeys.userId;
     const computeUnread = async () => {
-      const allMsgs = await db.messages.toArray();
+      // Only fetch messages where senderId is NOT me (incoming messages only)
+      // Use two targeted queries instead of loading entire table
+      const incomingDMs = await db.messages.where('recipientId').equals(myId).toArray();
+      const incomingChannel = await db.messages.where('channelId').above('').toArray();
+      const incoming = [...incomingDMs, ...incomingChannel.filter(m => m.senderId !== myId)];
       const dmCounts: Record<string, number> = {};
       const channelCounts: Record<string, number> = {};
       const latestMsgs: Record<string, { text: string; timestamp: number; fromMe: boolean }> = {};
-      for (const msg of allMsgs) {
+      for (const msg of incoming) {
         if (msg.channelId) {
-          if (msg.senderId === myId) continue;
           const lastViewed = lastViewedChannelsRef.current[msg.channelId] || 0;
           if (msg.timestamp > lastViewed) {
             channelCounts[msg.channelId] = (channelCounts[msg.channelId] || 0) + 1;
           }
         } else {
-          const partnerId = msg.senderId === myId ? msg.recipientId : msg.senderId;
+          const partnerId = msg.senderId;
           if (!partnerId) continue;
-          const fromMe = msg.senderId === myId;
-          // Only count incoming messages as unread
-          if (!fromMe) {
-            const lastViewed = lastViewedDmsRef.current[partnerId] || 0;
-            if (msg.timestamp > lastViewed) {
-              dmCounts[partnerId] = (dmCounts[partnerId] || 0) + 1;
-            }
+          const lastViewed = lastViewedDmsRef.current[partnerId] || 0;
+          if (msg.timestamp > lastViewed) {
+            dmCounts[partnerId] = (dmCounts[partnerId] || 0) + 1;
           }
-          // Track latest message per partner
+          // Track latest incoming message per partner
           const existing = latestMsgs[partnerId];
           if (!existing || msg.timestamp > existing.timestamp) {
-            latestMsgs[partnerId] = {
-              text: fromMe ? `You: ${msg.text || '📎 Attachment'}` : (msg.text || '📎 Attachment'),
-              timestamp: msg.timestamp,
-              fromMe,
-            };
+            latestMsgs[partnerId] = { text: msg.text || '📎 Attachment', timestamp: msg.timestamp, fromMe: false };
           }
+        }
+      }
+      // Also get latest outgoing DMs for preview
+      const outgoingDMs = await db.messages.where('senderId').equals(myId).toArray();
+      for (const msg of outgoingDMs) {
+        if (msg.channelId) continue;
+        const partnerId = msg.recipientId;
+        if (!partnerId) continue;
+        const existing = latestMsgs[partnerId];
+        if (!existing || msg.timestamp > existing.timestamp) {
+          latestMsgs[partnerId] = { text: `You: ${msg.text || '📎 Attachment'}`, timestamp: msg.timestamp, fromMe: true };
         }
       }
       setUnreadDMs(dmCounts);
       setUnreadChannels(channelCounts);
-      // Convert to string map for sidebar
       const previewMap: Record<string, string> = {};
       for (const [partnerId, latest] of Object.entries(latestMsgs)) {
         previewMap[partnerId] = latest.text;
@@ -1335,7 +1339,7 @@ export const App: React.FC = () => {
     };
     computeUnreadRef.current = computeUnread;
     computeUnread();
-    const interval = setInterval(computeUnread, 5000);
+    const interval = setInterval(computeUnread, 2000);
     return () => clearInterval(interval);
   }, [currentUserKeys]);
 
