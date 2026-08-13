@@ -440,14 +440,6 @@ function renderMediaItem(msg: LocalMessage, activeTab: MediaTab, onImageClick?: 
           Go <ArrowRight className="w-2 h-2 inline" />
         </button>
       )}
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-        <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
-        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize?.(meta.fileSize)} • {dateStr}</p>
-      </div>
     </div>
   );
 }
