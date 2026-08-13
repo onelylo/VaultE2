@@ -1408,7 +1408,7 @@ export const App: React.FC = () => {
       activeUsers: offlineQueueRef.current.allUsers,
       onMessageFlushed: () => {},
       onQueueEmpty: () => { isFlushing.current = false; }
-    });
+    }).catch(() => { isFlushing.current = false; });
   }, [networkStatus.isSocketConnected]);
 
   // Load stored channels on mount

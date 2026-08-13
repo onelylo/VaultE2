@@ -61,6 +61,7 @@
 | 2026-08-13 | `latest` | Typing indicators: store username on socket + auto-join channel rooms | `server/index.ts` |
 | 2026-08-13 | `latest` | channel:create adds creator to channel_members | `server/index.ts` |
 | 2026-08-13 | `latest` | Offline queue: fixed stale closures using refs | `client/App.tsx` |
+| 2026-08-13 | `latest` | Offline queue: added try/catch to prevent isFlushing stuck on error | `client/App.tsx` |
 | 2026-08-13 | `latest` | AttachmentMessage: use getJwtToken helper (localStorage + sessionStorage) | `client/AttachmentMessage.tsx` |
 | 2026-08-13 | `latest` | Reactions/pins: use socket.broadcast instead of io.emit | `server/index.ts` |
 | 2026-08-13 | `0ca9f09` | Message/reaction/pin spoofing prevention (server uses authenticatedUserId) | `server/index.ts` |
@@ -163,7 +164,48 @@ pending_sync (0) → sent (2) → delivered (3) → read (4)
 
 ---
 
-## 5. HOW TO UPDATE THIS FILE
+## 5. E2EE VERIFICATION
+
+### Encryption Flow (Verified: Truly End-to-End)
+```
+Client A                              Server                           Client B
+   │                                    │                                │
+   │── generateKeyPair() ──────────────>│                                │
+   │<── export public key ──────────────│                                │
+   │                                    │<── store public key ──────────│
+   │                                    │── relay ciphertext ──────────>│
+   │                                    │                                │── deriveSharedKey()
+   │                                    │                                │── decryptMessage()
+```
+
+### What's Encrypted
+- ✅ Message text (AES-256-GCM)
+- ✅ File attachments (binary + metadata)
+- ✅ Channel symmetric keys (wrapped per-member with ECDH)
+
+### What's NOT on the Server
+- ❌ Private keys (encrypted with user's password, stored in IndexedDB vault)
+- ❌ Plaintext (only ciphertext + IV stored)
+- ❌ Symmetric keys (derived client-side via ECDH)
+
+### Key Management
+- ECDH P-256 for key exchange (client-to-client)
+- AES-256-GCM for message encryption
+- PBKDF2 for vault key wrapping (user password → vault key)
+- ECDSA P-256 for key rotation signatures (separate from ECDH)
+- bcrypt for password hashing (server-side)
+- JWT HS256 for session tokens
+
+### Security Notes
+- Server never sees plaintext — stores only ciphertext + IV
+- Private keys encrypted with PBKDF2-derived key from user password
+- Key rotation uses ECDSA signatures to prove authenticity
+- TOFU (Trust On First Use) for initial key pinning
+- `timingSafeEqual` used for legacy SHA-256 password comparison
+
+---
+
+## 6. HOW TO UPDATE THIS FILE
 
 When fixing a bug or adding a feature:
 1. Add entry to **Section 2** (Bugs Fixed) with date, commit hash, fix description, and file(s)
