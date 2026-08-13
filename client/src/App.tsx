@@ -49,7 +49,8 @@ import {
   saveChannel,
   getStoredChannels,
   saveChannelKey,
-  getChannelKey
+  getChannelKey,
+  getActiveDMPartners
 } from './lib/db';
 import { useNetworkStatus, processOfflineQueue } from './lib/queue';
 import { playNotificationSound } from './lib/notify';
@@ -169,6 +170,21 @@ export const App: React.FC = () => {
 
   // ── Recent DMs (instant sidebar updates) ─────────────────────────────────────
   const [recentDMs, setRecentDMs] = useState<User[]>([]);
+
+  // Load recent DM partners from IndexedDB on mount so sidebar order persists across refresh
+  useEffect(() => {
+    if (!currentUserKeys) return;
+    (async () => {
+      const partnerIds = await getActiveDMPartners(currentUserKeys.userId);
+      const users = allUsersRef.current;
+      const ordered = partnerIds
+        .map(id => users.find(u => u.userId === id))
+        .filter(Boolean) as User[];
+      if (ordered.length > 0) {
+        setRecentDMs(ordered.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) })));
+      }
+    })();
+  }, [currentUserKeys]);
 
   const upsertDMConversation = useCallback((peer: User, lastMessageText: string) => {
     setRecentDMs(prev => {

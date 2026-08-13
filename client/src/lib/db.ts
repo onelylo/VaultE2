@@ -110,24 +110,20 @@ export async function updateMessageStatus(
 ): Promise<void> {
   // Try direct ID first
   const existing = await db.messages.get(id);
-  if (existing) {
-    if (newId && newId !== id) {
-      await db.messages.delete(id);
-      await db.messages.put({ ...existing, id: newId, status });
-    } else {
-      await db.messages.update(id, { status });
-    }
-    return;
-  }
-  // Fallback: look up by tempId
-  const byTemp = await db.messages.where('tempId').equals(id).first();
-  if (byTemp) {
-    if (newId && newId !== byTemp.id) {
-      await db.messages.delete(byTemp.id);
-      await db.messages.put({ ...byTemp, id: newId, status });
-    } else {
-      await db.messages.update(byTemp.id, { status });
-    }
+  const target = existing || await db.messages.where('tempId').equals(id).first();
+  if (!target) return;
+
+  // Prevent status downgrade (e.g. 'read' → 'sent' from stale ack)
+  const existingRank = STATUS_RANK[target.status] ?? 0;
+  const incomingRank = STATUS_RANK[status] ?? 0;
+  if (incomingRank < existingRank) return;
+
+  const targetId = target.id;
+  if (newId && newId !== targetId) {
+    await db.messages.delete(targetId);
+    await db.messages.put({ ...target, id: newId, status });
+  } else {
+    await db.messages.update(targetId, { status });
   }
 }
 
@@ -135,7 +131,15 @@ export async function bulkUpdateMessageStatus(
   ids: string[],
   status: LocalMessage['status']
 ): Promise<void> {
-  const updates = ids.map(id => db.messages.update(id, { status }));
+  const incomingRank = STATUS_RANK[status] ?? 0;
+  const messages = await db.messages.bulkGet(ids);
+  const updates = ids.map((id, i) => {
+    const msg = messages[i];
+    if (!msg) return Promise.resolve(0);
+    const existingRank = STATUS_RANK[msg.status] ?? 0;
+    if (incomingRank < existingRank) return Promise.resolve(0);
+    return db.messages.update(id, { status });
+  });
   await Promise.all(updates);
 }
 
