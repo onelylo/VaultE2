@@ -199,14 +199,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     const bubble = el.querySelector('[data-bubble]') as HTMLElement;
                     const target = bubble || el;
-                    target.style.transition = 'box-shadow 0.5s ease, background-color 0.5s ease';
-                    target.style.boxShadow = '0 0 20px 4px var(--accent-primary)';
-                    target.style.backgroundColor = 'color-mix(in srgb, var(--accent-primary) 8%, transparent)';
-                    target.style.borderRadius = '12px';
+                    target.style.transition = 'box-shadow 0.4s ease';
+                    target.style.boxShadow = '0 0 16px 3px var(--accent-primary)';
                     setTimeout(() => {
+                      target.style.transition = 'box-shadow 0.8s ease';
                       target.style.boxShadow = 'none';
-                      target.style.backgroundColor = 'transparent';
-                    }, 1500);
+                    }, 1200);
                   }
                 }}
                 className="p-2.5 rounded-xl bg-[var(--bg-app)]/80 border-l-4 border-[var(--accent-primary)] flex items-center justify-between gap-3 text-xs cursor-pointer hover:bg-[var(--hover-color)] transition-colors mb-2 select-none group/reply"
@@ -278,7 +276,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       {/* CONTEXTUAL ACTION MENU */}
       <div
-        className={`${showActions ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'} transition-all duration-150 z-20 shrink-0`}
+        className={`${showActions ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'} transition-all duration-150 z-20 shrink-0`}
       >
         <div
           className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl min-w-[160px] overflow-hidden"
