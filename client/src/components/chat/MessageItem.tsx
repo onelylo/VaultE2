@@ -78,7 +78,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
-  const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], {
+  const timeStr = new Date(msg.timestamp ?? Date.now()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
   });
