@@ -82,83 +82,41 @@ export const App: React.FC = () => {
   const [userFingerprint, setUserFingerprint] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [isRehydrating, setIsRehydrating] = useState(true);
-  const [theme, setTheme] = useState<string>('vault-dark');
+  const [theme, setTheme] = useState<string>(() => {
+    const guestSaved = localStorage.getItem('vaultchat_theme_guest');
+    if (guestSaved && guestSaved !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', guestSaved);
+      return guestSaved;
+    }
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    const initial = prefersDark ? 'vault-dark' : 'clean-light';
+    document.documentElement.setAttribute('data-theme', initial);
+    localStorage.setItem('vaultchat_theme_guest', initial);
+    return initial;
+  });
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<'overview' | 'users' | 'infrastructure'>('overview');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [avatarMenu, setAvatarMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
   const [channelSettings, setChannelSettings] = useState<Channel | null>(null);
-  const themeInitialized = useRef(false);
 
-  // Initialize theme synchronously on first mount (before AuthModal renders)
-  if (!themeInitialized.current) {
-    themeInitialized.current = true;
-    if (currentUserKeys?.userId) {
-      const userThemeKey = `vaultchat_theme_${currentUserKeys.userId}`;
-      const saved = localStorage.getItem(userThemeKey);
-      if (saved && saved !== 'undefined') {
-        document.documentElement.setAttribute('data-theme', saved);
-        setTheme(saved);
-      } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = prefersDark ? 'vault-dark' : 'clean-light';
-        document.documentElement.setAttribute('data-theme', initialTheme);
-        localStorage.setItem(userThemeKey, initialTheme);
-        setTheme(initialTheme);
-      }
-    } else {
-      const saved = localStorage.getItem('vaultchat_theme_guest');
-      if (saved && saved !== 'undefined') {
-        document.documentElement.setAttribute('data-theme', saved);
-        setTheme(saved);
-      } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = prefersDark ? 'vault-dark' : 'clean-light';
-        document.documentElement.setAttribute('data-theme', initialTheme);
-        localStorage.setItem('vaultchat_theme_guest', initialTheme);
-        setTheme(initialTheme);
-      }
-    }
-  }
-
-  // Load user-specific theme when currentUserKeys becomes available (after login/logout)
+  // Apply user-specific theme when logged in
   useEffect(() => {
-    if (currentUserKeys?.userId) {
-      const userThemeKey = `vaultchat_theme_${currentUserKeys.userId}`;
-      const saved = localStorage.getItem(userThemeKey);
+    const userId = currentUserKeys?.userId;
+    if (userId) {
+      const saved = localStorage.getItem(`vaultchat_theme_${userId}`);
       if (saved && saved !== 'undefined') {
         document.documentElement.setAttribute('data-theme', saved);
         setTheme(saved);
-      } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = prefersDark ? 'vault-dark' : 'clean-light';
-        document.documentElement.setAttribute('data-theme', initialTheme);
-        localStorage.setItem(userThemeKey, initialTheme);
-        setTheme(initialTheme);
-      }
-    } else {
-      const saved = localStorage.getItem('vaultchat_theme_guest');
-      if (saved && saved !== 'undefined') {
-        document.documentElement.setAttribute('data-theme', saved);
-        setTheme(saved);
-      } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = prefersDark ? 'vault-dark' : 'clean-light';
-        document.documentElement.setAttribute('data-theme', initialTheme);
-        localStorage.setItem('vaultchat_theme_guest', initialTheme);
-        setTheme(initialTheme);
       }
     }
   }, [currentUserKeys?.userId]);
 
-  // Persist theme changes to user-specific localStorage key
+  // Persist theme changes
   useEffect(() => {
-    if (currentUserKeys?.userId) {
-      localStorage.setItem(`vaultchat_theme_${currentUserKeys.userId}`, theme);
-    } else {
-      localStorage.setItem('vaultchat_theme_guest', theme);
-    }
+    const userId = currentUserKeys?.userId || 'guest';
+    localStorage.setItem(`vaultchat_theme_${userId}`, theme);
   }, [theme, currentUserKeys?.userId]);
 
   // ── Directory & Presence ─────────────────────────────────────────────────────

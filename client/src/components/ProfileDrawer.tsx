@@ -167,7 +167,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-4xl h-[85vh] max-h-[700px] flex rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-2xl text-[var(--text-main)] overflow-hidden animate-[scaleIn_0.2s_ease-out]"
+        className="relative w-full max-w-4xl h-[85vh] max-h-[700px] flex rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-2xl text-[var(--text-main)] overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar Navigation — Discord-style */}

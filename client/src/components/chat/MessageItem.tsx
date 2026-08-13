@@ -133,7 +133,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   return (
     <div
       id={`msg-${msg.id}`}
-      className={`relative group flex items-center gap-2 w-full max-w-lg ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}`}
+      className={`relative group flex items-center gap-2 w-full max-w-lg animate-messageIn ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}

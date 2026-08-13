@@ -453,11 +453,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 </div>
                 <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>@{selectedUser.username}</span>
                 {typingUsers.length > 0 && (
-                  <div className="flex items-center gap-1 text-[10px] mt-0.5" style={{ color: 'var(--accent-primary)' }}>
-                    <div className="flex space-x-0.5">
-                      <span className="w-1 h-1 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent-primary)', animationDelay: '0ms' }} />
-                      <span className="w-1 h-1 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent-primary)', animationDelay: '150ms' }} />
-                      <span className="w-1 h-1 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent-primary)', animationDelay: '300ms' }} />
+                  <div className="flex items-center gap-1.5 text-[10px] mt-0.5" style={{ color: 'var(--accent-primary)' }}>
+                    <div className="flex space-x-1">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
                     </div>
                     <span className="italic">{typingUsers[0]} is typing</span>
                   </div>
@@ -558,7 +558,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       <div className="mx-4 mb-4">
         {micDenied && (
-          <div className="mb-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2 animate-[fadeIn_0.15s_ease-out]">
+          <div className="mb-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2 animate-toastIn">
             <ShieldAlert className="w-4 h-4 flex-shrink-0" />
             <span>Microphone access denied. Please allow microphone permission in your browser settings.</span>
           </div>
