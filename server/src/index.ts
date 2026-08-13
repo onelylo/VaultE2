@@ -3,6 +3,9 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
@@ -62,18 +65,36 @@ import {
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
 
+// ── Security Configuration ────────────────────────────────────────────────────
+const JWT_SECRET: string = process.env.JWT_SECRET!;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('[FATAL] JWT_SECRET environment variable is required (min 32 chars).');
+  process.exit(1);
+}
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const BCRYPT_ROUNDS = 12;
+const JWT_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
 const app = express();
-app.use(cors());
+app.use(helmet());
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: MAX_ATTACHMENT_BYTES + 1024 * 1024,
+// Rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-const JWT_SECRET = 'vaultchat_enterprise_e2ee_jwt_2026';
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'] },
+  maxHttpBufferSize: MAX_ATTACHMENT_BYTES + 1024 * 1024,
+});
 
 // ── JWT Helpers ────────────────────────────────────────────────────────────────
 
@@ -86,8 +107,10 @@ function base64UrlDecode(str: string): string {
   return Buffer.from(b, 'base64').toString('utf8');
 }
 function signJwt(payload: object): string {
+  const now = Date.now();
+  const withExpiry = { ...payload, iat: now, exp: now + JWT_EXPIRY_MS };
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = base64UrlEncode(JSON.stringify(payload));
+  const body = base64UrlEncode(JSON.stringify(withExpiry));
   const sig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64')
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   return `${header}.${body}.${sig}`;
@@ -98,8 +121,12 @@ function verifyJwt(token: string): any {
     if (!header || !payload || !signature) return null;
     const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64')
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    if (signature !== expected) return null;
-    return JSON.parse(base64UrlDecode(payload));
+    // Timing-safe comparison to prevent side-channel attacks
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+    const decoded = JSON.parse(base64UrlDecode(payload));
+    // Check expiration
+    if (decoded.exp && Date.now() > decoded.exp) return null;
+    return decoded;
   } catch { return null; }
 }
 function requireAuth(req: express.Request, res: express.Response): string | null {
@@ -221,8 +248,12 @@ async function enrichMessagesWithAttachments(msgs: DbMessage[]): Promise<StoredM
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function hashPassword(pwd: string) {
-  return crypto.createHash('sha256').update(pwd).digest('hex');
+async function hashPassword(pwd: string): Promise<string> {
+  return bcrypt.hash(pwd, BCRYPT_ROUNDS);
+}
+
+async function verifyPassword(pwd: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(pwd, hash);
 }
 
 /** Canonical key for a DM pair (order-independent) */
@@ -346,10 +377,10 @@ app.put('/api/auth/password', async (req, res) => {
   try {
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.passwordHash !== hashPassword(currentPassword)) {
+    if (!await verifyPassword(currentPassword, user.passwordHash)) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
-    await updateUserPassword(userId, hashPassword(newPassword));
+    await updateUserPassword(userId, await hashPassword(newPassword));
     console.log(`[Auth] Password changed for ${user.username}`);
     return res.json({ success: true });
   } catch (e) {
@@ -358,7 +389,7 @@ app.put('/api/auth/password', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { username, fullName, email, password, role, publicKey, signingPublicKey, encryptedPrivateKey, keySalt } = req.body;
   if (!username || !password || !publicKey) {
     return res.status(400).json({ error: 'Username, password, and public key are required.' });
@@ -381,7 +412,7 @@ app.post('/api/auth/register', async (req, res) => {
       fullName: (fullName || username).trim(),
       email: (email || `${normalized}@vaultchat.internal`).trim(),
       role: userRole,
-      passwordHash: hashPassword(password),
+      passwordHash: await hashPassword(password),
       publicKey,
       signingPublicKey,
       encryptedPrivateKey,
@@ -402,46 +433,29 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password, publicKey, signingPublicKey, encryptedPrivateKey, keySalt, forceKeyRotation } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required.' });
   const normalized = username.trim().toLowerCase();
   const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
   try {
-    let user = await getUserById(userId);
+    const user = await getUserById(userId);
     if (!user) {
       const tombstone = await getUserByIdIncludingDeleted(userId);
       if (tombstone?.deletedAt) {
         return res.status(403).json({ error: 'Account has been deleted.' });
       }
-      // Auto-provision on first login
-      const newUser: DbUser = {
-        userId,
-        username: username.trim(),
-        fullName: username.trim(),
-        email: `${normalized}@vaultchat.internal`,
-        role: 'MEMBER',
-        passwordHash: hashPassword(password),
-        publicKey: publicKey || '',
-        signingPublicKey,
-        encryptedPrivateKey,
-        keySalt,
-        createdAt: Date.now(),
-      };
-      await insertUser(newUser);
-      user = newUser;
-      console.log(`[Auth] Auto-provisioned: ${username} (${userId})`);
-    } else {
-      if (user.passwordHash !== hashPassword(password)) {
-        return res.status(401).json({ error: 'Invalid credentials.' });
-      }
-      // Update vault keys if key rotation requested or missing
-      if (forceKeyRotation && publicKey && encryptedPrivateKey && keySalt) {
-        await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey, keySalt, signingPublicKey);
-        console.log(`[Auth] Key rotation applied for ${username}`);
-      } else if (publicKey && !user.publicKey) {
-        await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey || '', keySalt || '', signingPublicKey);
-      }
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+    if (!await verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+    // Update vault keys if key rotation requested or missing
+    if (forceKeyRotation && publicKey && encryptedPrivateKey && keySalt) {
+      await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey, keySalt, signingPublicKey);
+      console.log(`[Auth] Key rotation applied for ${username}`);
+    } else if (publicKey && !user.publicKey) {
+      await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey || '', keySalt || '', signingPublicKey);
     }
     const token = signJwt({ userId, username: user.username, role: user.role });
     console.log(`[Auth] Login: ${user.username} (${userId})`);
@@ -981,10 +995,32 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
+// Socket.IO authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  if (!token) {
+    return next(new Error('Authentication required'));
+  }
+  const decoded = verifyJwt(token as string);
+  if (!decoded?.userId) {
+    return next(new Error('Invalid or expired token'));
+  }
+  // Attach authenticated userId to socket for downstream use
+  (socket as any).authenticatedUserId = decoded.userId;
+  next();
+});
+
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
   socket.on('user:join', async (data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; signingPublicKey?: string }) => {
+    // Verify the claimed userId matches the authenticated socket user
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    if (data.userId !== authenticatedUserId) {
+      console.warn(`[Socket] userId mismatch: claimed ${data.userId}, authenticated ${authenticatedUserId}`);
+      return;
+    }
+    // Always use DB-resolved role, never trust client-supplied role (H7)
     const regUser = await getUserById(data.userId).catch(() => undefined);
     const activeUser = userToActive(data, socket.id, regUser);
 
@@ -1165,16 +1201,44 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Message Edit
+  // Message Edit — with authorization check (H3)
   socket.on('message:edit', async (data: { id: string; newCiphertext: string; newIv: string; recipientId?: string; channelId?: string }) => {
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    const originalMsg = await getMessageById(data.id).catch(() => undefined);
+    if (!originalMsg || originalMsg.senderId !== authenticatedUserId) {
+      socket.emit('message:edit:rejected', { id: data.id, error: 'Unauthorized: you can only edit your own messages' });
+      return;
+    }
     await updateMessageEdit(data.id, data.newCiphertext, data.newIv).catch(e => console.error('[Edit] Persist error:', e));
-    io.emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+    // Restrict broadcast to relevant participants, not all clients (H5)
+    if (data.recipientId) {
+      const recipient = activeUsers.get(data.recipientId);
+      if (recipient) io.to(recipient.socketId).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+    } else if (data.channelId) {
+      socket.broadcast.emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+    } else {
+      socket.broadcast.emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+    }
   });
 
-  // Message Delete
+  // Message Delete — with authorization check (H3)
   socket.on('message:delete', async (data: { id: string; recipientId?: string; channelId?: string }) => {
+    const authenticatedUserId = (socket as any).authenticatedUserId;
+    const originalMsg = await getMessageById(data.id).catch(() => undefined);
+    if (!originalMsg || originalMsg.senderId !== authenticatedUserId) {
+      socket.emit('message:delete:rejected', { id: data.id, error: 'Unauthorized: you can only delete your own messages' });
+      return;
+    }
     await markMessageDeleted(data.id).catch(e => console.error('[Delete] Persist error:', e));
-    io.emit('message:deleted', { id: data.id, deletedForEveryone: true });
+    // Restrict broadcast to relevant participants, not all clients (H5)
+    if (data.recipientId) {
+      const recipient = activeUsers.get(data.recipientId);
+      if (recipient) io.to(recipient.socketId).emit('message:deleted', { id: data.id, deletedForEveryone: true });
+    } else if (data.channelId) {
+      socket.broadcast.emit('message:deleted', { id: data.id, deletedForEveryone: true });
+    } else {
+      socket.broadcast.emit('message:deleted', { id: data.id, deletedForEveryone: true });
+    }
   });
 
   // Reactions

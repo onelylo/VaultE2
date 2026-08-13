@@ -6,6 +6,7 @@
  */
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 
@@ -15,8 +16,8 @@ const { Pool } = pg;
 
 const DB_DIR = process.env.VAULTCHAT_PGDATA || path.join(__dirname, '..', '..', '.pgdata');
 const DB_PORT = Number(process.env.VAULTCHAT_PGPORT || 5433);
-const DB_USER = process.env.VAULTCHAT_PGUSER || 'postgres';
-const DB_PASS = process.env.VAULTCHAT_PGPASSWORD || 'postgres';
+const DB_USER = process.env.VAULTCHAT_PGUSER || 'vaultchat';
+const DB_PASS = process.env.VAULTCHAT_PGPASSWORD || crypto.randomBytes(16).toString('hex');
 const UPLOADS_DIR = process.env.VAULTCHAT_UPLOADS || path.join(__dirname, '..', '..', 'uploads');
 
 let pool: pg.Pool | null = null;
