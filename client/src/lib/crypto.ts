@@ -37,7 +37,8 @@ export function compareFingerprints(keyA: string, keyB: string): boolean {
   const cleanA = keyA.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
   const cleanB = keyB.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
   if (cleanA.length === 0 || cleanB.length === 0) return false;
-  return cleanA === cleanB || cleanA.startsWith(cleanB) || cleanB.startsWith(cleanA);
+  // L3: Strict full-string comparison only — prefix matching is insecure
+  return cleanA === cleanB;
 }
 
 /**

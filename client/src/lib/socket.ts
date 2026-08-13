@@ -7,6 +7,8 @@ export const socket: Socket = io(SERVER_URL, {
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
+  // L1: Force WebSocket transport (no HTTP long-polling fallback)
+  transports: ['websocket'],
 });
 
 /** Call this before each connect to ensure the latest JWT is sent */

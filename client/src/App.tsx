@@ -1590,7 +1590,7 @@ export const App: React.FC = () => {
   // ── Send Message ─────────────────────────────────────────────────────────────
   const handleSendMessage = async (text: string, replyTo?: string) => {
     if (!currentUserKeys || (!selectedPeer && !selectedChannel) || !privateKeyObject) return;
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     const timestamp = Date.now();
     const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
 
@@ -1666,7 +1666,7 @@ export const App: React.FC = () => {
         ivStr = enc.iv;
       }
 
-      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
       const timestamp = Date.now();
       const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
       const pendingUpload: PendingUpload = { encryptedBinary, binaryIv, encryptedMetadata, metadataIv };

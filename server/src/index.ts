@@ -75,6 +75,10 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Token blocklist — in-memory store for invalidated JWTs (resets on server restart)
+const tokenBlocklist = new Set<string>();
 
 const app = express();
 app.use(helmet());
@@ -99,6 +103,12 @@ const io = new Server(server, {
 
 // ── JWT Helpers ────────────────────────────────────────────────────────────────
 
+// L7: Sanitize user input for log output (prevent log injection)
+function sanitizeLog(input: string | undefined | null): string {
+  if (!input) return '';
+  return String(input).replace(/[\r\n\t]/g, '_').slice(0, 128);
+}
+
 function base64UrlEncode(str: string): string {
   return Buffer.from(str).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
@@ -120,6 +130,8 @@ function verifyJwt(token: string): any {
   try {
     const [header, payload, signature] = token.split('.');
     if (!header || !payload || !signature) return null;
+    // Check blocklist
+    if (tokenBlocklist.has(token)) return null;
     const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64')
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     // Timing-safe comparison to prevent side-channel attacks
@@ -365,6 +377,13 @@ app.post('/api/users/me/avatar', async (req, res) => {
     if (!avatarData || !avatarData.startsWith('data:image/')) {
       return res.status(400).json({ error: 'Invalid avatar data' });
     }
+    // M5: Enforce avatar size limit (~2MB encoded = ~1.5MB raw)
+    const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+    const base64Payload = avatarData.split(',')[1] || '';
+    const estimatedBytes = Math.ceil(base64Payload.length * 3 / 4);
+    if (estimatedBytes > MAX_AVATAR_BYTES) {
+      return res.status(413).json({ error: 'Avatar exceeds 2 MB limit' });
+    }
     // Store the data URL directly (base64-encoded image)
     await updateUserAvatar(userId, avatarData);
     io.emit('user:profile-update', { userId, avatarUrl: avatarData });
@@ -390,7 +409,7 @@ app.put('/api/auth/password', async (req, res) => {
     }
     // Always store new passwords as bcrypt (even if old was SHA-256)
     await updateUserPassword(userId, await hashPassword(newPassword));
-    console.log(`[Auth] Password changed for ${user.username}`);
+    console.log(`[Auth] Password changed for ${sanitizeLog(user.username)}`);
     return res.json({ success: true });
   } catch (e) {
     console.error('[Auth] Password change error:', e);
@@ -398,12 +417,38 @@ app.put('/api/auth/password', async (req, res) => {
   }
 });
 
+app.post('/api/auth/logout', async (req, res) => {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) {
+    const token = auth.split(' ')[1];
+    tokenBlocklist.add(token);
+  }
+  return res.json({ success: true });
+});
+
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { username, fullName, email, password, role, publicKey, signingPublicKey, encryptedPrivateKey, keySalt } = req.body;
+  const { username, fullName, email, password, publicKey, signingPublicKey, encryptedPrivateKey, keySalt } = req.body;
   if (!username || !password || !publicKey) {
     return res.status(400).json({ error: 'Username, password, and public key are required.' });
   }
+
+  // M4: Input validation
   const normalized = username.trim().toLowerCase();
+  if (normalized.length < 3 || normalized.length > 32) {
+    return res.status(400).json({ error: 'Username must be 3-32 characters.' });
+  }
+  if (!/^[a-z0-9._-]+$/.test(normalized)) {
+    return res.status(400).json({ error: 'Username may only contain lowercase letters, numbers, dots, hyphens, underscores.' });
+  }
+
+  // M6: Password complexity
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a digit.' });
+  }
+
   const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
   try {
     const existing = await getUserByIdIncludingDeleted(userId);
@@ -430,7 +475,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     };
     await insertUser(newUser);
     const token = signJwt({ userId, username: newUser.username, role: userRole });
-    console.log(`[Auth] Registered: ${newUser.username} (${userId}) [${userRole}]`);
+    console.log(`[Auth] Registered: ${sanitizeLog(newUser.username)} (${userId}) [${userRole}]`);
     io.emit('user:registered', { user: publicUser(newUser) });
     return res.json({
       token,
@@ -473,7 +518,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey || '', keySalt || '', signingPublicKey);
     }
     const token = signJwt({ userId, username: user.username, role: user.role });
-    console.log(`[Auth] Login: ${user.username} (${userId})`);
+    console.log(`[Auth] Login: ${sanitizeLog(user.username)} (${userId})`);
     return res.json({
       token,
       user: {
@@ -797,6 +842,12 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
     return res.status(400).json({ error: 'keys array required' });
   }
   try {
+    // M10: Verify uploader is a channel member
+    const members = await getChannelMembers(channelId);
+    const isMember = members.some((m: any) => m.userId === userId);
+    if (!isMember) {
+      return res.status(403).json({ error: 'Not a channel member' });
+    }
     const validKeys = keys
       .filter((item: any) => item.userId && item.encryptedChannelKey && item.iv)
       .map((item: any) => ({
@@ -806,7 +857,7 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
         iv: item.iv,
       }));
     await upsertChannelKeys(channelId, validKeys);
-    console.log(`[ChannelKeys] Stored ${validKeys.length} key envelope(s) for channel #${channelId}`);
+    console.log(`[ChannelKeys] Stored ${validKeys.length} key envelope(s) for channel #${sanitizeLog(channelId)}`);
     return res.json({ success: true, count: validKeys.length });
   } catch (e) {
     console.error('[ChannelKeys] Store error:', e);
@@ -901,6 +952,16 @@ app.delete('/api/channels/:channelId', async (req, res) => {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ATTACHMENT_BYTES },
+  fileFilter: (_req, file, cb) => {
+    // L2: Only allow safe MIME types — encrypted payload looks opaque, so allow common types
+    const allowed = [
+      'image/', 'video/', 'audio/', 'application/pdf',
+      'application/zip', 'application/x-7z-compressed', 'application/gzip',
+      'text/plain', 'application/octet-stream',
+    ];
+    const ok = allowed.some(prefix => file.mimetype.startsWith(prefix));
+    cb(null, ok);
+  },
 });
 
 /**
@@ -916,6 +977,16 @@ app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
     const { encryptedMetadata, binaryIv, metadataIv } = req.body;
     if (!encryptedMetadata || !binaryIv) {
       return res.status(400).json({ error: 'Missing encrypted metadata or binary IV' });
+    }
+    // L8: Validate metadata field lengths to prevent abuse
+    if (typeof encryptedMetadata !== 'string' || encryptedMetadata.length > 100000) {
+      return res.status(400).json({ error: 'Invalid encrypted metadata' });
+    }
+    if (typeof binaryIv !== 'string' || binaryIv.length > 256) {
+      return res.status(400).json({ error: 'Invalid binary IV' });
+    }
+    if (metadataIv && (typeof metadataIv !== 'string' || metadataIv.length > 256)) {
+      return res.status(400).json({ error: 'Invalid metadata IV' });
     }
     const attachmentId = `att_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const diskName = `${attachmentId}.enc`;
@@ -977,8 +1048,17 @@ app.get('/api/attachments/:id', async (req, res) => {
 
 // ── Health Route ──────────────────────────────────────────────────────────────
 
-app.get('/health', async (_req, res) => {
+app.get('/health', async (req, res) => {
   try {
+    // M8: Health endpoint requires admin auth in production
+    if (IS_PRODUCTION) {
+      const userId = requireAuth(req, res);
+      if (!userId) return;
+      const user = await getUserById(userId);
+      if (!user || user.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
+    }
     const stats = await getDatabaseStats();
     res.json({
       status: 'ok',
@@ -991,7 +1071,7 @@ app.get('/health', async (_req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (e) {
-    res.status(500).json({ status: 'error', error: (e as Error).message });
+    res.status(500).json({ status: 'error', error: IS_PRODUCTION ? 'Internal error' : (e as Error).message });
   }
 });
 
@@ -1002,10 +1082,10 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     return res.status(413).json({ error: 'File exceeds 25 MB limit' });
   }
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: `Upload error: ${err.message}` });
+    return res.status(400).json({ error: 'Upload error' });
   }
   console.error('[Express] Unhandled error:', err);
-  return res.status(500).json({ error: 'Server error' });
+  return res.status(500).json({ error: IS_PRODUCTION ? 'Server error' : err?.message || 'Server error' });
 });
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
