@@ -1035,7 +1035,7 @@ export const App: React.FC = () => {
 
     const onMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!currentUserKeys || !privateKeyObject) return;
-      const localMsg = await decryptPayload(payload);
+      const localMsg = await decryptPayloadRef.current(payload);
       if (!localMsg) return;
       await saveMessage(localMsg);
 
@@ -1075,7 +1075,7 @@ export const App: React.FC = () => {
 
     const onChannelMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!payload.channelId) return;
-      const localMsg = await decryptPayload(payload);
+      const localMsg = await decryptPayloadRef.current(payload);
       if (!localMsg) return;
       await saveMessage(localMsg);
 
@@ -1149,7 +1149,7 @@ export const App: React.FC = () => {
     // Reactive roster: a new user just registered — refresh the directory.
     const onUserRegistered = async () => {
       const token = getJwtToken();
-      if (token) await fetchUserDirectory(token);
+      if (token) await fetchUserDirectoryRef.current(token);
     };
 
     // Reactive roster: a user just came online — add their full data to allUsers
@@ -1178,7 +1178,7 @@ export const App: React.FC = () => {
       // If a user came online but we don't have their full data, fetch the directory
       if (data.isOnline && !allUsersRef.current.find(u => u.userId === data.userId)) {
         const token = getJwtToken();
-        if (token) fetchUserDirectory(token);
+        if (token) fetchUserDirectoryRef.current(token);
       }
     };
 
@@ -1194,7 +1194,7 @@ export const App: React.FC = () => {
         oldSigningPublicKey: data.oldSigningPublicKey,
       } : u));
       if (selectedPeerRef.current?.userId === data.userId) {
-        await validatePeerKeyTofu({ ...selectedPeerRef.current, ...data });
+        await validatePeerKeyTofuRef.current({ ...selectedPeerRef.current, ...data });
       }
     };
 
@@ -1414,7 +1414,7 @@ export const App: React.FC = () => {
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
     };
-  }, [currentUserKeys, privateKeyObject, getOrDeriveSharedKey, getOrGenerateChannelKey, decryptPayload, fetchUserDirectory, validatePeerKeyTofu]);
+  }, [currentUserKeys, privateKeyObject, getOrDeriveSharedKey, getOrGenerateChannelKey]);
 
   // ── Ctrl+K Search Shortcut ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1830,6 +1830,14 @@ export const App: React.FC = () => {
 
   const computeUnreadRef = useRef<(() => Promise<void>) | null>(null);
   const historyFetchedRef = useRef(false);
+
+  // Refs for callbacks that change frequently (to stabilize socket listener useEffect)
+  const decryptPayloadRef = useRef(decryptPayload);
+  decryptPayloadRef.current = decryptPayload;
+  const fetchUserDirectoryRef = useRef(fetchUserDirectory);
+  fetchUserDirectoryRef.current = fetchUserDirectory;
+  const validatePeerKeyTofuRef = useRef(validatePeerKeyTofu);
+  validatePeerKeyTofuRef.current = validatePeerKeyTofu;
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
