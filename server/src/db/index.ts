@@ -247,7 +247,7 @@ export async function getUserByIdIncludingDeleted(userId: string): Promise<DbUse
 }
 
 export async function getUserByUsername(username: string): Promise<DbUser | undefined> {
-  const res = await getPool().query(`SELECT ${USER_COLS} FROM users WHERE username = $1 AND deleted_at IS NULL`, [username]);
+  const res = await getPool().query(`SELECT ${USER_COLS} FROM users WHERE LOWER(username) = LOWER($1) AND deleted_at IS NULL`, [username]);
   return res.rows[0] ? mapUserRow(res.rows[0]) : undefined;
 }
 

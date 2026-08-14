@@ -18,6 +18,8 @@ interface EditUserModalProps {
     userId: string;
     role: string;
     fullName: string;
+    email?: string;
+    username?: string;
     status: string;
     phone?: string;
     newPassword?: string;
@@ -28,6 +30,8 @@ interface EditUserModalProps {
 export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalProps) {
   const [role, setRole] = useState(user?.role || 'MEMBER');
   const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [username, setUsername] = useState(user?.username || '');
   const [status, setStatus] = useState(user?.status || 'ACTIVE');
   const [phone, setPhone] = useState(user?.phone || '');
   const [newPassword, setNewPassword] = useState('');
@@ -40,6 +44,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
     if (user) {
       setRole(user.role || 'MEMBER');
       setFullName(user.fullName || '');
+      setEmail(user.email || '');
+      setUsername(user.username || '');
       setStatus(user.status || 'ACTIVE');
       setPhone(user.phone || '');
       setNewPassword('');
@@ -52,7 +58,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Check if anything changed
-    const hasChanges = role !== user.role || fullName !== (user.fullName || '') || status !== (user.status || 'ACTIVE') || phone !== (user.phone || '') || newPassword.trim() || revokeKeys;
+    const hasChanges = role !== user.role || fullName !== (user.fullName || '') || email !== (user.email || '') || username !== user.username || status !== (user.status || 'ACTIVE') || phone !== (user.phone || '') || newPassword.trim() || revokeKeys;
     if (!hasChanges) {
       setShaking(true);
       setTimeout(() => setShaking(false), 400);
@@ -62,6 +68,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
       userId: user.id,
       role,
       fullName,
+      email,
+      username,
       status,
       phone: phone.trim() || undefined,
       newPassword: newPassword.trim() ? newPassword : undefined,
@@ -106,6 +114,28 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
             />
           </div>

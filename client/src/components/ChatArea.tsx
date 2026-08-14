@@ -201,6 +201,47 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (messages) setAllMessages(messages);
   }, [messages]);
 
+  // Poll for message status updates (ensures checkmarks update)
+  useEffect(() => {
+    if (!selectedChannel && !selectedUser) return;
+    const interval = setInterval(async () => {
+      let msgs: LocalMessage[] = [];
+      if (selectedChannel) {
+        msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
+      } else if (selectedUser && currentUserId) {
+        const [sent, received] = await Promise.all([
+          db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
+          db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
+        ]);
+        msgs = [...sent, ...received];
+      }
+      setAllMessages(prev => {
+        const dbMap = new Map(msgs.map(m => [m.id, m]));
+        let changed = false;
+        const next: LocalMessage[] = [];
+        for (const msg of prev) {
+          const dbMsg = dbMap.get(msg.id);
+          if (!dbMsg) continue; // removed from DB
+          if (dbMsg.status !== msg.status || dbMsg.isDeleted !== msg.isDeleted || dbMsg.removed !== msg.removed) {
+            next.push(dbMsg);
+            changed = true;
+          } else {
+            next.push(msg);
+          }
+        }
+        // Add new messages not in prev
+        for (const msg of msgs) {
+          if (!prev.some(m => m.id === msg.id)) {
+            next.push(msg);
+            changed = true;
+          }
+        }
+        return changed ? next.sort((a, b) => a.timestamp - b.timestamp) : prev;
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [selectedChannel?.id, selectedUser?.userId, currentUserId]);
+
   // Visible messages (lazy loaded, filter out removed)
   const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
 

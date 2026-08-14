@@ -790,8 +790,18 @@ app.patch('/api/admin/users/:id/profile', async (req, res) => {
   try {
     const target = await getUserById(req.params.id);
     if (!target) return res.status(404).json({ error: 'User not found' });
-    const { fullName, phone } = req.body;
-    await updateUserProfile(target.userId, { fullName, phone });
+    const { fullName, phone, email, username } = req.body;
+    // Validate username if changing
+    if (username && username !== target.username) {
+      if (typeof username !== 'string' || username.length < 3 || username.length > 30 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ error: 'Username must be 3-30 chars, alphanumeric + underscore' });
+      }
+      const existing = await getUserByUsername(username).catch(() => undefined);
+      if (existing && existing.userId !== target.userId) {
+        return res.status(409).json({ error: 'Username already taken' });
+      }
+    }
+    await updateUserProfile(target.userId, { fullName, phone, email, username });
     const updated = await getUserById(target.userId);
     if (!updated) return res.status(404).json({ error: 'User not found' });
     io.emit('user:profile-update', { userId: updated.userId, fullName: updated.fullName, username: updated.username, avatarUrl: updated.avatarUrl });
@@ -1478,6 +1488,11 @@ io.use(async (socket, next) => {
   const decoded = await verifyJwt(token as string);
   if (!decoded?.userId) {
     return next(new Error('Invalid or expired token'));
+  }
+  // Check if user is suspended
+  const user = await getUserById(decoded.userId).catch(() => undefined);
+  if (user?.status === 'SUSPENDED') {
+    return next(new Error('Account suspended'));
   }
   // Attach authenticated userId to socket for downstream use
   (socket as any).authenticatedUserId = decoded.userId;

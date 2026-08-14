@@ -64,10 +64,14 @@ function ChannelSettingsInner({
     slowMode !== (channel.slowModeSeconds || 0) || isAnnouncement !== (channel.isAnnouncement || false) ||
     JSON.stringify(memberIds) !== JSON.stringify(channel.memberIds || []);
 
-  // All channels show all users as members
-  const effectiveMemberIds = (channel.type === 'official' || channel.type === 'team')
+  // All channels show all users as members (including self)
+  const baseMemberIds = (channel.type === 'official' || channel.type === 'team')
     ? allUsers.map(u => u.userId)
     : channel.memberIds || [];
+  // Always include current user
+  const effectiveMemberIds = currentUser && !baseMemberIds.includes(currentUser.userId)
+    ? [...baseMemberIds, currentUser.userId]
+    : baseMemberIds;
 
   // Sort: owner first, then current user, then alphabetical
   const sortedMemberIds = [...effectiveMemberIds].sort((a, b) => {
@@ -75,10 +79,16 @@ function ChannelSettingsInner({
     if (b === channel.createdBy && a !== channel.createdBy) return 1;
     if (a === currentUser?.userId && b !== currentUser?.userId) return -1;
     if (b === currentUser?.userId && a !== currentUser?.userId) return 1;
-    const ua = allUsers.find(u => u.userId === a);
-    const ub = allUsers.find(u => u.userId === b);
-    return (ua?.username || '').localeCompare(ub?.username || '');
+    const ua = allUsers.find(u => u.userId === a) || (currentUser?.userId === a ? currentUser : null);
+    const ub = allUsers.find(u => u.userId === b) || (currentUser?.userId === b ? currentUser : null);
+    return ((ua as User)?.username || '').localeCompare((ub as User)?.username || '');
   });
+
+  // Helper to find a user (includes current user who is excluded from allUsers)
+  const findMember = (id: string): User | undefined => {
+    if (id === currentUser?.userId) return currentUser as User;
+    return allUsers.find(u => u.userId === id);
+  };
 
   const sharedMessages = useLiveQuery(async () => {
     const all = await db.messages.toArray();
@@ -382,12 +392,12 @@ function ChannelSettingsInner({
                 )}
               </div>
             )}
-            <div className="space-y-1 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              {sortedMemberIds.map(id => {
-                const member = allUsers.find(u => u.userId === id);
-                if (!member) return null;
-                return renderMemberRow(member);
-              })}
+              <div className="space-y-1 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                {sortedMemberIds.map(id => {
+                  const member = findMember(id);
+                  if (!member) return null;
+                  return renderMemberRow(member);
+                })}
             </div>
           </div>
         </div>
