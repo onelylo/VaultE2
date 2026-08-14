@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FileText, Download, X, Loader2, ImageIcon, File as FileIcon, AlertTriangle, Play } from 'lucide-react';
+import { FileText, Download, Loader2, ImageIcon, File as FileIcon, AlertTriangle, Play } from 'lucide-react';
 import type { LocalMessage } from '../types/chat';
 import {
   downloadEncryptedAttachment,

@@ -242,7 +242,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
                   <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>Stay logged in</span>
                 </label>
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  {stayLoggedIn ? '30 days' : 'This session only'}
+                  {stayLoggedIn ? 'Keeps you signed in' : 'This session only'}
                 </span>
               </div>
             )}

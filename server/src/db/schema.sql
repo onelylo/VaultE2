@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS channel_members (
   PRIMARY KEY (channel_id, user_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_channel_members_user ON channel_members (user_id);
+
 CREATE TABLE IF NOT EXISTS message_reactions (
   message_id  TEXT NOT NULL,
   user_id     TEXT NOT NULL,

@@ -272,7 +272,7 @@ export async function updateUserPassword(userId: string, passwordHash: string): 
   await getPool().query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [userId, passwordHash]);
 }
 
-export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string }): Promise<void> {
+export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string; username?: string }): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [userId];
   let idx = 2;
@@ -281,6 +281,7 @@ export async function updateUserProfile(userId: string, data: { fullName?: strin
   if (data.avatarUrl !== undefined) { sets.push(`avatar_url = $${idx++}`); vals.push(data.avatarUrl); }
   if (data.status !== undefined) { sets.push(`status = $${idx++}`); vals.push(data.status); }
   if (data.statusMessage !== undefined) { sets.push(`status_message = $${idx++}`); vals.push(data.statusMessage); }
+  if (data.username !== undefined) { sets.push(`username = $${idx++}`); vals.push(data.username); }
   if (sets.length === 0) return;
   await getPool().query(`UPDATE users SET ${sets.join(', ')} WHERE id = $1`, vals);
 }
@@ -311,6 +312,20 @@ export async function getChannelMembers(channelId: string): Promise<string[]> {
   return res.rows.map((r) => r.user_id);
 }
 
+async function getChannelMembersMap(channelIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (channelIds.length === 0) return map;
+  const res = await getPool().query(
+    `SELECT channel_id, user_id FROM channel_members WHERE channel_id = ANY($1)`,
+    [channelIds]
+  );
+  for (const row of res.rows) {
+    if (!map.has(row.channel_id)) map.set(row.channel_id, []);
+    map.get(row.channel_id)!.push(row.user_id);
+  }
+  return map;
+}
+
 export async function getChannelsForUser(userId: string): Promise<DbChannel[]> {
   const channelIds = await getPool().query(
     'SELECT channel_id FROM channel_members WHERE user_id = $1',
@@ -323,8 +338,9 @@ export async function getChannelsForUser(userId: string): Promise<DbChannel[]> {
     [channelIdList]
   );
   const channels = res.rows.map(mapChannelRow);
+  const memberMap = await getChannelMembersMap(channelIdList);
   for (const channel of channels) {
-    channel.memberIds = await getChannelMembers(channel.id);
+    channel.memberIds = memberMap.get(channel.id) || [];
   }
   return channels;
 }
@@ -361,9 +377,10 @@ export async function getAllChannels(userId?: string): Promise<DbChannel[]> {
   const res = await getPool().query('SELECT * FROM channels ORDER BY name ASC');
   const channels = res.rows.map(mapChannelRow);
   
-  // Populate memberIds for each channel
+  // Populate memberIds for each channel (single batch query)
+  const memberMap = await getChannelMembersMap(channels.map(c => c.id));
   for (const channel of channels) {
-    channel.memberIds = await getChannelMembers(channel.id);
+    channel.memberIds = memberMap.get(channel.id) || [];
   }
   
   if (!userId) return channels;

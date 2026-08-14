@@ -603,6 +603,7 @@ export const App: React.FC = () => {
         if (data.fullName) updated.fullName = data.fullName;
         if (data.email) updated.email = data.email;
         if (data.avatar) updated.avatarUrl = data.avatar;
+        if (data.username) updated.username = data.username;
         if (data.statusMessage !== undefined) updated.statusMessage = data.statusMessage;
         return updated;
       });
@@ -1069,7 +1070,7 @@ export const App: React.FC = () => {
       // Use targeted query: only messages I sent to this recipient/channel that aren't read yet
       const sentMsgs = await db.messages.where('senderId').equals(myId).toArray();
       const unreadSent = sentMsgs.filter(m => 
-        m.recipientId === conversationId && 
+        (m.recipientId === conversationId || m.channelId === conversationId) && 
         m.status !== 'read'
       );
       if (unreadSent.length > 0) {
@@ -1255,13 +1256,13 @@ export const App: React.FC = () => {
       }, 3000);
     };
 
-    const onUserStopTyping = (data: { userId: string; channelId?: string; recipientId?: string }) => {
+    const onUserStopTyping = (data: { userId: string; username?: string; channelId?: string; recipientId?: string }) => {
       const conversationId = data.channelId || data.recipientId;
       if (!conversationId) return;
       setTypingUsers(prev => {
         const existing = prev[conversationId] || [];
-        const user = allUsers.find(u => u.userId === data.userId);
-        const updated = existing.filter(u => u !== (user?.fullName || user?.username));
+        const name = data.username || allUsers.find(u => u.userId === data.userId)?.username || '';
+        const updated = existing.filter(u => u !== name);
         if (updated.length === 0) {
           const next = { ...prev };
           delete next[conversationId];

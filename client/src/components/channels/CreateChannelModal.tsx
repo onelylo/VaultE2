@@ -23,7 +23,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
   const [type, setType] = useState<'private' | 'team' | 'official'>('private');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
-  const isAdminOrSupervisor = currentUser?.role === 'ADMIN';
+  const isAdminOrSupervisor = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
   if (!isOpen) return null;
 

@@ -79,7 +79,8 @@ const JWT_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Token blocklist — in-memory store for invalidated JWTs (resets on server restart)
-const tokenBlocklist = new Set<string>();
+// Map<token, expiryMs> to allow eviction of expired entries
+const tokenBlocklist = new Map<string, number>();
 
 const app = express();
 app.use(helmet());
@@ -131,8 +132,12 @@ function verifyJwt(token: string): any {
   try {
     const [header, payload, signature] = token.split('.');
     if (!header || !payload || !signature) return null;
-    // Check blocklist
-    if (tokenBlocklist.has(token)) return null;
+    // Check blocklist (with expiry eviction)
+    const blockedExpiry = tokenBlocklist.get(token);
+    if (blockedExpiry !== undefined) {
+      if (blockedExpiry > Date.now()) return null;
+      tokenBlocklist.delete(token); // expired, clean up
+    }
     const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64')
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     // Timing-safe comparison to prevent side-channel attacks
@@ -358,12 +363,12 @@ const handleProfileUpdate = async (req: any, res: any) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   try {
-    const { fullName, email, avatarUrl, avatar, status, statusMessage } = req.body;
+    const { fullName, email, avatarUrl, avatar, status, statusMessage, username } = req.body;
     const finalAvatarUrl = avatarUrl || avatar;
-    await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage });
+    await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username });
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId, fullName: user.fullName, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
+    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
     return res.json({ user: publicUser(user) });
   } catch (e) {
     console.error('[Profile] Update error:', e);
@@ -426,7 +431,7 @@ app.post('/api/auth/logout', async (req, res) => {
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) {
     const token = auth.split(' ')[1];
-    tokenBlocklist.add(token);
+    tokenBlocklist.set(token, Date.now() + JWT_EXPIRY_MS);
   }
   return res.json({ success: true });
 });
@@ -995,7 +1000,7 @@ app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
     const attachmentId = `att_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const diskName = `${attachmentId}.enc`;
     const absPath = path.join(getUploadsDir(), diskName);
-    fs.writeFileSync(absPath, req.file.buffer);
+    await fs.promises.writeFile(absPath, req.file.buffer);
 
     await insertAttachment({
       id: attachmentId,
@@ -1438,7 +1443,7 @@ io.on('connection', (socket) => {
   socket.on('user:stop_typing', (data: { channelId?: string; recipientId?: string }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
-    const userData = { userId: authenticatedUserId, channelId: data.channelId, recipientId: data.recipientId };
+    const userData = { userId: authenticatedUserId, username: (socket as any).username || authenticatedUserId, channelId: data.channelId, recipientId: data.recipientId };
     if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('user:stop_typing', userData);
     } else if (data.recipientId) {

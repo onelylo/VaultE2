@@ -23,7 +23,36 @@ export function ChannelSettingsModal({
   onMemberClick?: (user: User) => void;
 }) {
   if (!isOpen || !channel) return null;
+  return (
+    <ChannelSettingsModalInner
+      channel={channel}
+      onClose={onClose}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      allUsers={allUsers}
+      currentUser={currentUser}
+      onMemberClick={onMemberClick}
+    />
+  );
+}
 
+function ChannelSettingsModalInner({
+  channel,
+  onClose,
+  onUpdate,
+  onDelete,
+  allUsers,
+  currentUser,
+  onMemberClick,
+}: {
+  channel: Channel;
+  onClose: () => void;
+  onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles'>>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  allUsers: User[];
+  currentUser?: User | UserKeyPair;
+  onMemberClick?: (user: User) => void;
+}) {
   const [name, setName] = useState(channel.name);
   const [description, setDescription] = useState(channel.description || '');
   const [memberIds, setMemberIds] = useState<string[]>(channel.memberIds || []);

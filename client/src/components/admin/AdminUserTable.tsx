@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Loader2, Shield, UserCog, Trash2 } from 'lucide-react';
+import { Settings, Loader2, Shield, UserCog } from 'lucide-react';
 import type { AdminUser } from '../../types/chat';
 
 interface AdminUserTableProps {

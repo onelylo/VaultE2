@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, Image, Fingerprint, Copy, Info, MoreHorizontal } from 'lucide-react';
+import { MessageSquare, Image, Fingerprint, Copy, Info } from 'lucide-react';
 import type { User } from '../types/chat';
 
 interface UserAvatarMenuProps {

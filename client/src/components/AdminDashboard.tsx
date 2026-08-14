@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ShieldCheck,
-  Trash2,
   RefreshCw,
   X,
   KeyRound,
@@ -19,8 +18,7 @@ import {
   Clock,
   Lock,
   FolderOpen,
-  Cpu,
-  RefreshCcw
+  Cpu
 } from 'lucide-react';
 import type { AdminUser, UserKeyPair, UserRole } from '../types/chat';
 import { getFingerprint } from '../lib/crypto';

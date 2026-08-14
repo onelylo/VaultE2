@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
-  Camera, Mic, Paperclip, Copy, MoreHorizontal, X,
+  Camera, Mic, Paperclip, Copy, MoreHorizontal,
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
