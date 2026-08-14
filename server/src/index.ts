@@ -1058,9 +1058,10 @@ app.get('/api/url-preview', async (req, res) => {
 
     // SSRF protection: block private/internal IP ranges
     const hostname = parsed.hostname;
-    const isPrivateIP = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.|localhost|::1|fc|fd)/i.test(hostname)
-      || hostname === 'localhost'
-      || hostname === '[::1]';
+    // Check for IPv6 mapped IPv4 (::ffff:192.168.x.x) and IPv6 private ranges
+    const isPrivateIP = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.|localhost$)/i.test(hostname)
+      || /^(::1|fc00:|fd00:|fe80:|ff00:|::ffff:(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.))/i.test(hostname)
+      || hostname === 'localhost';
     if (isPrivateIP) return res.status(400).json({ error: 'Private/internal URLs not allowed' });
 
     const controller = new AbortController();

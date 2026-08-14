@@ -80,6 +80,8 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({ onSelect, existi
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-smooth hover:scale-110"
                 style={{
                   backgroundColor: existingEmojis.includes(emoji) ? 'color-mix(in srgb, var(--accent-primary) 30%, transparent)' : 'transparent',
+                  fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
+                  fontSize: '1.25rem',
                 }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = existingEmojis.includes(emoji) ? 'color-mix(in srgb, var(--accent-primary) 30%, transparent)' : 'transparent'}

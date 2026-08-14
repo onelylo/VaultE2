@@ -49,6 +49,7 @@ import {
   saveTrustedKey,
   saveChannel,
   getStoredChannels,
+  getPendingSyncMessages,
   saveChannelKey,
   getChannelKey,
   getActiveDMPartners,
@@ -1575,9 +1576,10 @@ export const App: React.FC = () => {
 
   const flushOfflineQueue = useCallback(() => {
     if (!currentUserKeys || isFlushing.current || !getJwtToken()) return;
+    if (!socket.connected) return; // Don't try to flush if socket is down
     isFlushing.current = true;
-    // Safety reset after 10s in case onQueueEmpty never fires
-    setTimeout(() => { isFlushing.current = false; }, 10000);
+    // Safety reset after 15s in case onQueueEmpty never fires
+    const safetyTimer = setTimeout(() => { isFlushing.current = false; }, 15000);
     processOfflineQueue({
       senderId: currentUserKeys.userId,
       socket,
@@ -1586,14 +1588,12 @@ export const App: React.FC = () => {
       privateKey: offlineQueueRef.current.privateKeyObject,
       activeUsers: offlineQueueRef.current.allUsers,
       onMessageFlushed: (msg) => {
-        // The message status was updated in IndexedDB by updateMessageStatus.
-        // Emit channels:get to refresh channels (in case of channel messages).
         if (msg.channelId) {
           socket.emit('channels:get');
         }
       },
-      onQueueEmpty: () => { isFlushing.current = false; }
-    }).catch(() => { isFlushing.current = false; });
+      onQueueEmpty: () => { clearTimeout(safetyTimer); isFlushing.current = false; }
+    }).catch(() => { clearTimeout(safetyTimer); isFlushing.current = false; });
   }, [currentUserKeys]);
 
   // Flush when socket connects (with delay to ensure socket is fully ready)
@@ -1606,8 +1606,7 @@ export const App: React.FC = () => {
   // Also listen for socket connect event directly to catch edge cases
   useEffect(() => {
     const handleConnect = () => {
-      setTimeout(flushOfflineQueue, 500);
-      // Re-join socket rooms on reconnect so channel messages are delivered
+      // Re-join socket rooms first so server accepts our messages
       if (currentUserKeys) {
         socket.emit('user:join', {
           userId: currentUserKeys.userId,
@@ -1618,6 +1617,8 @@ export const App: React.FC = () => {
           signingPublicKey: currentUserKeys.signingPublicKeyBase64,
         });
       }
+      // Then flush offline queue after a short delay
+      setTimeout(flushOfflineQueue, 1000);
     };
     socket.on('connect', handleConnect);
     return () => { socket.off('connect', handleConnect); };
@@ -1633,6 +1634,20 @@ export const App: React.FC = () => {
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [currentUserKeys]);
+
+  // Periodic check: flush pending messages whenever socket is connected
+  useEffect(() => {
+    if (!currentUserKeys) return;
+    const interval = setInterval(async () => {
+      if (socket.connected && !isFlushing.current) {
+        const pending = await getPendingSyncMessages(currentUserKeys.userId);
+        if (pending.length > 0) {
+          flushOfflineQueue();
+        }
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [currentUserKeys, flushOfflineQueue]);
 
   // Check token expiry periodically and force logout if expired
   useEffect(() => {

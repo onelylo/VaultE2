@@ -491,11 +491,22 @@ export async function updateChannel(channelId: string, data: Partial<Pick<DbChan
 
 export async function deleteChannel(channelId: string): Promise<void> {
   const db = getPool();
+  // Get attachment file paths before deleting records
+  const attachments = await db.query(
+    `SELECT file_path FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE channel_id = $1)`,
+    [channelId]
+  );
   await db.query(`DELETE FROM channel_keys WHERE channel_id = $1`, [channelId]);
   await db.query(`DELETE FROM channel_members WHERE channel_id = $1`, [channelId]);
   await db.query(`DELETE FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE channel_id = $1)`, [channelId]);
   await db.query(`DELETE FROM messages WHERE channel_id = $1`, [channelId]);
   await db.query(`DELETE FROM channels WHERE id = $1`, [channelId]);
+  // Delete physical attachment files
+  const uploadsDir = path.resolve(path.join(__dirname, '..', '..', 'uploads'));
+  for (const row of attachments.rows) {
+    const filePath = path.resolve(path.join(uploadsDir, row.file_path));
+    try { await fs.promises.unlink(filePath); } catch { /* ignore */ }
+  }
 }
 
 // ── Channel Keys ────────────────────────────────────────────────────────────
@@ -711,6 +722,8 @@ export async function getAttachmentsByMessageIds(messageIds: string[]): Promise<
 }
 
 export async function linkAttachmentToMessage(attachmentId: string, messageId: string): Promise<void> {
+  const msg = await getPool().query(`SELECT id FROM messages WHERE id = $1`, [messageId]);
+  if (msg.rows.length === 0) throw new Error('Message not found');
   await getPool().query(`UPDATE attachments SET message_id = $2 WHERE id = $1`, [attachmentId, messageId]);
 }
 
