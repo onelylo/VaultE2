@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
+import { socket } from '../lib/socket';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
   Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText,
@@ -168,6 +169,51 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Visible messages (lazy loaded)
   const visibleMessages = allMessages.slice(-loadCount);
+
+  // Reactions: Map<messageId, {userId: string, emoji: string}[]>
+  type ReactionEntry = { userId: string; emoji: string };
+  const [reactionsMap, setReactionsMap] = useState<Map<string, ReactionEntry[]>>(new Map());
+
+  // Fetch reactions for visible messages
+  useEffect(() => {
+    if (!visibleMessages || visibleMessages.length === 0) return;
+    const ids = visibleMessages.map(m => m.id);
+    fetch('/api/reactions/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageIds: ids }),
+    })
+      .then(r => r.json())
+      .then((data: { reactions: Record<string, ReactionEntry[]> }) => {
+        const map = new Map<string, ReactionEntry[]>();
+        for (const [msgId, reactions] of Object.entries(data.reactions || {})) {
+          map.set(msgId, reactions);
+        }
+        setReactionsMap(map);
+      })
+      .catch(() => {});
+  }, [visibleMessages?.map(m => m.id).join(',')]);
+
+  // Listen for live reaction updates
+  useEffect(() => {
+    const handleReactions = (data: { messageId: string; reactions: ReactionEntry[] }) => {
+      setReactionsMap(prev => {
+        const next = new Map(prev);
+        next.set(data.messageId, data.reactions);
+        return next;
+      });
+    };
+    socket.on('message:reactions', handleReactions);
+    return () => { socket.off('message:reactions', handleReactions); };
+  }, []);
+
+  const handleAddReaction = useCallback((messageId: string, emoji: string) => {
+    socket.emit('reaction:add', { messageId, emoji });
+  }, []);
+
+  const handleRemoveReaction = useCallback((messageId: string, emoji: string) => {
+    socket.emit('reaction:remove', { messageId, emoji });
+  }, []);
 
   // Load more when scrolling to top
   const handleScrollTop = useCallback(() => {
@@ -633,6 +679,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
               resolveKey={resolveMessageKey}
               onImageClick={(url, name) => setActiveLightbox({ url, name })}
+              reactions={reactionsMap.get(msg.id) || []}
+              onAddReaction={handleAddReaction}
+              onRemoveReaction={handleRemoveReaction}
+              allUsers={allUsers}
             />
           ))
         )}

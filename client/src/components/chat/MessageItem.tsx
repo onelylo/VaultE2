@@ -6,6 +6,7 @@ import {
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { ReactionPicker } from '../ReactionPicker';
 
 const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) => {
   if (status === 'pending_sync') {
@@ -55,6 +56,10 @@ interface MessageItemProps {
   setPendingDeleteEveryoneId: (id: string | null) => void;
   resolveKey: (msg: LocalMessage) => Promise<CryptoKey | null>;
   onImageClick: (url: string, name?: string) => void;
+  reactions?: { userId: string; emoji: string }[];
+  onAddReaction?: (messageId: string, emoji: string) => void;
+  onRemoveReaction?: (messageId: string, emoji: string) => void;
+  allUsers?: User[];
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -76,6 +81,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   setPendingDeleteEveryoneId,
   resolveKey,
   onImageClick,
+  reactions = [],
+  onAddReaction,
+  onRemoveReaction,
+  allUsers = [],
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
@@ -290,6 +299,50 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           </>
         )}
+
+        {/* Reaction chips below the bubble */}
+        {reactions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {Object.entries(
+              reactions.reduce<Record<string, { count: number; users: string[]; hasOwn: boolean }>>((acc, r) => {
+                if (!acc[r.emoji]) acc[r.emoji] = { count: 0, users: [], hasOwn: false };
+                acc[r.emoji].count++;
+                acc[r.emoji].users.push(r.userId);
+                if (r.userId === currentUserId) acc[r.emoji].hasOwn = true;
+                return acc;
+              }, {})
+            ).map(([emoji, { count, users, hasOwn }]) => (
+              <div key={emoji} className="relative group/react group/rx">
+                <button
+                  onClick={() => hasOwn ? onRemoveReaction?.(msg.id, emoji) : onAddReaction?.(msg.id, emoji)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                    hasOwn
+                      ? 'border-[var(--accent-primary)]/50'
+                      : 'border-[var(--border-color)] hover:border-[var(--accent-primary)]/30'
+                  }`}
+                  style={{
+                    backgroundColor: hasOwn
+                      ? 'color-mix(in srgb, var(--accent-primary) 20%, var(--bg-surface))'
+                      : 'var(--bg-surface)',
+                  }}
+                >
+                  <span>{emoji}</span>
+                  {count > 1 && (
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{count}</span>
+                  )}
+                </button>
+                {/* Tooltip: show who reacted */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded-lg text-[10px] whitespace-nowrap opacity-0 pointer-events-none group-hover/rx:opacity-100 transition-opacity z-50 shadow-lg"
+                  style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>
+                  {users.map(uid => {
+                    const name = allUsers.find(u => u.userId === uid)?.username || uid.slice(0, 8);
+                    return uid === currentUserId ? 'You' : name;
+                  }).join(', ')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ACTION BUTTONS — Reply + Edit + 3-dot side by side */}
@@ -309,6 +362,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           >
             <Reply className="w-3.5 h-3.5" />
           </button>
+        )}
+
+        {/* Reaction picker button */}
+        {!msg.isDeleted && editingMsgId !== msg.id && onAddReaction && (
+          <ReactionPicker
+            onSelect={(emoji) => onAddReaction(msg.id, emoji)}
+            existingEmojis={reactions.map(r => r.emoji)}
+            triggerClassName="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            triggerStyle={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+            triggerLabel="Add reaction"
+          />
         )}
 
         {/* Edit button — own messages, within 5m, not audio */}
