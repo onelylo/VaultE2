@@ -1624,13 +1624,48 @@ export const App: React.FC = () => {
       // Update the local Dexie channel immediately
       if (result.channel) {
         await saveChannel(result.channel);
-        // Also update selectedChannel if it's the one being edited
         if (selectedChannel?.id === id) {
           setSelectedChannel(result.channel);
         }
       }
       // Also trigger full refresh via socket
       socket.emit('channels:get');
+
+      // If new members were added, distribute channel key envelopes
+      if (data.memberIds && currentUserKeys) {
+        const channelKey = await getOrGenerateChannelKey(id);
+        if (!channelKey) return;
+        const currentMembers = result.channel?.memberIds || [];
+        const newMemberIds = data.memberIds.filter(mid => !currentMembers.includes(mid) || currentMembers.indexOf(mid) === -1);
+        const actualNewMembers = data.memberIds.filter(mid => {
+          // Include members that were just added (not already in the previous list)
+          const prevChannel = channels.find(c => c.id === id);
+          return !prevChannel?.memberIds?.includes(mid);
+        });
+        if (actualNewMembers.length > 0) {
+          const envelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
+          for (const mid of actualNewMembers) {
+            const memberUser = allUsers.find(u => u.userId === mid);
+            if (!memberUser?.publicKey) continue;
+            try {
+              const sharedKey = await getOrDeriveSharedKey(mid, memberUser.publicKey);
+              if (!sharedKey) continue;
+              const exportedKey = await crypto.subtle.exportKey('jwk', channelKey);
+              const encryptedData = await encryptChannelKeyForUser(exportedKey, sharedKey);
+              envelopes.push({ userId: mid, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv });
+            } catch (e) {
+              console.error(`[E2EE] Failed to distribute channel key to ${mid}:`, e);
+            }
+          }
+          if (envelopes.length > 0) {
+            await fetch(`${API_BASE}/api/channels/${id}/keys`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ keys: envelopes }),
+            });
+          }
+        }
+      }
     } catch (e) {
       console.error('[Channel] Update error:', e);
       alert('Failed to update channel');

@@ -81,6 +81,10 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // Token blocklist — in-memory store for invalidated JWTs (resets on server restart)
 // Map<token, expiryMs> to allow eviction of expired entries
 const tokenBlocklist = new Map<string, number>();
+// Rate limiting for key rotation: Map<userId, timestamps[]>
+const rotationsByUser = new Map<string, number[]>();
+// Rate limiting for uploads: Map<userId, timestamps[]>
+const uploadsByUser = new Map<string, number[]>();
 
 const app = express();
 app.use(helmet());
@@ -556,6 +560,14 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 app.post('/api/auth/rotate-key', async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
+  // Rate limit: max 3 rotations per hour per user
+  const now = Date.now();
+  const userRotations = (rotationsByUser.get(userId) || []).filter(t => t > now - 3600000);
+  if (userRotations.length >= 3) {
+    return res.status(429).json({ error: 'Too many key rotations. Try again in 1 hour.' });
+  }
+  userRotations.push(now);
+  rotationsByUser.set(userId, userRotations);
   const { publicKey, signingPublicKey, encryptedPrivateKey, keySalt, signature, oldPublicKey } = req.body;
   if (!publicKey || !signingPublicKey || !encryptedPrivateKey || !keySalt || !signature || !oldPublicKey) {
     return res.status(400).json({ error: 'publicKey, signingPublicKey, encryptedPrivateKey, keySalt, signature, and oldPublicKey are required.' });
@@ -983,6 +995,14 @@ const upload = multer({
 app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
+  // Rate limit: max 10 uploads per minute per user
+  const now = Date.now();
+  const userUploads = (uploadsByUser.get(userId) || []).filter(t => t > now - 60000);
+  if (userUploads.length >= 10) {
+    return res.status(429).json({ error: 'Too many uploads. Try again in 1 minute.' });
+  }
+  userUploads.push(now);
+  uploadsByUser.set(userId, userUploads);
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const { encryptedMetadata, binaryIv, metadataIv } = req.body;
@@ -1131,6 +1151,18 @@ async function broadcastChannels(): Promise<void> {
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
+  // Simple per-socket rate limiter for message sends
+  const msgTimestamps: number[] = [];
+  const isRateLimited = (): boolean => {
+    const now = Date.now();
+    // Remove timestamps older than 1 second
+    while (msgTimestamps.length > 0 && msgTimestamps[0] < now - 1000) msgTimestamps.shift();
+    // Allow max 10 messages per second
+    if (msgTimestamps.length >= 10) return true;
+    msgTimestamps.push(now);
+    return false;
+  };
+
   socket.on('user:join', async (data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; signingPublicKey?: string }) => {
     // Verify the claimed userId matches the authenticated socket user
     const authenticatedUserId = (socket as any).authenticatedUserId;
@@ -1233,6 +1265,7 @@ io.on('connection', (socket) => {
 
   // Direct Message Send — persisted to PostgreSQL
   socket.on('message:send', async (payload: StoredMessage) => {
+    if (isRateLimited()) return;
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { recipientId, ciphertext, tempId, id, attachment } = payload;
     if (!ciphertext || typeof ciphertext !== 'string') {
@@ -1273,6 +1306,7 @@ io.on('connection', (socket) => {
 
   // Group Channel Message Send — persisted to PostgreSQL
   socket.on('channel:message:send', async (payload: StoredMessage) => {
+    if (isRateLimited()) return;
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { channelId, ciphertext, tempId, id, attachment } = payload;
     if (!channelId) return;
