@@ -20,10 +20,11 @@ import {
   Server,
   VolumeX,
   Volume2,
+  Ban,
 } from 'lucide-react';
 import type { User, Channel, UserKeyPair } from '../types/chat';
 import { getFingerprint } from '../lib/crypto';
-import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation } from '../lib/db';
+import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
 import { CreateChannelModal } from './channels/CreateChannelModal';
 
 interface SidebarProps {
@@ -89,8 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const otherUsers = users.filter(u => u.userId !== currentUser?.userId && u.statusMessage !== '[deleted]');
   const onlineCount = otherUsers.filter(u => u.isOnline).length;
 
-  // Filter users based on mode
-  const filteredUsers = searchMode
+  // Filter users based on mode (excluding blocked users)
+  const filteredUsers = (searchMode
     ? otherUsers.filter(u =>
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -101,7 +102,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const dexieMatches = otherUsers.filter(u => activeDMPartners.includes(u.userId) && !recentIds.has(u.userId));
         // recentDMs first (already ordered by most recent), then Dexie matches
         return [...recentDMs.filter(u => otherUsers.some(o => o.userId === u.userId)), ...dexieMatches];
-      })();
+      })()
+  ).filter(u => !blockedSet.has(u.userId));
 
   const filteredChannels = channels.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -145,6 +147,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     getMutedConversations().then(setMutedSet);
   }, []);
 
+  // Blocked users
+  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    getBlockedUsers().then(setBlockedSet);
+  }, []);
+
   const handleToggleMute = useCallback(async (conversationId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (mutedSet.has(conversationId)) {
@@ -155,6 +163,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setMutedSet(prev => new Set(prev).add(conversationId));
     }
   }, [mutedSet]);
+
+  const handleToggleBlock = useCallback(async (userId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (blockedSet.has(userId)) {
+      await unblockUser(userId);
+      setBlockedSet(prev => { const next = new Set(prev); next.delete(userId); return next; });
+    } else {
+      await blockUser(userId);
+      setBlockedSet(prev => new Set(prev).add(userId));
+    }
+  }, [blockedSet]);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -718,6 +737,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title={mutedSet.has(user.userId) ? 'Unmute' : 'Mute'}
                       >
                         {mutedSet.has(user.userId) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                    {!isCollapsed && (
+                      <button
+                        onClick={(e) => handleToggleBlock(user.userId, e)}
+                        className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
+                        style={{ color: blockedSet.has(user.userId) ? '#ef4444' : 'var(--text-muted)' }}
+                        title={blockedSet.has(user.userId) ? 'Unblock' : 'Block'}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

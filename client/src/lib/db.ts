@@ -14,6 +14,7 @@ export class VaultChatDatabase extends Dexie {
   channels!: Table<Channel, string>;
   channelKeys!: Table<ChannelKey, string>;
   mutedConversations!: Table<{ conversationId: string }, string>;
+  blockedUsers!: Table<{ userId: string }, string>;
 
   constructor() {
     super('VaultChatDB');
@@ -37,7 +38,7 @@ export class VaultChatDatabase extends Dexie {
       console.log('[DB] Migrated to v5 — emergency/shift tables removed');
     });
 
-    // v6: Add muted conversations
+    // v6: Add muted conversations + blocked users
     this.version(6).stores({
       keys:        'userId, username, role, createdAt',
       messages:    'id, tempId, senderId, recipientId, channelId, timestamp, status, [senderId+recipientId]',
@@ -45,6 +46,7 @@ export class VaultChatDatabase extends Dexie {
       channels:    'id, name, type',
       channelKeys: 'channelId',
       mutedConversations: 'conversationId',
+      blockedUsers: 'userId',
     });
   }
 }
@@ -220,4 +222,24 @@ export async function isConversationMuted(conversationId: string): Promise<boole
 export async function getMutedConversations(): Promise<Set<string>> {
   const all = await db.mutedConversations.toArray();
   return new Set(all.map(e => e.conversationId));
+}
+
+// ── Blocked Users ──────────────────────────────────────────────────────────────
+
+export async function blockUser(userId: string): Promise<void> {
+  await db.blockedUsers.put({ userId });
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  await db.blockedUsers.delete(userId);
+}
+
+export async function isUserBlocked(userId: string): Promise<boolean> {
+  const entry = await db.blockedUsers.get(userId);
+  return !!entry;
+}
+
+export async function getBlockedUsers(): Promise<Set<string>> {
+  const all = await db.blockedUsers.toArray();
+  return new Set(all.map(e => e.userId));
 }
