@@ -1,5 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
-import twemoji from 'twemoji';
+import React, { useState, useRef, useMemo } from 'react';
 
 const FLAG_COUNTRY_MAP: Record<string, string> = {
   '🇺🇸': 'United States (US)', '🇬🇧': 'United Kingdom (GB)', '🇫🇷': 'France (FR)', '🇩🇪': 'Germany (DE)', '🇮🇹': 'Italy (IT)', '🇪🇸': 'Spain (ES)', '🇯🇵': 'Japan (JP)', '🇰🇷': 'South Korea (KR)', '🇨🇳': 'China (CN)', '🇷🇺': 'Russia (RU)', '🇧🇷': 'Brazil (BR)', '🇮🇳': 'India (IN)', '🇦🇺': 'Australia (AU)', '🇨🇦': 'Canada (CA)', '🇲🇽': 'Mexico (MX)', '🇦🇷': 'Argentina (AR)', '🇿🇦': 'South Africa (ZA)', '🇳🇬': 'Nigeria (NG)', '🇪🇬': 'Egypt (EG)', '🇹🇷': 'Turkey (TR)', '🇸🇦': 'Saudi Arabia (SA)', '🇦🇪': 'UAE (AE)', '🇮🇱': 'Israel (IL)', '🇵🇰': 'Pakistan (PK)', '🇧🇩': 'Bangladesh (BD)', '🇻🇳': 'Vietnam (VN)', '🇹🇭': 'Thailand (TH)', '🇮🇩': 'Indonesia (ID)', '🇲🇾': 'Malaysia (MY)', '🇵🇭': 'Philippines (PH)', '🇸🇬': 'Singapore (SG)', '🇳🇿': 'New Zealand (NZ)', '🇭🇰': 'Hong Kong (HK)', '🇹🇼': 'Taiwan (TW)', '🇺🇦': 'Ukraine (UA)', '🇵🇱': 'Poland (PL)', '🇳🇱': 'Netherlands (NL)', '🇧🇪': 'Belgium (BE)', '🇨🇭': 'Switzerland (CH)', '🇦🇹': 'Austria (AT)', '🇸🇪': 'Sweden (SE)', '🇳🇴': 'Norway (NO)', '🇩🇰': 'Denmark (DK)', '🇫🇮': 'Finland (FI)', '🇮🇪': 'Ireland (IE)', '🇵🇹': 'Portugal (PT)', '🇬🇷': 'Greece (GR)', '🇨🇿': 'Czechia (CZ)', '🇷🇴': 'Romania (RO)', '🇭🇺': 'Hungary (HU)', '🇧🇬': 'Bulgaria (BG)', '🇷🇸': 'Serbia (RS)', '🇭🇷': 'Croatia (HR)', '🇸🇮': 'Slovenia (SI)', '🇧🇦': 'Bosnia (BA)', '🇲🇰': 'North Macedonia (MK)', '🇦🇱': 'Albania (AL)', '🇲🇪': 'Montenegro (ME)', '🇽🇰': 'Kosovo (XK)', '🇱🇺': 'Luxembourg (LU)', '🇮🇸': 'Iceland (IS)', '🇪🇪': 'Estonia (EE)', '🇱🇻': 'Latvia (LV)', '🇱🇹': 'Lithuania (LT)', '🇧🇾': 'Belarus (BY)', '🇲🇩': 'Moldova (MD)', '🇬🇪': 'Georgia (GE)', '🇦🇲': 'Armenia (AM)', '🇦🇿': 'Azerbaijan (AZ)', '🇰🇿': 'Kazakhstan (KZ)', '🇺🇿': 'Uzbekistan (UZ)', '🇹🇲': 'Turkmenistan (TM)', '🇰🇬': 'Kyrgyzstan (KG)', '🇹🇯': 'Tajikistan (TJ)', '🇦🇫': 'Afghanistan (AF)', '🇮🇷': 'Iran (IR)', '🇮🇶': 'Iraq (IQ)', '🇸🇾': 'Syria (SY)', '🇱🇧': 'Lebanon (LB)', '🇯🇴': 'Jordan (JO)', '🇵🇸': 'Palestine (PS)', '🇾🇪': 'Yemen (YE)', '🇴🇲': 'Oman (OM)', '🇶🇦': 'Qatar (QA)', '🇧🇭': 'Bahrain (BH)', '🇰🇼': 'Kuwait (KW)',
@@ -10,20 +9,10 @@ function isFlagEmoji(emoji: string): boolean {
   return FLAG_COUNTRY_MAP.hasOwnProperty(emoji);
 }
 
-// Render emoji using Twemoji (SVG images for consistent cross-platform rendering)
-function Emoji({ emoji, size = 28 }: { emoji: string; size?: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (ref.current) {
-      twemoji.parse(ref.current, {
-        folder: 'svg',
-        ext: '.svg',
-        size: 72,
-      });
-    }
-  }, [emoji]);
-  return <span ref={ref}>{emoji}</span>;
-}
+const EMOJI_STYLE = {
+  fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
+  fontSize: '1.25rem',
+};
 
 const EMOJI_CATEGORIES: Record<string, { label: string; emojis: string[] }> = {
   'Smileys': {
@@ -155,10 +144,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
                 onClick={() => { onSelect(emoji); setSearch(''); }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
                 title={isFlagEmoji(emoji) ? FLAG_COUNTRY_MAP[emoji] : ''}
+                style={EMOJI_STYLE}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <Emoji emoji={emoji} size={24} />
+                {emoji}
               </button>
             ))}
           </div>
@@ -179,10 +169,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
                     onClick={() => { onSelect(emoji); setSearch(''); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
                     title={isFlagEmoji(emoji) ? FLAG_COUNTRY_MAP[emoji] : ''}
+                    style={EMOJI_STYLE}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    <Emoji emoji={emoji} size={24} />
+                    {emoji}
                   </button>
                 ))}
               </div>
