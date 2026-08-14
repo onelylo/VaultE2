@@ -184,12 +184,32 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Track whether we just switched conversations (for scroll-to-bottom)
   const justSwitchedRef = useRef(false);
 
+  // Helper: scroll to the very last message element so it's always visible above the text input
+  const scrollToBottom = useCallback((smooth = false) => {
+    const lastMsg = visibleMessages?.[visibleMessages.length - 1];
+    if (!lastMsg) {
+      // Fallback: scroll container to bottom
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+      }
+      return;
+    }
+    const el = document.getElementById(`msg-${lastMsg.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'end' });
+    } else if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+    }
+    isNearBottomRef.current = true;
+  }, [visibleMessages]);
+
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    isNearBottomRef.current = distFromBottom < 200;
-    setShowScrollDown(distFromBottom >= 200);
+    // Account for the text input area (~120px) below the scroll container
+    isNearBottomRef.current = distFromBottom < 120;
+    setShowScrollDown(distFromBottom >= 120);
     // Load more messages when scrolling near top
     if (el.scrollTop < 100) handleScrollTop();
   }, [handleScrollTop]);
@@ -217,13 +237,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     // Scroll to bottom after a short delay to ensure DOM is updated
     const timer = setTimeout(() => {
       if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        scrollToBottom(false);
         justSwitchedRef.current = false;
-        isNearBottomRef.current = true;
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, [visibleMessages?.length]);
+  }, [visibleMessages?.length, scrollToBottom]);
 
   // Auto-scroll to bottom on new messages when user is near bottom
   const prevMsgCountRef = useRef(visibleMessages?.length || 0);
@@ -235,12 +254,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     // Only auto-scroll if: message count increased AND user is near bottom AND not just switched
     if (newCount > prevCount && isNearBottomRef.current && !justSwitchedRef.current) {
       requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+        scrollToBottom(false);
       });
     }
-  }, [visibleMessages?.length]);
+  }, [visibleMessages?.length, scrollToBottom]);
 
   // Textarea auto-resize
   const autoResize = useCallback(() => {
@@ -277,12 +294,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setText('');
       setActiveReply(null);
       // Scroll to bottom after sending
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          isNearBottomRef.current = true;
-        }
-      });
+      requestAnimationFrame(() => scrollToBottom(false));
       return;
     }
 
@@ -291,12 +303,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setText('');
       setActiveReply(null);
       // Scroll to bottom after sending
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          isNearBottomRef.current = true;
-        }
-      });
+      requestAnimationFrame(() => scrollToBottom(false));
     }
   };
 
@@ -639,9 +646,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         {showScrollDown && allMessages && allMessages.length > 0 && (
           <button
             onClick={() => {
-              scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+              scrollToBottom(true);
               setShowScrollDown(false);
-              isNearBottomRef.current = true;
             }}
             className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10"
             title="Scroll to latest messages"
