@@ -63,12 +63,21 @@ function ChannelSettingsInner({
     slowMode !== (channel.slowModeSeconds || 0) || isAnnouncement !== (channel.isAnnouncement || false) ||
     JSON.stringify(memberIds) !== JSON.stringify(channel.memberIds || []);
 
-  // For official channels, all users are members; for team, all except self
-  const effectiveMemberIds = channel.type === 'official'
+  // All channels show all users as members
+  const effectiveMemberIds = (channel.type === 'official' || channel.type === 'team')
     ? allUsers.map(u => u.userId)
-    : channel.type === 'team'
-      ? allUsers.filter(u => u.userId !== currentUser?.userId).map(u => u.userId)
-      : channel.memberIds || [];
+    : channel.memberIds || [];
+
+  // Sort: owner first, then current user, then alphabetical
+  const sortedMemberIds = [...effectiveMemberIds].sort((a, b) => {
+    if (a === channel.createdBy && b !== channel.createdBy) return -1;
+    if (b === channel.createdBy && a !== channel.createdBy) return 1;
+    if (a === currentUser?.userId && b !== currentUser?.userId) return -1;
+    if (b === currentUser?.userId && a !== currentUser?.userId) return 1;
+    const ua = allUsers.find(u => u.userId === a);
+    const ub = allUsers.find(u => u.userId === b);
+    return (ua?.username || '').localeCompare(ub?.username || '');
+  });
 
   const sharedMessages = useLiveQuery(async () => {
     const all = await db.messages.toArray();
@@ -133,12 +142,50 @@ function ChannelSettingsInner({
   ];
   const tabCounts = { all: sharedMessages.length, images: images.length, video: video.length, audio: audio.length, docs: docs.length };
 
+  const renderMemberRow = (member: User) => (
+    <div key={member.userId}
+      className="flex items-center justify-between px-3 py-2 transition-colors"
+      style={{ borderBottom: '1px solid var(--border-color)', cursor: onMemberClick ? 'pointer' : 'default' }}
+      onClick={() => onMemberClick?.(member)}
+      onMouseEnter={e => onMemberClick && (e.currentTarget.style.backgroundColor = 'var(--hover-color)')}
+      onMouseLeave={e => onMemberClick && (e.currentTarget.style.backgroundColor = 'transparent')}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[10px] flex-shrink-0"
+          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--accent-primary)' }}>
+          {member.username.substring(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>
+              {member.fullName || member.username}
+            </span>
+            {member.userId === channel.createdBy && (
+              <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
+            )}
+            {member.userId === currentUser?.userId && (
+              <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
+            )}
+          </div>
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>@{member.username}</span>
+        </div>
+      </div>
+      {canManageMembers && member.userId !== channel.createdBy && (
+        <button onClick={e => { e.stopPropagation(); handleRemoveMember(member.userId); }}
+          className="p-1.5 rounded-lg flex-shrink-0" style={{ color: '#f87171' }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+          <UserMinus className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
       onClick={handleClose}>
       <div ref={modalRef}
-        className={`w-full max-w-sm rounded-2xl relative animate-[scaleIn_0.15s_ease-out] max-h-[85vh] flex flex-col overflow-hidden ${shaking ? 'animate-shake' : ''}`}
+        className={`w-full max-w-md rounded-2xl relative animate-[scaleIn_0.15s_ease-out] max-h-[85vh] flex flex-col overflow-hidden ${shaking ? 'animate-shake' : ''}`}
         style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 30px var(--glow-color)' }}
         onClick={e => e.stopPropagation()}>
 
@@ -148,13 +195,12 @@ function ChannelSettingsInner({
         </button>
 
         <div className="overflow-y-auto flex-1 p-6">
-          {/* Channel Identity with double-click to edit */}
+          {/* Channel Identity */}
           <div className="flex flex-col items-center space-y-2 mb-4">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '3px solid var(--border-color)', color: 'var(--accent-primary)' }}>
               #
             </div>
-            {/* Channel name - double-click to edit */}
             {canEditSettings && editingField === 'name' ? (
               <div className="w-full max-w-[220px]">
                 <input type="text" value={name} onChange={e => setName(e.target.value)}
@@ -184,9 +230,9 @@ function ChannelSettingsInner({
             </div>
           </div>
 
-          {/* Description - double-click to edit */}
+          {/* Description */}
           {canEditSettings && editingField === 'description' ? (
-            <div className="mb-3">
+            <div className="mb-4">
               <input type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Set description..."
                 onBlur={() => setEditingField(null)}
@@ -197,7 +243,7 @@ function ChannelSettingsInner({
               />
             </div>
           ) : (
-            <div className="mb-3 cursor-pointer hover:opacity-80" onDoubleClick={() => canEditSettings && setEditingField('description')}>
+            <div className="mb-4 cursor-pointer hover:opacity-80" onDoubleClick={() => canEditSettings && setEditingField('description')}>
               {channel.description ? (
                 <div className="px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
                   <span className="text-[9px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
@@ -211,7 +257,7 @@ function ChannelSettingsInner({
             </div>
           )}
 
-          {/* Editable fields for owner/admin */}
+          {/* Editable fields */}
           {canEditSettings && (
             <div className="space-y-2 mb-4">
               <div>
@@ -224,7 +270,10 @@ function ChannelSettingsInner({
               </div>
               {channel.type === 'official' && (
                 <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>READ ONLY</span>
+                  <div>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>READ ONLY</span>
+                    <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Only admins can post</p>
+                  </div>
                   <button type="button" onClick={() => setIsAnnouncement(prev => !prev)}
                     className="relative w-10 h-5 rounded-full transition-colors"
                     style={{ backgroundColor: isAnnouncement ? 'var(--accent-primary)' : 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -239,41 +288,46 @@ function ChannelSettingsInner({
           {/* Shared Media */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
-              {sharedMessages.length > 0 && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(totalSize)} · {sharedMessages.length}</span>}
+              <h4 className="text-[11px] font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
+              {sharedMessages.length > 0 && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(totalSize)} &middot; {sharedMessages.length}</span>}
             </div>
-            <div className="flex gap-0.5 mb-2 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+            <div className="flex gap-1 mb-3 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
               {mediaTabs.map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[9px] font-bold transition-all"
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[9px] font-bold transition-all"
                   style={{ backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent', color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)' }}>
-                  <tab.icon className="w-2.5 h-2.5" />
+                  <tab.icon className="w-3 h-3" />
+                  <span className="hidden sm:inline">{tab.label}</span>
                   {tabCounts[tab.id] > 0 && <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>}
                 </button>
               ))}
             </div>
             {grouped.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {grouped.map(group => (
                   <div key={group.label}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Calendar className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
-                      <span className="text-[9px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                      <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
                       <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
+                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{group.items.length} {group.items.length === 1 ? 'item' : 'items'}</span>
                     </div>
-                    <div className="space-y-1">
+                    <div className={activeTab === 'images' || activeTab === 'video' ? 'grid grid-cols-3 gap-1.5' : 'space-y-1.5'}>
                       {group.items.map(msg => {
                         const meta = msg.attachmentMeta!;
                         const isImage = meta.mimeType?.startsWith('image/');
+                        const isVideo = meta.mimeType?.startsWith('video/');
                         return (
-                          <div key={msg.id} className="flex items-center gap-2 p-1.5 rounded-lg text-[10px]"
+                          <div key={msg.id} className="flex items-center gap-2 p-2 rounded-lg text-[10px]"
                             style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
                             {isImage && meta.thumbnailDataUrl ? (
-                              <img src={meta.thumbnailDataUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                              <img src={meta.thumbnailDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                            ) : isVideo && meta.thumbnailDataUrl ? (
+                              <img src={meta.thumbnailDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                             ) : (
-                              <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
                                 style={{ backgroundColor: 'var(--bg-card)', color: 'var(--accent-primary)' }}>
-                                <Paperclip className="w-3 h-3" />
+                                <Paperclip className="w-4 h-4" />
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
@@ -288,20 +342,20 @@ function ChannelSettingsInner({
                 ))}
               </div>
             ) : (
-              <div className="text-center py-4">
-                <Paperclip className="w-5 h-5 mx-auto mb-1" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+              <div className="text-center py-6">
+                <Paperclip className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No files shared yet</p>
               </div>
             )}
           </div>
 
-          {/* Editable Members (team/private) - list style */}
-          {canManageMembers && (
-            <div className="mb-4">
-              <h4 className="text-[10px] font-bold tracking-wider flex items-center gap-2 mb-2" style={{ color: 'var(--text-muted)' }}>
-                <Users className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
-                <span>MEMBERS ({currentMembers.length})</span>
-              </h4>
+          {/* Members */}
+          <div className="mb-4">
+            <h4 className="text-[11px] font-bold tracking-wider flex items-center gap-2 mb-2" style={{ color: 'var(--text-muted)' }}>
+              <Users className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
+              <span>MEMBERS ({sortedMemberIds.length})</span>
+            </h4>
+            {canManageMembers && (
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: 'var(--text-muted)' }} />
                 <input type="search" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
@@ -326,86 +380,18 @@ function ChannelSettingsInner({
                   </div>
                 )}
               </div>
-              {/* Member list - full rows */}
-              <div className="space-y-1 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                {currentMembers.map(member => (
-                  <div key={member.userId}
-                    className="flex items-center justify-between px-3 py-2 transition-colors"
-                    style={{ borderBottom: '1px solid var(--border-color)', cursor: onMemberClick ? 'pointer' : 'default' }}
-                    onClick={() => onMemberClick?.(member)}
-                    onMouseEnter={e => onMemberClick && (e.currentTarget.style.backgroundColor = 'var(--hover-color)')}
-                    onMouseLeave={e => onMemberClick && (e.currentTarget.style.backgroundColor = 'transparent')}>
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[10px] flex-shrink-0"
-                        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--accent-primary)' }}>
-                        {member.username.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>
-                            {member.fullName || member.username}
-                          </span>
-                          {member.userId === currentUser?.userId && (
-                            <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
-                          )}
-                          {member.userId === channel.createdBy && (
-                            <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
-                          )}
-                        </div>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>@{member.username}</span>
-                      </div>
-                    </div>
-                    <button onClick={e => { e.stopPropagation(); handleRemoveMember(member.userId); }}
-                      className="p-1.5 rounded-lg flex-shrink-0" style={{ color: '#f87171' }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                      <UserMinus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+            )}
+            <div className="space-y-1 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+              {sortedMemberIds.map(id => {
+                const member = allUsers.find(u => u.userId === id);
+                if (!member) return null;
+                return renderMemberRow(member);
+              })}
             </div>
-          )}
-
-          {/* Read-only Members - list style */}
-          {!canManageMembers && (
-            <div className="mb-4">
-              <h4 className="text-[10px] font-bold tracking-wider flex items-center gap-2 mb-2" style={{ color: 'var(--text-muted)' }}>
-                <Users className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
-                <span>MEMBERS ({effectiveMemberIds.length})</span>
-              </h4>
-              <div className="space-y-1 rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                {effectiveMemberIds.map(id => {
-                  const user = allUsers.find(u => u.userId === id);
-                  if (!user) return null;
-                  return (
-                    <div key={id} className="flex items-center gap-2.5 px-3 py-2"
-                      style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[10px] flex-shrink-0"
-                        style={{ backgroundColor: 'var(--bg-card)', color: 'var(--accent-primary)' }}>
-                        {user.username.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</span>
-                          {id === currentUser?.userId && (
-                            <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
-                          )}
-                          {id === channel.createdBy && (
-                            <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
-                          )}
-                        </div>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>@{user.username}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Actions - at the bottom */}
+        {/* Actions */}
         <div className="flex items-center gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
           {canEditSettings && (
             <button onClick={handleSave} disabled={!hasChanges}
