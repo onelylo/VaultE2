@@ -9,9 +9,20 @@ function isFlagEmoji(emoji: string): boolean {
   return FLAG_COUNTRY_MAP.hasOwnProperty(emoji);
 }
 
-const EMOJI_STYLE = {
+const EMOJI_STYLE: React.CSSProperties = {
   fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
-  fontSize: '1.25rem',
+  fontSize: '1.5rem',
+  lineHeight: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const EMOJI_BUTTON_STYLE: React.CSSProperties = {
+  width: '32px',
+  height: '32px',
+  minWidth: '32px',
+  minHeight: '32px',
 };
 
 const EMOJI_CATEGORIES: Record<string, { label: string; emojis: string[] }> = {
@@ -142,13 +153,13 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
               <button
                 key={`${emoji}-${i}`}
                 onClick={() => { onSelect(emoji); setSearch(''); }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
+                className="flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
+                style={EMOJI_BUTTON_STYLE}
                 title={isFlagEmoji(emoji) ? FLAG_COUNTRY_MAP[emoji] : ''}
-                style={EMOJI_STYLE}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                {emoji}
+                <span style={EMOJI_STYLE}>{emoji}</span>
               </button>
             ))}
           </div>
@@ -167,13 +178,13 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
                   <button
                     key={`${emoji}-${i}`}
                     onClick={() => { onSelect(emoji); setSearch(''); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
+                    className="flex items-center justify-center rounded-lg transition-smooth hover:scale-125"
+                    style={EMOJI_BUTTON_STYLE}
                     title={isFlagEmoji(emoji) ? FLAG_COUNTRY_MAP[emoji] : ''}
-                    style={EMOJI_STYLE}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    {emoji}
+                    <span style={EMOJI_STYLE}>{emoji}</span>
                   </button>
                 ))}
               </div>

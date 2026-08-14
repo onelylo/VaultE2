@@ -2,6 +2,22 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '🎉', '🚀', '👀', '✅', '💯', '🤔', '👏', '💪', '🙏'];
 
+const EMOJI_STYLE: React.CSSProperties = {
+  fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
+  fontSize: '1.5rem',
+  lineHeight: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const EMOJI_BUTTON_STYLE: React.CSSProperties = {
+  width: '32px',
+  height: '32px',
+  minWidth: '32px',
+  minHeight: '32px',
+};
+
 interface ReactionPickerProps {
   onSelect: (emoji: string) => void;
   existingEmojis?: string[];
@@ -77,16 +93,15 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({ onSelect, existi
               <button
                 key={emoji}
                 onClick={() => { onSelect(emoji); setIsOpen(false); }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-smooth hover:scale-110"
+                className="flex items-center justify-center rounded-lg transition-smooth hover:scale-110"
                 style={{
+                  ...EMOJI_BUTTON_STYLE,
                   backgroundColor: existingEmojis.includes(emoji) ? 'color-mix(in srgb, var(--accent-primary) 30%, transparent)' : 'transparent',
-                  fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
-                  fontSize: '1.25rem',
                 }}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = existingEmojis.includes(emoji) ? 'color-mix(in srgb, var(--accent-primary) 30%, transparent)' : 'transparent'}
               >
-                {emoji}
+                <span style={EMOJI_STYLE}>{emoji}</span>
               </button>
             ))}
           </div>
