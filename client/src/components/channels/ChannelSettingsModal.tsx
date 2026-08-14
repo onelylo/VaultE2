@@ -392,26 +392,26 @@ function ChannelSettingsInner({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
+        <div className="flex flex-col gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
           {canEditSettings && (
             <button onClick={handleSave} disabled={!hasChanges}
-              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ backgroundColor: hasChanges ? '#ef4444' : 'var(--accent-primary)', color: 'var(--accent-text)' }}>
-              {hasChanges ? 'SAVE' : 'CLOSE'}
+              {hasChanges ? 'SAVE CHANGES' : 'CLOSE'}
             </button>
           )}
           {!canEditSettings && (channel.type === 'team' || channel.type === 'private') && onLeaveChannel && (
             <button onClick={() => { onLeaveChannel(channel.id); onClose(); }}
-              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
               style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-              <LogOut className="w-3 h-3" /> LEAVE
+              <LogOut className="w-3 h-3" /> LEAVE CHANNEL
             </button>
           )}
           {canEditSettings && (
             <button onClick={() => { onDelete(channel.id); onClose(); }}
-              className="py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center"
+              className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
               style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3 h-3" /> DELETE CHANNEL
             </button>
           )}
         </div>

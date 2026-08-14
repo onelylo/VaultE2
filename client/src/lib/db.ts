@@ -173,7 +173,8 @@ export async function updateMessageStatus(
     await db.messages.delete(targetId);
     await db.messages.put({ ...target, id: newId, status });
   } else {
-    await db.messages.update(targetId, { status });
+    // Use put() instead of update() for reliable Dexie observable triggering
+    await db.messages.put({ ...target, status });
   }
 }
 

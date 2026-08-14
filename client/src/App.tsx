@@ -1531,9 +1531,11 @@ export const App: React.FC = () => {
     }).catch(() => { isFlushing.current = false; });
   }, [currentUserKeys]);
 
-  // Flush when socket connects
+  // Flush when socket connects (with delay to ensure socket is fully ready)
   useEffect(() => {
-    if (networkStatus.isSocketConnected) flushOfflineQueue();
+    if (networkStatus.isSocketConnected) {
+      setTimeout(flushOfflineQueue, 1000);
+    }
   }, [networkStatus.isSocketConnected, flushOfflineQueue]);
 
   // Also listen for socket connect event directly to catch edge cases

@@ -244,12 +244,29 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, []);
 
   const handleAddReaction = useCallback((messageId: string, emoji: string) => {
+    // Optimistic update: show the reaction immediately
+    setReactionsMap(prev => {
+      const next = new Map(prev);
+      const existing = next.get(messageId) || [];
+      const hasOwn = existing.some(r => r.emoji === emoji && r.userId === currentUserId);
+      if (!hasOwn) {
+        next.set(messageId, [...existing, { userId: currentUserId || '', emoji }]);
+      }
+      return next;
+    });
     socket.emit('reaction:add', { messageId, emoji });
-  }, []);
+  }, [currentUserId]);
 
   const handleRemoveReaction = useCallback((messageId: string, emoji: string) => {
+    // Optimistic update: remove the reaction immediately
+    setReactionsMap(prev => {
+      const next = new Map(prev);
+      const existing = next.get(messageId) || [];
+      next.set(messageId, existing.filter(r => !(r.emoji === emoji && r.userId === currentUserId)));
+      return next;
+    });
     socket.emit('reaction:remove', { messageId, emoji });
-  }, []);
+  }, [currentUserId]);
 
   // Starred messages
   const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
