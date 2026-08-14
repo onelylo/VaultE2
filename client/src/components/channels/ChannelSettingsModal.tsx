@@ -209,35 +209,13 @@ function ChannelSettingsInner({
             </div>
           </div>
 
-          {/* Info Rows */}
-          <div className="space-y-2 mb-4">
-            {channel.description && (
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
-                <span className="text-[11px] text-right max-w-[60%] truncate" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
-              </div>
-            )}
-            {channel.type !== 'official' && (
-              <>
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>CREATED BY</span>
-                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
-                    {allUsers.find(u => u.userId === channel.createdBy)?.fullName || allUsers.find(u => u.userId === channel.createdBy)?.username || 'Unknown'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>MEMBERS</span>
-                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{effectiveMemberIds.length}</span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>SLOW MODE</span>
-                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
-                    {slowMode > 0 ? `${slowMode}s` : 'Off'}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Info Rows - only description */}
+          {channel.description && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl mb-4" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+              <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
+              <span className="text-[11px] text-right max-w-[60%] truncate" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
+            </div>
+          )}
 
           {/* Shared Media - under Description */}
           <div className="mb-4">
