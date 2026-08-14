@@ -394,65 +394,65 @@ function ChannelSettingsInner({
           )}
 
           {/* Shared Attachments */}
-          {sharedMessages.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
+              {sharedMessages.length > 0 && (
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(totalSize)} · {sharedMessages.length} files</span>
-              </div>
-              <div className="flex gap-0.5 mb-2 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                {mediaTabs.map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[9px] font-bold transition-all"
-                    style={{ backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent', color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)' }}>
-                    <tab.icon className="w-2.5 h-2.5" />
-                    {tabCounts[tab.id] > 0 && <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>}
-                  </button>
-                ))}
-              </div>
-              {grouped.length > 0 ? (
-                <div className="space-y-2">
-                  {grouped.map(group => (
-                    <div key={group.label}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Calendar className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
-                        <span className="text-[9px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
-                        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
-                      </div>
-                      <div className="space-y-1">
-                        {group.items.map(msg => {
-                          const meta = msg.attachmentMeta!;
-                          const isImage = meta.mimeType?.startsWith('image/');
-                          return (
-                            <div key={msg.id} className="flex items-center gap-2 p-1.5 rounded-lg text-[10px]"
-                              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                              {isImage && meta.thumbnailDataUrl ? (
-                                <img src={meta.thumbnailDataUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                              ) : (
-                                <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-                                  style={{ backgroundColor: 'var(--bg-card)', color: 'var(--accent-primary)' }}>
-                                  <Paperclip className="w-3 h-3" />
-                                </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
-                                <p style={{ color: 'var(--text-muted)' }}>{formatSize(meta.fileSize || 0)}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <Paperclip className="w-5 h-5 mx-auto mb-1" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No {activeTab !== 'all' ? mediaTabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} files shared yet</p>
-                </div>
               )}
             </div>
-          )}
+            <div className="flex gap-0.5 mb-2 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+              {mediaTabs.map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded-md text-[9px] font-bold transition-all"
+                  style={{ backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent', color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)' }}>
+                  <tab.icon className="w-2.5 h-2.5" />
+                  {tabCounts[tab.id] > 0 && <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>}
+                </button>
+              ))}
+            </div>
+            {grouped.length > 0 ? (
+              <div className="space-y-2">
+                {grouped.map(group => (
+                  <div key={group.label}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Calendar className="w-2.5 h-2.5" style={{ color: 'var(--text-muted)' }} />
+                      <span className="text-[9px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
+                      <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
+                    </div>
+                    <div className="space-y-1">
+                      {group.items.map(msg => {
+                        const meta = msg.attachmentMeta!;
+                        const isImage = meta.mimeType?.startsWith('image/');
+                        return (
+                          <div key={msg.id} className="flex items-center gap-2 p-1.5 rounded-lg text-[10px]"
+                            style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                            {isImage && meta.thumbnailDataUrl ? (
+                              <img src={meta.thumbnailDataUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: 'var(--bg-card)', color: 'var(--accent-primary)' }}>
+                                <Paperclip className="w-3 h-3" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+                              <p style={{ color: 'var(--text-muted)' }}>{formatSize(meta.fileSize || 0)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <Paperclip className="w-5 h-5 mx-auto mb-1" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No {activeTab !== 'all' ? mediaTabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} files shared yet</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>,
