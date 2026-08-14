@@ -59,6 +59,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [shaking, setShaking] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('profile');
   const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem('vaultchat_sound') !== 'false');
   const [notificationsEnabled, setNotificationsEnabled] = useState(localStorage.getItem('vaultchat_notifications') !== 'false');
@@ -294,8 +295,12 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                 </div>
 
                 {/* Save button */}
-                <div className="flex justify-end">
-                  <button onClick={() => setShowSaveConfirm(true)} disabled={saving}
+                <div className={`flex justify-end ${shaking ? 'animate-shake' : ''}`}>
+                  <button onClick={() => {
+                    const hasChanges2 = username !== currentUser.username || email !== currentUser.email || phone !== (currentUser.phone || '') || avatarUrl;
+                    if (!hasChanges2) { setShaking(true); setTimeout(() => setShaking(false), 400); return; }
+                    setShowSaveConfirm(true);
+                  }} disabled={saving}
                     className="btn-shiny px-5 py-2.5 text-sm font-bold rounded-xl flex items-center gap-2 disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                     <span>{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}</span>

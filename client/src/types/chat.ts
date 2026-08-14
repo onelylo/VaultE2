@@ -76,6 +76,7 @@ export interface EncryptedPayload {
   ciphertext: string; // Base64 AES-GCM ciphertext (empty string if attachment-only)
   iv: string;         // Base64 12-byte IV
   timestamp: number;
+  status?: string;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: string;

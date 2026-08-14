@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Shield, Key, UserCheck, AlertTriangle, Lock, RefreshCw } from 'lucide-react';
 
@@ -31,6 +31,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
   const [phone, setPhone] = useState(user?.phone || '');
   const [newPassword, setNewPassword] = useState('');
   const [revokeKeys, setRevokeKeys] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Reset state when user prop changes
   useEffect(() => {
@@ -48,6 +50,13 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Check if anything changed
+    const hasChanges = role !== user.role || fullName !== (user.fullName || '') || status !== (user.status || 'ACTIVE') || phone !== (user.phone || '') || newPassword.trim() || revokeKeys;
+    if (!hasChanges) {
+      setShaking(true);
+      setTimeout(() => setShaking(false), 400);
+      return;
+    }
     onSave({
       userId: user.id,
       role,
@@ -74,7 +83,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>
           {/* Full Legal Name */}
           <div>
             <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Full Legal Name</label>

@@ -147,55 +147,57 @@ function ChannelSettingsInner({
         </button>
 
         <div className="overflow-y-auto flex-1 p-6">
-          {/* Channel Identity */}
+          {/* Channel Identity with inline-editable name and description */}
           <div className="flex flex-col items-center space-y-3 mb-4">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '3px solid var(--border-color)', color: 'var(--accent-primary)' }}>
               #
             </div>
-            <div className="text-center">
+            {/* Inline-editable channel name */}
+            {canEditSettings ? (
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                className="font-bold text-sm text-center bg-transparent border-b-2 focus:outline-none w-full max-w-[200px]"
+                style={{ color: 'var(--text-main)', borderColor: 'var(--border-color)' }}
+                onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+              />
+            ) : (
               <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>#{channel.name}</h3>
-              <div className="flex items-center justify-center gap-1.5 mt-1">
-                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: typeInfo.color, border: `1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)` }}>
-                  <TypeIcon className="w-2.5 h-2.5" />{typeInfo.label}
-                </span>
-                {isAnnouncement && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
-                    style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>READ ONLY</span>
-                )}
-              </div>
+            )}
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"
+                style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: typeInfo.color, border: `1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)` }}>
+                <TypeIcon className="w-2.5 h-2.5" />{typeInfo.label}
+              </span>
+              {isAnnouncement && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                  style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>READ ONLY</span>
+              )}
             </div>
           </div>
 
-          {/* Info: Description */}
-          {channel.description && (
+          {/* Inline-editable description with label */}
+          {canEditSettings ? (
+            <div className="mb-3">
+              <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</label>
+              <input type="text" value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Set description..."
+                className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
+                onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
+            </div>
+          ) : channel.description ? (
             <div className="px-3 py-2 rounded-xl mb-3" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
               <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
             </div>
-          )}
+          ) : null}
 
           {/* Editable fields for owner/admin */}
           {canEditSettings && (
             <div className="space-y-2 mb-4">
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Channel Name</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)}
-                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Description</label>
-                <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Set description..."
-                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
-              </div>
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Slow Mode</label>
+                <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>SLOW MODE</label>
                 <select value={slowMode} onChange={e => setSlowMode(Number(e.target.value))}
                   className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
                   style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>

@@ -387,7 +387,7 @@ export const App: React.FC = () => {
       ciphertext: payload.ciphertext,
       iv: payload.iv,
       timestamp: payload.timestamp ?? Date.now(),
-      status: 'received' as const,
+      status: (payload.status as LocalMessage['status']) || 'received',
       isDecrypted,
       isEdited: payload.isEdited,
       isDeleted: payload.isDeleted,
@@ -2007,7 +2007,15 @@ export const App: React.FC = () => {
 
   const handleDeleteForEveryone = async (messageId: string) => {
     await markMessageDeletedLocally(messageId);
-    socket.emit('message:delete', { id: messageId, recipientId: selectedPeer?.userId, channelId: selectedChannel?.id });
+    const payload = { id: messageId, recipientId: selectedPeer?.userId, channelId: selectedChannel?.id };
+    if (socket.connected) {
+      socket.emit('message:delete', payload);
+    } else {
+      // Retry when socket reconnects
+      const retryHandler = () => { socket.emit('message:delete', payload); };
+      socket.once('connect', retryHandler);
+      setTimeout(() => socket.off('connect', retryHandler), 30000);
+    }
   };
 
   const usersWithPresence: User[] = allUsers.map(u => ({

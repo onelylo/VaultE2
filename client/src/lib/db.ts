@@ -113,15 +113,17 @@ const STATUS_RANK: Record<string, number> = {
 };
 
 export async function saveMessage(msg: LocalMessage): Promise<void> {
-  // Server messages always come with status 'received' from decryptPayload,
-  // which would downgrade local 'delivered'/'read' status on re-fetch.
-  // Preserve the higher of the two statuses.
+  // Preserve local status and deletion state that may be more up-to-date than server
   const existing = await db.messages.get(msg.id);
   if (existing) {
-    const existingRank = STATUS_RANK[existing.status] ?? 0;
-    const incomingRank = STATUS_RANK[msg.status ?? ''] ?? 0;
-    if (existingRank > incomingRank) {
-      await db.messages.put({ ...msg, status: existing.status });
+    const existingStatusRank = STATUS_RANK[existing.status] ?? 0;
+    const incomingStatusRank = STATUS_RANK[msg.status ?? ''] ?? 0;
+    // Preserve higher status
+    const finalStatus = existingStatusRank > incomingStatusRank ? existing.status : msg.status;
+    // Preserve local isDeleted if already deleted
+    const finalIsDeleted = existing.isDeleted || msg.isDeleted;
+    if (finalStatus !== msg.status || finalIsDeleted !== msg.isDeleted) {
+      await db.messages.put({ ...msg, status: finalStatus, isDeleted: finalIsDeleted });
       return;
     }
   }
