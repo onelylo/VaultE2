@@ -595,8 +595,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             filteredUsers.map(user => {
               const isSelected = selectedUser?.userId === user.userId;
               const fp = fingerprints[user.userId] || '...';
-              const isOnline = user.isOnline ?? false;
-              const isAway = user.isAway ?? false;
+              // Always look up live presence from the users prop, not from recentDMs which may be stale
+              const liveUser = users.find(u => u.userId === user.userId) || user;
+              const isOnline = liveUser.isOnline ?? false;
+              const isAway = liveUser.isAway ?? false;
               const unread = unreadDMs[user.userId] || 0;
 
               return (
