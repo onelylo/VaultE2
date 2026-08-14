@@ -120,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const hiddenDMUsers = filteredUsers.filter(u => hiddenSet.has(u.userId));
 
   const filteredChannels = channels.filter(c =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
+    c.type !== 'public' && c.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Load active DM partners

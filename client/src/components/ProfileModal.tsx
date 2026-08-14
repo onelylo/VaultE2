@@ -166,17 +166,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <button onClick={onStartDM} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs"
                   style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}>MESSAGE</button>
               )}
-              {isBlocked && onUnblock ? (
-                <button onClick={() => setConfirmAction('unblock')} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
-                  style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e' }}>
-                  <MessageSquare className="w-3 h-3" /> UNBLOCK
-                </button>
-              ) : onBlock ? (
-                <button onClick={() => setConfirmAction('block')} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
-                  style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
-                  <Ban className="w-3 h-3" /> BLOCK
-                </button>
-              ) : null}
             </div>
 
             {/* Shared Media */}
@@ -229,6 +218,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Footer - block/unblock at the bottom */}
+        <div className="flex items-center gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
+          {isBlocked && onUnblock ? (
+            <button onClick={() => setConfirmAction('unblock')}
+              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+              style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e' }}>
+              <MessageSquare className="w-3 h-3" /> UNBLOCK
+            </button>
+          ) : onBlock ? (
+            <button onClick={() => setConfirmAction('block')}
+              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+              style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+              <Ban className="w-3 h-3" /> BLOCK
+            </button>
+          ) : (
+            <button onClick={onClose}
+              className="flex-1 py-2 px-3 rounded-xl font-bold text-xs"
+              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+              CLOSE
+            </button>
+          )}
         </div>
       </div>
 

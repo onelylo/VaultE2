@@ -347,6 +347,16 @@ aside, .sidebar-container {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
 /* --- Animation utilities --- */
 .animate-fadeIn {
   animation: fadeIn 0.15s ease-out;
