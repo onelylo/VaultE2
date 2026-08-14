@@ -171,8 +171,7 @@ async function seedDefaultChannels(): Promise<void> {
 
 async function seedAdminAccount(): Promise<void> {
   const username = 'Onelylo';
-  const normalized = username.trim().toLowerCase();
-  const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
+  const userId = `usr_${username.replace(/[^a-zA-Z0-9]/g, '')}`;
   const existing = await getPool().query('SELECT id FROM users WHERE id = $1', [userId]);
   if (existing.rows.length > 0) return;
 
@@ -188,7 +187,7 @@ async function seedAdminAccount(): Promise<void> {
   await getPool().query(
     `INSERT INTO users (id, username, full_name, email, role, password_hash, public_key, status, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [userId, normalized, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
+    [userId, username, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
   );
   console.log(`[DB] Seeded admin account: ${username} (${userId})`);
 }
@@ -247,7 +246,7 @@ export async function getUserByIdIncludingDeleted(userId: string): Promise<DbUse
 }
 
 export async function getUserByUsername(username: string): Promise<DbUser | undefined> {
-  const res = await getPool().query(`SELECT ${USER_COLS} FROM users WHERE LOWER(username) = LOWER($1) AND deleted_at IS NULL`, [username]);
+  const res = await getPool().query(`SELECT ${USER_COLS} FROM users WHERE username = $1 AND deleted_at IS NULL`, [username]);
   return res.rows[0] ? mapUserRow(res.rows[0]) : undefined;
 }
 

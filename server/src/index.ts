@@ -548,7 +548,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a digit.' });
   }
 
-  const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
+  // Use original case for userId so "Onelylo" and "onelylo" are different accounts
+  const userId = `usr_${username.trim().replace(/[^a-zA-Z0-9]/g, '')}`;
   try {
     const existing = await getUserByIdIncludingDeleted(userId);
     if (existing) {
@@ -589,8 +590,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password, publicKey, signingPublicKey, encryptedPrivateKey, keySalt, forceKeyRotation } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required.' });
-  const normalized = username.trim().toLowerCase();
-  const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
+  // Use original case for userId lookup (case-sensitive)
+  const userId = `usr_${username.trim().replace(/[^a-zA-Z0-9]/g, '')}`;
   try {
     const user = await getUserById(userId);
     if (!user) {
