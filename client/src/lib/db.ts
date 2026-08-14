@@ -16,6 +16,7 @@ export class VaultChatDatabase extends Dexie {
   mutedConversations!: Table<{ conversationId: string }, string>;
   blockedUsers!: Table<{ userId: string }, string>;
   drafts!: Table<{ conversationId: string; text: string }, string>;
+  forwardedMessages!: Table<{ messageId: string }, string>;
 
   constructor() {
     super('VaultChatDB');
@@ -49,6 +50,7 @@ export class VaultChatDatabase extends Dexie {
       mutedConversations: 'conversationId',
       blockedUsers: 'userId',
       drafts: 'conversationId',
+      forwardedMessages: 'messageId',
     });
   }
 }
@@ -263,4 +265,17 @@ export async function getDraft(conversationId: string): Promise<string> {
 
 export async function deleteDraft(conversationId: string): Promise<void> {
   await db.drafts.delete(conversationId);
+}
+
+// ── Forwarded Messages ─────────────────────────────────────────────────────────
+
+export async function markForwarded(messageId: string): Promise<void> {
+  await db.forwardedMessages.put({ messageId });
+}
+
+export async function getForwardedStatus(messageIds: string[]): Promise<Set<string>> {
+  if (messageIds.length === 0) return new Set();
+  const all = await db.forwardedMessages.toArray();
+  const idSet = new Set(messageIds);
+  return new Set(all.filter(e => idSet.has(e.messageId)).map(e => e.messageId));
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, saveDraft, getDraft, deleteDraft } from '../lib/db';
+import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus } from '../lib/db';
 import { socket } from '../lib/socket';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
@@ -243,6 +243,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Starred messages
   const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
 
+  // Forwarded messages
+  const [forwardedSet, setForwardedSet] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
@@ -256,6 +259,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         setStarredSet(new Set(Object.keys(data.status || {}).filter(k => data.status[k])));
       })
       .catch(() => {});
+
+    getForwardedStatus(ids).then(setForwardedSet);
   }, [visibleMessages?.map(m => m.id).join(',')]);
 
   const handleToggleStar = useCallback(async (messageId: string, isStarred: boolean) => {
@@ -747,6 +752,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               onForward={setForwardMsg}
               isStarred={starredSet.has(msg.id)}
               onToggleStar={handleToggleStar}
+              isForwarded={forwardedSet.has(msg.id)}
             />
           ))
         )}

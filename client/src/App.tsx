@@ -51,7 +51,8 @@ import {
   getStoredChannels,
   saveChannelKey,
   getChannelKey,
-  getActiveDMPartners
+  getActiveDMPartners,
+  markForwarded
 } from './lib/db';
 import { useNetworkStatus, processOfflineQueue } from './lib/queue';
 import { playNotificationSound } from './lib/notify';
@@ -1794,6 +1795,7 @@ export const App: React.FC = () => {
       const { ciphertext, iv } = await encryptMessage(originalText, channelKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
       await saveMessage(localMsg);
+      await markForwarded(tempId);
       if (!isOffline) {
         socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp });
       }
@@ -1807,6 +1809,7 @@ export const App: React.FC = () => {
       const { ciphertext, iv } = await encryptMessage(originalText, sharedKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
       await saveMessage(localMsg);
+      await markForwarded(tempId);
       upsertDMConversation(peer, originalText);
       if (!isOffline) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp });

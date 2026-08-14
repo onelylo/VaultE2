@@ -63,6 +63,7 @@ interface MessageItemProps {
   onForward?: (msg: LocalMessage) => void;
   isStarred?: boolean;
   onToggleStar?: (messageId: string, isStarred: boolean) => void;
+  isForwarded?: boolean;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -91,6 +92,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onForward,
   isStarred = false,
   onToggleStar,
+  isForwarded = false,
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
@@ -216,6 +218,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
         ) : (
           <>
+            {/* Forwarded label */}
+            {isForwarded && (
+              <span className="text-[10px] font-medium italic block mb-1" style={{ color: 'var(--text-muted)' }}>
+                ↪ Forwarded
+              </span>
+            )}
+
             {/* CHANNEL CHATS ONLY: Sender name inside top of bubble */}
             {chatType === 'channel' && !isSelf && (
               <span className="text-xs font-bold text-[var(--accent-primary)] block mb-1">

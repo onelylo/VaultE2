@@ -72,7 +72,7 @@ export const LinkPreview: React.FC<{ url: string }> = ({ url }) => {
         <div className="flex items-center gap-1.5 mb-1">
           <Globe className="w-3 h-3 shrink-0" style={{ color: 'var(--text-muted)' }} />
           <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
-            {new URL(url).hostname}
+            {(() => { try { return new URL(url).hostname; } catch { return url.slice(0, 40); } })()}
           </span>
           <ExternalLink className="w-2.5 h-2.5 ml-auto opacity-0 group-hover/preview:opacity-100 transition-opacity" style={{ color: 'var(--text-muted)' }} />
         </div>
