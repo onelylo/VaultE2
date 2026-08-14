@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, Fingerprint, Shield, LogOut, Palette, Sun, Moon, Camera,
@@ -168,9 +168,16 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
   const displayAvatar = avatarUrl || currentUser.avatarUrl;
 
+  const hasChanges = username !== currentUser.username || email !== currentUser.email || phone !== (currentUser.phone || '') || !!avatarUrl;
+
+  const handleClose = useCallback(() => {
+    if (hasChanges) { setShaking(true); setTimeout(() => setShaking(false), 400); return; }
+    onClose();
+  }, [hasChanges, onClose]);
+
   return createPortal(
     <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
       <div
         className="relative w-full max-w-5xl h-[85vh] max-h-[700px] flex rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-2xl text-[var(--text-main)] overflow-hidden animate-scaleIn mx-auto"
         onClick={(e) => e.stopPropagation()}
