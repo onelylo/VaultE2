@@ -173,7 +173,7 @@ export const App: React.FC = () => {
 
   // Keep allUsersRef synchronized with state (synchronous, not deferred)
   const setAllUsersAndRef = useCallback((updater: User[] | ((prev: User[]) => User[])) => {
-    setAllUsersAndRef(prev => {
+    setAllUsers(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       allUsersRef.current = next;
       return next;
