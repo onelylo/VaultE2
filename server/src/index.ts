@@ -364,17 +364,20 @@ async function buildUserDirectory(requestingUserId?: string) {
 
 function userToActive(data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; avatarUrl?: string }, socketId: string, regUser?: DbUser): ActiveUser {
   const role: UserRole = (regUser?.role as UserRole) || 'MEMBER';
-  const fullName = data.fullName || regUser?.fullName || data.username;
-  const avatarUrl = data.avatarUrl || regUser?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fullName.trim())}`;
+  const username = regUser?.username || data.username;
+  const fullName = regUser?.fullName || data.fullName || username;
+  const email = regUser?.email || `${username}@vaultchat.internal`;
+  const avatarUrl = regUser?.avatarUrl || data.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fullName.trim())}`;
+  const publicKey = regUser?.publicKey || data.publicKey;
   return {
     userId: data.userId,
-    username: data.username,
+    username,
     fullName,
-    email: regUser?.email || `${data.username}@vaultchat.internal`,
+    email,
     role,
     avatarUrl,
     socketId,
-    publicKey: data.publicKey,
+    publicKey,
     lastSeen: Date.now(),
   };
 }
@@ -403,8 +406,26 @@ const handleProfileUpdate = async (req: any, res: any) => {
   if (!userId) return;
   try {
     const { fullName, email, avatarUrl, avatar, status, statusMessage, username, phone } = req.body;
-    // Security: Check username uniqueness if changing
-    if (username) {
+    // Input validation
+    if (fullName !== undefined && (typeof fullName !== 'string' || fullName.length > 100)) {
+      return res.status(400).json({ error: 'Full name must be a string, max 100 characters' });
+    }
+    if (email !== undefined && (typeof email !== 'string' || email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    if (phone !== undefined && (typeof phone !== 'string' || phone.length > 20)) {
+      return res.status(400).json({ error: 'Phone must be max 20 characters' });
+    }
+    if (statusMessage !== undefined && (typeof statusMessage !== 'string' || statusMessage.length > 200)) {
+      return res.status(400).json({ error: 'Status message max 200 characters' });
+    }
+    if (username !== undefined) {
+      if (typeof username !== 'string' || username.length < 3 || username.length > 30) {
+        return res.status(400).json({ error: 'Username must be 3-30 characters' });
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+      }
       const existing = await getUserByUsername(username).catch(() => undefined);
       if (existing && existing.userId !== userId) {
         return res.status(409).json({ error: 'Username already taken' });
@@ -465,11 +486,16 @@ app.put('/api/auth/password', async (req, res) => {
     }
     // Always store new passwords as bcrypt (even if old was SHA-256)
     await updateUserPassword(userId, await hashPassword(newPassword));
-    // Security: Invalidate current session by blocking the token
+    // Invalidate all sessions for this user
     const auth = req.headers.authorization;
     if (auth?.startsWith('Bearer ')) {
       const token = auth.slice(7);
       tokenBlocklist.set(token, Date.now() + JWT_EXPIRY_MS);
+    }
+    // Force disconnect all sockets for this user
+    const userSocket = activeUsers.get(userId);
+    if (userSocket) {
+      io.to(userSocket.socketId).emit('user:password_changed', { reason: 'Password changed — please log in again' });
     }
     return res.json({ success: true });
   } catch (e) {
@@ -1802,15 +1828,12 @@ io.on('connection', (socket) => {
       socket.emit('message:edit:rejected', { id: data.id, error: 'Unauthorized: you can only edit your own messages' });
       return;
     }
-    await updateMessageEdit(data.id, data.newCiphertext, data.newIv).catch(e => console.error('[Edit] Persist error:', e));
-    // Restrict broadcast to relevant participants, not all clients (H5)
+    await updateMessageEdit(data.id, data.newCiphertext, data.newIv).catch(() => {});
     if (data.recipientId) {
       const recipient = activeUsers.get(data.recipientId);
       if (recipient) io.to(recipient.socketId).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
     } else if (data.channelId) {
-      socket.broadcast.emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
-    } else {
-      socket.broadcast.emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+      socket.to(`channel:${data.channelId}`).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
     }
   });
 
@@ -1819,18 +1842,15 @@ io.on('connection', (socket) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const originalMsg = await getMessageById(data.id).catch(() => undefined);
     if (!originalMsg || originalMsg.senderId !== authenticatedUserId) {
-      socket.emit('message:delete:rejected', { id: data.id, error: 'Unauthorized: you can only delete your own messages' });
+      socket.emit('message:delete:rejected', { id: data.id, error: 'Unauthorized' });
       return;
     }
-    await markMessageDeleted(data.id).catch(e => console.error('[Delete] Persist error:', e));
-    // Restrict broadcast to relevant participants, not all clients (H5)
+    await markMessageDeleted(data.id).catch(() => {});
     if (data.recipientId) {
       const recipient = activeUsers.get(data.recipientId);
       if (recipient) io.to(recipient.socketId).emit('message:deleted', { id: data.id, deletedForEveryone: true });
     } else if (data.channelId) {
-      socket.broadcast.emit('message:deleted', { id: data.id, deletedForEveryone: true });
-    } else {
-      socket.broadcast.emit('message:deleted', { id: data.id, deletedForEveryone: true });
+      socket.to(`channel:${data.channelId}`).emit('message:deleted', { id: data.id, deletedForEveryone: true });
     }
   });
 

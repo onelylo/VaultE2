@@ -81,7 +81,7 @@ function isTokenExpired(): boolean {
   if (!token) return true;
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    return Date.now() >= payload.exp * 1000;
+    return Date.now() >= payload.exp;
   } catch {
     return true;
   }
@@ -1289,6 +1289,16 @@ export const App: React.FC = () => {
       window.location.reload();
     };
 
+    const onPasswordChanged = () => {
+      // Force logout on password change from another session
+      if (socket.connected) socket.disconnect();
+      localStorage.removeItem('vaultchat_jwt');
+      sessionStorage.removeItem('vaultchat_jwt');
+      setCurrentUserKeys(null);
+      alert('Your password was changed. Please log in again.');
+      window.location.reload();
+    };
+
     const onChannelMemberAdded = (data: { channelId: string; userId: string }) => {
       // If the added member is the current user, refresh channels to show the new channel
       if (data.userId === currentUserKeys?.userId) {
@@ -1380,6 +1390,7 @@ export const App: React.FC = () => {
     socket.on('user:role_change', onUserRoleChange);
     socket.on('user:profile-update', onUserProfileUpdate);
     socket.on('user:suspended', onUserSuspended);
+    socket.on('user:password_changed', onPasswordChanged);
     socket.on('channel:member_added', onChannelMemberAdded);
     socket.on('channel:member_removed', onChannelMemberRemoved);
     socket.on('channel:key_rotated', onChannelKeyRotated);
@@ -1454,6 +1465,7 @@ export const App: React.FC = () => {
       socket.off('user:role_change', onUserRoleChange);
       socket.off('user:profile-update', onUserProfileUpdate);
       socket.off('user:suspended', onUserSuspended);
+      socket.off('user:password_changed', onPasswordChanged);
       socket.off('channel:member_added', onChannelMemberAdded);
       socket.off('channel:member_removed', onChannelMemberRemoved);
       socket.off('channel:key_rotated', onChannelKeyRotated);

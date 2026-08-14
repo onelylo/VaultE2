@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, Globe } from 'lucide-react';
+import { API_BASE } from '../../lib/attachments';
 
 interface LinkPreviewData {
   url: string;
@@ -22,8 +23,10 @@ export const LinkPreview: React.FC<{ url: string }> = ({ url }) => {
 
     let cancelled = false;
     setLoading(true);
-
-    fetch(`/api/url-preview?url=${encodeURIComponent(url)}`)
+    const token = localStorage.getItem('vaultchat_jwt');
+    fetch(`${API_BASE}/api/url-preview?url=${encodeURIComponent(url)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(r => r.json())
       .then((result: LinkPreviewData) => {
         if (cancelled) return;

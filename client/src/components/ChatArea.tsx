@@ -201,64 +201,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (messages) setAllMessages(messages);
   }, [messages]);
 
-  // Poll for message status updates and new messages
-  useEffect(() => {
-    if (!selectedChannel && !selectedUser) return;
-    const interval = setInterval(async () => {
-      if (selectedChannel) {
-        const msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
-        setAllMessages(prev => {
-          const dbMap = new Map(msgs.map(m => [m.id, m]));
-          const prevMap = new Map(prev.map(m => [m.id, m]));
-          let changed = false;
-          // Update existing entries and add new ones
-          for (const msg of msgs) {
-            const existing = prevMap.get(msg.id);
-            if (!existing || existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
-              prevMap.set(msg.id, msg);
-              changed = true;
-            }
-          }
-          // Remove entries no longer in DB (handles tempId→serverId transition)
-          for (const id of prevMap.keys()) {
-            if (!dbMap.has(id)) {
-              prevMap.delete(id);
-              changed = true;
-            }
-          }
-          return changed ? [...prevMap.values()].sort((a, b) => a.timestamp - b.timestamp) : prev;
-        });
-      } else if (selectedUser && currentUserId) {
-        const [sent, received] = await Promise.all([
-          db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
-          db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
-        ]);
-        const msgs = [...sent, ...received];
-        setAllMessages(prev => {
-          const dbMap = new Map(msgs.map(m => [m.id, m]));
-          const prevMap = new Map(prev.map(m => [m.id, m]));
-          let changed = false;
-          for (const msg of msgs) {
-            const existing = prevMap.get(msg.id);
-            if (!existing || existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
-              prevMap.set(msg.id, msg);
-              changed = true;
-            }
-          }
-          // Remove entries no longer in DB (handles tempId→serverId transition)
-          for (const id of prevMap.keys()) {
-            if (!dbMap.has(id)) {
-              prevMap.delete(id);
-              changed = true;
-            }
-          }
-          return changed ? [...prevMap.values()].sort((a, b) => a.timestamp - b.timestamp) : prev;
-        });
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [selectedChannel?.id, selectedUser?.userId, currentUserId]);
-
   // Visible messages (lazy loaded, filter out removed)
   const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
 

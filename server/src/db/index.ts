@@ -171,17 +171,24 @@ async function seedDefaultChannels(): Promise<void> {
 
 async function seedAdminAccount(): Promise<void> {
   const username = 'Onelylo';
-  const existing = await getPool().query('SELECT id FROM users WHERE username = $1', [username]);
-  if (existing.rows.length > 0) return; // Already exists
+  const normalized = username.trim().toLowerCase();
+  const userId = `usr_${normalized.replace(/[^a-z0-9]/g, '')}`;
+  const existing = await getPool().query('SELECT id FROM users WHERE id = $1', [userId]);
+  if (existing.rows.length > 0) return;
 
-  const passwordHash = await bcrypt.hash('Biatch@2011', 12);
-  const userId = `admin_${crypto.randomBytes(8).toString('hex')}`;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.warn('[DB] ADMIN_PASSWORD not set — skipping admin seed');
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
   const createdAt = Date.now();
 
   await getPool().query(
     `INSERT INTO users (id, username, full_name, email, role, password_hash, public_key, status, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [userId, username, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
+    [userId, normalized, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
   );
   console.log(`[DB] Seeded admin account: ${username} (${userId})`);
 }
@@ -326,8 +333,8 @@ export async function deleteUser(userId: string): Promise<void> {
   const db = getPool();
   await db.query(`DELETE FROM channel_members WHERE user_id = $1`, [userId]);
   await db.query(`DELETE FROM channel_keys WHERE user_id = $1`, [userId]);
-  await db.query(`DELETE FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE sender_id = $1 OR recipient_id = $1)`, [userId]);
-  await db.query(`DELETE FROM messages WHERE sender_id = $1 OR recipient_id = $1`, [userId]);
+  // Soft-delete messages: preserve history for other participants
+  await db.query(`UPDATE messages SET is_deleted = TRUE WHERE sender_id = $1 OR recipient_id = $1`, [userId]);
   // Soft-delete: keep the tombstone row so login/register cannot resurrect the account.
   await db.query(`UPDATE users SET deleted_at = NOW() WHERE id = $1`, [userId]);
 }
