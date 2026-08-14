@@ -303,7 +303,7 @@ function ChannelSettingsInner({
               </h4>
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: 'var(--text-muted)' }} />
-                <input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
+                <input type="search" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                   placeholder="Add members..."
                   className="w-full rounded-xl py-1.5 pl-8 pr-3 text-[11px] focus:outline-none"
                   style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}

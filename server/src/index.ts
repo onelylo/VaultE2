@@ -1517,16 +1517,19 @@ io.on('connection', (socket) => {
     // Verify senderId matches authenticated user (prevent spoofing)
     const senderId = authenticatedUserId;
 
-    // Check if recipient has blocked the sender
-    if (recipientId && await isUserBlockedBy(recipientId, senderId)) {
-      // Still ACK to sender so they know it was sent (E2EE: server can't modify content)
-      socket.emit('message:ack', {
-        tempId: tempId || id,
-        serverId: id || `srv_${Date.now()}`,
-        timestamp: Date.now(),
-        status: 'sent',
-      });
-      return;
+    // Check if either party has blocked the other
+    if (recipientId) {
+      const blockedByRecipient = await isUserBlockedBy(recipientId, senderId);
+      const blockedBySender = await isUserBlockedBy(senderId, recipientId);
+      if (blockedByRecipient || blockedBySender) {
+        socket.emit('message:ack', {
+          tempId: tempId || id,
+          serverId: id || `srv_${Date.now()}`,
+          timestamp: Date.now(),
+          status: 'failed',
+        });
+        return;
+      }
     }
 
     const messageId = id || `srv_${Date.now()}`;

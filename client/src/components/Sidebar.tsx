@@ -413,7 +413,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="relative">
             <input
-              type="text"
+              type="search"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder={activeView === 'channels' ? 'Filter channels...' : searchMode ? 'Search people...' : 'Filter conversations...'}

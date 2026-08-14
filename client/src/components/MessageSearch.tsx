@@ -176,7 +176,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
           <Search className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
           <input
             ref={inputRef}
-            type="text"
+            type="search"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}

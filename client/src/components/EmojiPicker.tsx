@@ -88,7 +88,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
       {/* Search */}
       <div className="p-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
         <input
-          type="text"
+          type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search emoji..."
