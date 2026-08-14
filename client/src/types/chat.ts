@@ -79,6 +79,7 @@ export interface EncryptedPayload {
   status?: string;
   isEdited?: boolean;
   isDeleted?: boolean;
+  removed?: boolean;
   replyTo?: string;
   attachment?: AttachmentPayload;
 }
@@ -97,6 +98,7 @@ export interface LocalMessage {
   isDecrypted: boolean;
   isEdited?: boolean;
   isDeleted?: boolean;
+  removed?: boolean;
   replyTo?: string;
   attachment?: AttachmentPayload;
   attachmentMeta?: AttachmentMeta; // Decrypted locally — not persisted in cleartext

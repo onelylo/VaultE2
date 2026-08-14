@@ -113,20 +113,22 @@ const STATUS_RANK: Record<string, number> = {
 };
 
 export async function saveMessage(msg: LocalMessage): Promise<void> {
-  // Preserve local status and deletion state that may be more up-to-date than server
+  // Preserve local state that may be more up-to-date than server
   const existing = await db.messages.get(msg.id);
   if (existing) {
+    // If message was removed by user, don't re-add it
+    if (existing.removed) return;
     const existingStatusRank = STATUS_RANK[existing.status] ?? 0;
     const incomingStatusRank = STATUS_RANK[msg.status ?? ''] ?? 0;
-    // Preserve higher status
     const finalStatus = existingStatusRank > incomingStatusRank ? existing.status : msg.status;
-    // Preserve local isDeleted if already deleted
     const finalIsDeleted = existing.isDeleted || msg.isDeleted;
     if (finalStatus !== msg.status || finalIsDeleted !== msg.isDeleted) {
       await db.messages.put({ ...msg, status: finalStatus, isDeleted: finalIsDeleted });
       return;
     }
   }
+  // Skip if incoming message is marked removed
+  if (msg.removed) return;
   await db.messages.put(msg);
 }
 
@@ -204,7 +206,14 @@ export async function clearPendingUpload(id: string): Promise<void> {
 
 export async function deleteMessageLocally(id: string): Promise<void> {
   const msg = await db.messages.get(id);
-  if (msg) await db.messages.update(id, { isDeleted: true });
+  if (!msg) return;
+  if (msg.isDeleted) {
+    // Already deleted — mark as removed to hide the bubble permanently
+    await db.messages.update(id, { removed: true });
+  } else {
+    // First time — mark as deleted to show the bubble
+    await db.messages.update(id, { isDeleted: true });
+  }
 }
 
 export async function markMessageDeletedLocally(id: string): Promise<void> {

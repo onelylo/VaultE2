@@ -201,8 +201,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (messages) setAllMessages(messages);
   }, [messages]);
 
-  // Visible messages (lazy loaded)
-  const visibleMessages = allMessages.slice(-loadCount);
+  // Visible messages (lazy loaded, filter out removed)
+  const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
 
   // Reactions: Map<messageId, {userId: string, emoji: string}[]>
   type ReactionEntry = { userId: string; emoji: string };
