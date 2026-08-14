@@ -194,6 +194,11 @@ export async function processOfflineQueue(opts: QueueProcessorOptions): Promise<
         attachment,
       };
 
+      if (!socket.connected) {
+        // Socket disconnected mid-flush — stop processing, leave remaining as pending_sync
+        break;
+      }
+
       if (msg.channelId) {
         payload.channelId = msg.channelId;
         socket.emit('channel:message:send', payload);

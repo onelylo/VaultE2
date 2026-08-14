@@ -1623,6 +1623,17 @@ export const App: React.FC = () => {
     return () => { socket.off('connect', handleConnect); };
   }, [flushOfflineQueue, currentUserKeys]);
 
+  // Restart socket when browser comes back online (handles reconnection exhaustion)
+  useEffect(() => {
+    const handleOnline = () => {
+      if (!socket.connected && currentUserKeys) {
+        connectSocket();
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [currentUserKeys]);
+
   // Check token expiry periodically and force logout if expired
   useEffect(() => {
     if (!currentUserKeys) return;

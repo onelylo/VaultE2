@@ -580,14 +580,15 @@ export async function insertMessage(msg: DbMessage): Promise<void> {
 }
 
 /** Messages in a direct thread between two users (order-independent) */
-export async function getDirectMessages(userA: string, userB: string): Promise<DbMessage[]> {
+export async function getDirectMessages(userA: string, userB: string, limit = 500, offset = 0): Promise<DbMessage[]> {
   const res = await getPool().query(
     `SELECT ${MSG_COLS} FROM messages
      WHERE recipient_id IS NOT NULL AND (
        (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
      )
-     ORDER BY created_at ASC`,
-    [userA, userB]
+     ORDER BY created_at ASC
+     LIMIT $3 OFFSET $4`,
+    [userA, userB, limit, offset]
   );
   return res.rows.map(mapMessageRow);
 }
@@ -606,15 +607,16 @@ export async function getMessageById(id: string): Promise<DbMessage | undefined>
 }
 
 /** Full history for a user: their DM threads plus every channel message */
-export async function getMessagesForUser(userId: string): Promise<DbMessage[]> {
+export async function getMessagesForUser(userId: string, limit = 500, offset = 0): Promise<DbMessage[]> {
   const res = await getPool().query(
     `SELECT ${MSG_COLS} FROM messages
      WHERE (sender_id = $1 OR recipient_id = $1)
         OR (channel_id IS NOT NULL AND channel_id IN (
               SELECT channel_id FROM channel_members WHERE user_id = $1
             ))
-     ORDER BY created_at ASC`,
-    [userId]
+     ORDER BY created_at ASC
+     LIMIT $2 OFFSET $3`,
+    [userId, limit, offset]
   );
   return res.rows.map(mapMessageRow);
 }
