@@ -1553,10 +1553,15 @@ io.on('connection', (socket) => {
     await insertChannel(newChannel).catch(e => console.error('[Channel] Persist error:', e));
     // Add creator to channel_members so they can see the channel
     await addChannelMember(channelId, authenticatedUserId, authenticatedUserId).catch(() => {});
-    // Add invited members
+    // Add invited members and join their sockets to the channel room
     const invitedIds = (data.memberIds || []).filter(mid => mid !== authenticatedUserId);
     for (const mid of invitedIds) {
       await addChannelMember(channelId, mid, authenticatedUserId).catch(() => {});
+      // Join invited member's socket to channel room if online
+      const memberSocket = activeUsers.get(mid);
+      if (memberSocket) {
+        io.to(memberSocket.socketId).socketsJoin(`channel:${channelId}`);
+      }
     }
     // Auto-join creator to channel room
     socket.join(`channel:${channelId}`);

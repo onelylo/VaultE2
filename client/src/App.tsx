@@ -1928,6 +1928,9 @@ export const App: React.FC = () => {
       if (!isOffline) {
         socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp, isForwarded: true });
       }
+      // Navigate to target channel
+      const channel = channels.find(c => c.id === target.channelId);
+      if (channel) handleSelectChannel(channel);
     } else {
       const peer = allUsers.find(u => u.userId === target.userId);
       if (!peer) return;
@@ -1943,6 +1946,8 @@ export const App: React.FC = () => {
       if (!isOffline) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp, isForwarded: true });
       }
+      // Navigate to target DM
+      handleSelectPeer(peer);
     }
   };
 
