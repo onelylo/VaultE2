@@ -186,20 +186,24 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Track whether user just sent a message (force scroll even if scrolled up)
   const justSentRef = useRef(false);
 
-  // Helper: scroll the container to absolute bottom
+  // Helper: scroll the container to absolute bottom by setting scrollTop
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+    // scrollHeight - clientHeight is the maximum scrollTop value
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    el.scrollTo({ top: maxScroll, behavior: smooth ? 'smooth' : 'instant' });
     isNearBottomRef.current = true;
+    setShowScrollDown(false);
   }, []);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    isNearBottomRef.current = distFromBottom < 120;
-    setShowScrollDown(distFromBottom >= 120);
+    // 50px threshold — anything within 50px of bottom = "at bottom"
+    isNearBottomRef.current = distFromBottom < 50;
+    setShowScrollDown(distFromBottom >= 50);
     if (el.scrollTop < 100) handleScrollTop();
   }, [handleScrollTop]);
 
@@ -228,26 +232,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       justSwitchedRef.current = false;
     }, 50);
     return () => clearTimeout(timer);
-  }, [visibleMessages?.length, scrollToBottom]);
+  }, [switchKey, scrollToBottom]);
 
-  // Auto-scroll to bottom on new messages when user is near bottom, or just sent a message
-  const prevMsgCountRef = useRef(visibleMessages?.length || 0);
+  // Auto-scroll: watch allMessages length (NOT visibleMessages — sliced array may not change size)
+  const prevAllMsgCountRef = useRef(allMessages?.length || 0);
   useEffect(() => {
-    const newCount = visibleMessages?.length || 0;
-    const prevCount = prevMsgCountRef.current;
-    prevMsgCountRef.current = newCount;
+    const newCount = allMessages?.length || 0;
+    const prevCount = prevAllMsgCountRef.current;
+    prevAllMsgCountRef.current = newCount;
 
     if (newCount > prevCount) {
-      // Always scroll if user just sent a message, otherwise only if near bottom
       const shouldScroll = justSentRef.current || (isNearBottomRef.current && !justSwitchedRef.current);
       justSentRef.current = false;
       if (shouldScroll) {
-        // Use setTimeout to ensure the new message is in the DOM before scrolling
-        const timer = setTimeout(() => scrollToBottom(false), 0);
-        return () => clearTimeout(timer);
+        // Double rAF: first frame lets React render, second frame lets layout settle
+        const timer = requestAnimationFrame(() => {
+          requestAnimationFrame(() => scrollToBottom(false));
+        });
+        return () => cancelAnimationFrame(timer);
       }
     }
-  }, [visibleMessages?.length, scrollToBottom]);
+  }, [allMessages?.length, scrollToBottom]);
 
   // Textarea auto-resize
   const autoResize = useCallback(() => {
