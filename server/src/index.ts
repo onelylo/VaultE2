@@ -991,9 +991,14 @@ app.post('/api/block/:userId', async (req, res) => {
   if (blockerId === blockedId) return res.status(400).json({ error: 'Cannot block yourself' });
   try {
     await blockUserOnServer(blockerId, blockedId);
+    // Push updated directory to the blocked user so they see blockedByThem
+    const blockedSocket = activeUsers.get(blockedId);
+    if (blockedSocket) {
+      const directory = await buildUserDirectory(blockedId);
+      io.to(blockedSocket.socketId).emit('users:directory', directory);
+    }
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[Block] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1004,9 +1009,14 @@ app.delete('/api/block/:userId', async (req, res) => {
   const { userId: blockedId } = req.params;
   try {
     await unblockUserOnServer(blockerId, blockedId);
+    // Push updated directory to the unblocked user so they see blockedByThem is gone
+    const blockedSocket = activeUsers.get(blockedId);
+    if (blockedSocket) {
+      const directory = await buildUserDirectory(blockedId);
+      io.to(blockedSocket.socketId).emit('users:directory', directory);
+    }
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[Unblock] Error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });

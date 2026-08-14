@@ -1672,6 +1672,8 @@ export const App: React.FC = () => {
 
     // 4. Emit channel creation event
     socket.emit('channel:create', { ...channelData, createdBy: currentUserKeys.userId });
+    // Fallback: re-fetch channels after a short delay in case broadcast is slow
+    setTimeout(() => socket.emit('channels:get'), 500);
   };
 
   const handleUpdateChannel = async (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => {
