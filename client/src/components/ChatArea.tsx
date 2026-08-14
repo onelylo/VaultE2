@@ -183,34 +183,23 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const isNearBottomRef = useRef(true);
   // Track whether we just switched conversations (for scroll-to-bottom)
   const justSwitchedRef = useRef(false);
+  // Track whether user just sent a message (force scroll even if scrolled up)
+  const justSentRef = useRef(false);
 
-  // Helper: scroll to the very last message element so it's always visible above the text input
+  // Helper: scroll the container to absolute bottom
   const scrollToBottom = useCallback((smooth = false) => {
-    const lastMsg = visibleMessages?.[visibleMessages.length - 1];
-    if (!lastMsg) {
-      // Fallback: scroll container to bottom
-      if (scrollRef.current) {
-        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
-      }
-      return;
-    }
-    const el = document.getElementById(`msg-${lastMsg.id}`);
-    if (el) {
-      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'end' });
-    } else if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
-    }
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
     isNearBottomRef.current = true;
-  }, [visibleMessages]);
+  }, []);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // Account for the text input area (~120px) below the scroll container
     isNearBottomRef.current = distFromBottom < 120;
     setShowScrollDown(distFromBottom >= 120);
-    // Load more messages when scrolling near top
     if (el.scrollTop < 100) handleScrollTop();
   }, [handleScrollTop]);
 
@@ -234,28 +223,29 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   useEffect(() => {
     if (!justSwitchedRef.current || !scrollRef.current) return;
-    // Scroll to bottom after a short delay to ensure DOM is updated
     const timer = setTimeout(() => {
-      if (scrollRef.current) {
-        scrollToBottom(false);
-        justSwitchedRef.current = false;
-      }
+      scrollToBottom(false);
+      justSwitchedRef.current = false;
     }, 50);
     return () => clearTimeout(timer);
   }, [visibleMessages?.length, scrollToBottom]);
 
-  // Auto-scroll to bottom on new messages when user is near bottom
+  // Auto-scroll to bottom on new messages when user is near bottom, or just sent a message
   const prevMsgCountRef = useRef(visibleMessages?.length || 0);
   useEffect(() => {
     const newCount = visibleMessages?.length || 0;
     const prevCount = prevMsgCountRef.current;
     prevMsgCountRef.current = newCount;
 
-    // Only auto-scroll if: message count increased AND user is near bottom AND not just switched
-    if (newCount > prevCount && isNearBottomRef.current && !justSwitchedRef.current) {
-      requestAnimationFrame(() => {
-        scrollToBottom(false);
-      });
+    if (newCount > prevCount) {
+      // Always scroll if user just sent a message, otherwise only if near bottom
+      const shouldScroll = justSentRef.current || (isNearBottomRef.current && !justSwitchedRef.current);
+      justSentRef.current = false;
+      if (shouldScroll) {
+        // Use setTimeout to ensure the new message is in the DOM before scrolling
+        const timer = setTimeout(() => scrollToBottom(false), 0);
+        return () => clearTimeout(timer);
+      }
     }
   }, [visibleMessages?.length, scrollToBottom]);
 
@@ -293,8 +283,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setPreviewDataUrl(null);
       setText('');
       setActiveReply(null);
-      // Scroll to bottom after sending
-      requestAnimationFrame(() => scrollToBottom(false));
+      justSentRef.current = true;
       return;
     }
 
@@ -302,8 +291,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onSendMessage(text.trim(), activeReply?.msgId);
       setText('');
       setActiveReply(null);
-      // Scroll to bottom after sending
-      requestAnimationFrame(() => scrollToBottom(false));
+      justSentRef.current = true;
     }
   };
 
