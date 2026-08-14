@@ -152,3 +152,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log (actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at);
+
+CREATE TABLE IF NOT EXISTS token_blocklist (
+  token_hash TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  expires_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_blocklist_user ON token_blocklist (user_id);
+CREATE INDEX IF NOT EXISTS idx_token_blocklist_expires ON token_blocklist (expires_at);

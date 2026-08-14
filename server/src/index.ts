@@ -77,6 +77,9 @@ import {
   transferChannelOwnership,
   logAudit,
   getAuditLog,
+  blockToken,
+  isTokenBlocked,
+  cleanupExpiredTokens,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -95,8 +98,8 @@ const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// Token blocklist — in-memory store for invalidated JWTs (resets on server restart)
-// Map<token, expiryMs> to allow eviction of expired entries
+// Token blocklist — PostgreSQL-backed (persistent across restarts)
+// In-memory fast-path for recently blocked tokens
 const tokenBlocklist = new Map<string, number>();
 // Rate limiting for key rotation: Map<userId, timestamps[]>
 const rotationsByUser = new Map<string, number[]>();
@@ -104,9 +107,23 @@ const rotationsByUser = new Map<string, number[]>();
 const uploadsByUser = new Map<string, number[]>();
 // Slow mode tracker: Map<"slowmode:channelId:userId", lastMsgTimestamp>
 const slowModeTracker = new Map<string, number>();
+const SLOWMODE_MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes max slow mode
 
 const app = express();
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -151,30 +168,24 @@ function signJwt(payload: object): string {
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   return `${header}.${body}.${sig}`;
 }
-function verifyJwt(token: string): any {
+async function verifyJwt(token: string): Promise<any> {
   try {
     const [header, payload, signature] = token.split('.');
     if (!header || !payload || !signature) return null;
-    // Check blocklist (with expiry eviction)
-    const blockedExpiry = tokenBlocklist.get(token);
-    if (blockedExpiry !== undefined) {
-      if (blockedExpiry > Date.now()) return null;
-      tokenBlocklist.delete(token); // expired, clean up
-    }
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    if (await isTokenBlocked(tokenHash)) return null;
     const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64')
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    // Timing-safe comparison to prevent side-channel attacks
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
     const decoded = JSON.parse(base64UrlDecode(payload));
-    // Check expiration
     if (decoded.exp && Date.now() > decoded.exp) return null;
     return decoded;
   } catch { return null; }
 }
-function requireAuth(req: express.Request, res: express.Response): string | null {
+async function requireAuth(req: express.Request, res: express.Response): Promise<string | null> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return null; }
-  const decoded = verifyJwt(auth.split(' ')[1]);
+  const decoded = await verifyJwt(auth.split(' ')[1]);
   if (!decoded?.userId) { res.status(401).json({ error: 'Invalid token' }); return null; }
   return decoded.userId as string;
 }
@@ -182,7 +193,7 @@ function requireAuth(req: express.Request, res: express.Response): string | null
 async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return null; }
-  const decoded = verifyJwt(auth.split(' ')[1]);
+  const decoded = await verifyJwt(auth.split(' ')[1]);
   if (!decoded?.userId) { res.status(401).json({ error: 'Invalid token' }); return null; }
   // Re-verify role from database — don't trust JWT claim
   const user = await getUserById(decoded.userId).catch(() => undefined);
@@ -385,7 +396,7 @@ function userToActive(data: { userId: string; username: string; fullName?: strin
 // ── Auth Routes ───────────────────────────────────────────────────────────────
 
 app.get('/api/auth/me', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const user = await getUserById(userId);
@@ -402,7 +413,7 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 const handleProfileUpdate = async (req: any, res: any) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const { fullName, email, avatarUrl, avatar, status, statusMessage, username, phone } = req.body;
@@ -447,7 +458,7 @@ app.put('/api/auth/profile', handleProfileUpdate);
 app.put('/api/user/profile', handleProfileUpdate);
 
 app.post('/api/users/me/avatar', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const { avatarData } = req.body;
@@ -472,7 +483,7 @@ app.post('/api/users/me/avatar', async (req, res) => {
 });
 
 app.put('/api/auth/password', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
@@ -490,7 +501,8 @@ app.put('/api/auth/password', async (req, res) => {
     const auth = req.headers.authorization;
     if (auth?.startsWith('Bearer ')) {
       const token = auth.slice(7);
-      tokenBlocklist.set(token, Date.now() + JWT_EXPIRY_MS);
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      await blockToken(tokenHash, userId, Date.now() + JWT_EXPIRY_MS);
     }
     // Force disconnect all sockets for this user
     const userSocket = activeUsers.get(userId);
@@ -507,7 +519,8 @@ app.post('/api/auth/logout', async (req, res) => {
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) {
     const token = auth.split(' ')[1];
-    tokenBlocklist.set(token, Date.now() + JWT_EXPIRY_MS);
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await blockToken(tokenHash, '', Date.now() + JWT_EXPIRY_MS).catch(() => {});
   }
   return res.json({ success: true });
 });
@@ -631,7 +644,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
  * then bumps key_version and pins the new keys for TOFU chain verification.
  */
 app.post('/api/auth/rotate-key', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   // Rate limit: max 3 rotations per hour per user
   const now = Date.now();
@@ -696,7 +709,7 @@ app.post('/api/auth/rotate-key', async (req, res) => {
  * Clients compare the pinned key metadata after every rotation to detect MITM.
  */
 app.get('/api/users/:id/keys', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const user = await getUserById(req.params.id);
@@ -719,7 +732,7 @@ app.get('/api/users/:id/keys', async (req, res) => {
 // ── User Directory Route ──────────────────────────────────────────────────────
 
 app.get('/api/users', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     return res.json({ users: await buildUserDirectory(userId) });
@@ -973,7 +986,7 @@ function formatUptime(seconds: number): string {
 // ── Message History Routes ────────────────────────────────────────────────────
 
 app.get('/api/messages/direct/:recipientId', async (req, res) => {
-  const senderId = requireAuth(req, res);
+  const senderId = await requireAuth(req, res);
   if (!senderId) return;
   try {
     const msgs = await getDirectMessages(senderId, req.params.recipientId);
@@ -990,7 +1003,7 @@ app.get('/api/messages/direct/:recipientId', async (req, res) => {
  * Used on login / after server restart to instantly restore the conversation feed.
  */
 app.get('/api/messages', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const msgs = await getMessagesForUser(userId);
@@ -1004,7 +1017,7 @@ app.get('/api/messages', async (req, res) => {
 
 // ── Reactions Batch Endpoint ────────────────────────────────────────────────
 app.post('/api/reactions/batch', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { messageIds } = req.body;
   if (!Array.isArray(messageIds) || messageIds.length === 0) {
@@ -1021,7 +1034,7 @@ app.post('/api/reactions/batch', async (req, res) => {
 
 // ── URL Preview Endpoint ───────────────────────────────────────────────────────
 app.get('/api/url-preview', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { url } = req.query;
   if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
@@ -1069,7 +1082,7 @@ app.get('/api/url-preview', async (req, res) => {
 
 // ── Starred Messages ──────────────────────────────────────────────────────────
 app.post('/api/starred', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { messageId } = req.body;
   if (!messageId) return res.status(400).json({ error: 'messageId required' });
@@ -1083,7 +1096,7 @@ app.post('/api/starred', async (req, res) => {
 });
 
 app.delete('/api/starred/:messageId', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     await unstarMessage(userId, req.params.messageId);
@@ -1095,7 +1108,7 @@ app.delete('/api/starred/:messageId', async (req, res) => {
 });
 
 app.get('/api/starred', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const starred = await getStarredMessages(userId);
@@ -1107,7 +1120,7 @@ app.get('/api/starred', async (req, res) => {
 });
 
 app.post('/api/starred/batch', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { messageIds } = req.body;
   if (!Array.isArray(messageIds) || messageIds.length === 0) {
@@ -1125,7 +1138,7 @@ app.post('/api/starred/batch', async (req, res) => {
 // ── Block/Unblock Endpoints ────────────────────────────────────────────────────
 
 app.post('/api/block/:userId', async (req, res) => {
-  const blockerId = requireAuth(req, res);
+  const blockerId = await requireAuth(req, res);
   if (!blockerId) return;
   const { userId: blockedId } = req.params;
   if (blockerId === blockedId) return res.status(400).json({ error: 'Cannot block yourself' });
@@ -1144,7 +1157,7 @@ app.post('/api/block/:userId', async (req, res) => {
 });
 
 app.delete('/api/block/:userId', async (req, res) => {
-  const blockerId = requireAuth(req, res);
+  const blockerId = await requireAuth(req, res);
   if (!blockerId) return;
   const { userId: blockedId } = req.params;
   try {
@@ -1162,7 +1175,7 @@ app.delete('/api/block/:userId', async (req, res) => {
 });
 
 app.get('/api/block/status/:userId', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { userId: targetId } = req.params;
   try {
@@ -1178,7 +1191,7 @@ app.get('/api/block/status/:userId', async (req, res) => {
 // ── Channel Keys Endpoints (Key Distribution) ─────────────────────────────────
 
 app.post('/api/channels/:channelId/keys', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   const { channelId } = req.params;
   const { keys } = req.body; // Array of { userId, encryptedChannelKey, iv }
@@ -1211,7 +1224,7 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
 });
 
 app.get('/api/channels/:channelId/key', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const keyEntry = await getChannelKey(req.params.channelId, userId);
@@ -1228,7 +1241,7 @@ app.get('/api/channels/:channelId/key', async (req, res) => {
 // ── Channel Management (Admin/Manager) ─────────────────────────────────────────
 
 app.patch('/api/channels/:channelId', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const channel = await getChannelById(req.params.channelId);
@@ -1284,7 +1297,7 @@ app.patch('/api/channels/:channelId', async (req, res) => {
 });
 
 app.delete('/api/channels/:channelId', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const channel = await getChannelById(req.params.channelId);
@@ -1328,7 +1341,7 @@ const upload = multer({
  * row in `attachments`; it never possesses decryption keys or plaintext.
  */
 app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   // Rate limit: max 10 uploads per minute per user
   const now = Date.now();
@@ -1381,7 +1394,7 @@ app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
  * Client-side WebCrypto decrypts it locally; server never sees plaintext.
  */
 app.get('/api/attachments/:id', async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
     const attachment = await getAttachmentById(req.params.id);
@@ -1418,7 +1431,7 @@ app.get('/health', async (req, res) => {
   try {
     // M8: Health endpoint requires admin auth in production
     if (IS_PRODUCTION) {
-      const userId = requireAuth(req, res);
+      const userId = await requireAuth(req, res);
       if (!userId) return;
       const user = await getUserById(userId);
       if (!user || user.role !== 'ADMIN') {
@@ -1457,12 +1470,12 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
 // Socket.IO authentication middleware
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   if (!token) {
     return next(new Error('Authentication required'));
   }
-  const decoded = verifyJwt(token as string);
+  const decoded = await verifyJwt(token as string);
   if (!decoded?.userId) {
     return next(new Error('Invalid or expired token'));
   }
@@ -1995,6 +2008,25 @@ async function boot() {
     console.log(`  APIs: /api/users  /api/messages  /api/messages/direct/:id`);
     console.log(`  Attachments: /api/attachments/upload | /api/attachments/:id`);
     console.log(`================================================\n`);
+
+    // Periodic cleanup: expired tokens, stale slowmode entries, empty rate limit maps
+    setInterval(() => {
+      cleanupExpiredTokens().catch(() => {});
+      const now = Date.now();
+      for (const [key, ts] of slowModeTracker) {
+        if (now - ts > SLOWMODE_MAX_DURATION_MS) slowModeTracker.delete(key);
+      }
+      for (const [key, timestamps] of rotationsByUser) {
+        const fresh = timestamps.filter(t => t > now - 3600000);
+        if (fresh.length === 0) rotationsByUser.delete(key);
+        else rotationsByUser.set(key, fresh);
+      }
+      for (const [key, timestamps] of uploadsByUser) {
+        const fresh = timestamps.filter(t => t > now - 60000);
+        if (fresh.length === 0) uploadsByUser.delete(key);
+        else uploadsByUser.set(key, fresh);
+      }
+    }, 5 * 60 * 1000);
   });
 }
 

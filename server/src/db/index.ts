@@ -201,6 +201,7 @@ function getPool(): pg.Pool {
 // ── Users ───────────────────────────────────────────────────────────────────
 
 const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
+const USER_COLS_SAFE = 'id, username, full_name, email, role, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
 
 function mapUserRow(row: any): DbUser {
   return {
@@ -251,7 +252,7 @@ export async function getUserByUsername(username: string): Promise<DbUser | unde
 }
 
 export async function getAllUsers(): Promise<DbUser[]> {
-  const res = await getPool().query(`SELECT ${USER_COLS} FROM users WHERE deleted_at IS NULL ORDER BY username ASC`);
+  const res = await getPool().query(`SELECT ${USER_COLS_SAFE} FROM users WHERE deleted_at IS NULL ORDER BY username ASC`);
   return res.rows.map(mapUserRow);
 }
 
@@ -858,6 +859,24 @@ export async function getAuditLog(limit = 100, offset = 0): Promise<{ actorId: s
     details: r.details,
     createdAt: Number(r.created_at),
   }));
+}
+
+// ── Token Blocklist ─────────────────────────────────────────────────────────
+
+export async function blockToken(tokenHash: string, userId: string, expiresAt: number): Promise<void> {
+  await getPool().query(
+    'INSERT INTO token_blocklist (token_hash, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token_hash) DO NOTHING',
+    [tokenHash, userId, expiresAt]
+  );
+}
+
+export async function isTokenBlocked(tokenHash: string): Promise<boolean> {
+  const res = await getPool().query('SELECT 1 FROM token_blocklist WHERE token_hash = $1 AND expires_at > $2', [tokenHash, Date.now()]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function cleanupExpiredTokens(): Promise<void> {
+  await getPool().query('DELETE FROM token_blocklist WHERE expires_at < $1', [Date.now()]);
 }
 
 export async function getDatabaseStats(): Promise<{ users: number; channels: number; messages: number; attachments: number }> {

@@ -81,8 +81,9 @@ describe('PetroShield E2EE WebCrypto Utility', () => {
     const pubKeyBase64 = await exportPublicKey(keyPair.publicKey);
 
     const fingerprint = await getFingerprint(pubKeyBase64);
-    expect(fingerprint).toHaveLength(8);
-    expect(fingerprint).toMatch(/^[0-9A-F]{8}$/);
+    // Fingerprint is 30 hex chars (120 bits) formatted in groups of 4
+    expect(fingerprint.length).toBeGreaterThanOrEqual(30);
+    expect(fingerprint).toMatch(/^[0-9A-F ]+$/);
   });
 
   it('should encrypt private key into Key Vault format and decrypt it back with password', async () => {

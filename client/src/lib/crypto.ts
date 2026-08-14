@@ -349,9 +349,11 @@ export async function getFingerprint(publicKeyBase64: string): Promise<string> {
     const hashBuffer = await getWebCrypto().subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex.substring(0, 8).toUpperCase();
+    // Return 30 hex chars (120 bits) formatted in groups of 4
+    const chars = hashHex.substring(0, 30).toUpperCase();
+    return chars.match(/.{1,4}/g)?.join(' ') || chars;
   } catch {
-    return publicKeyBase64.substring(0, 8).toUpperCase();
+    return publicKeyBase64.substring(0, 30).toUpperCase();
   }
 }
 
