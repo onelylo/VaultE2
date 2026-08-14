@@ -163,16 +163,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
     getHiddenConversations().then(setHiddenSet);
   }, []);
 
+  const [muteMenuUser, setMuteMenuUser] = useState<{ userId: string; username: string } | null>(null);
+
+  const MUTE_DURATIONS = [
+    { label: '15 minutes', ms: 15 * 60 * 1000 },
+    { label: '1 hour', ms: 60 * 60 * 1000 },
+    { label: '4 hours', ms: 4 * 60 * 60 * 1000 },
+    { label: '12 hours', ms: 12 * 60 * 60 * 1000 },
+    { label: '1 day', ms: 24 * 60 * 60 * 1000 },
+    { label: '7 days', ms: 7 * 24 * 60 * 60 * 1000 },
+    { label: 'Until I turn it back on', ms: undefined },
+  ];
+
   const handleToggleMute = useCallback(async (conversationId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (mutedSet.has(conversationId)) {
       await unmuteConversation(conversationId);
       setMutedSet(prev => { const next = new Set(prev); next.delete(conversationId); return next; });
     } else {
-      await muteConversation(conversationId);
-      setMutedSet(prev => new Set(prev).add(conversationId));
+      // Show duration picker
+      setMuteMenuUser({ userId: conversationId, username: '' });
     }
   }, [mutedSet]);
+
+  const handleMuteWithDuration = async (durationMs?: number) => {
+    if (!muteMenuUser) return;
+    await muteConversation(muteMenuUser.userId, durationMs);
+    setMutedSet(prev => new Set(prev).add(muteMenuUser.userId));
+    setMuteMenuUser(null);
+  };
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -664,7 +683,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={user.userId}
                   onClick={() => handleSelectUserWrapper(user)}
                   title={`${user.fullName || user.username} (${user.role})`}
-                  className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                  className="w-full text-left px-2 py-2 rounded-lg flex items-center group transition-smooth"
                   style={{
                     backgroundColor: isSelected
                       ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)'
@@ -676,7 +695,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : '1px solid transparent',
                   }}
                 >
-                  <div className="flex items-center space-x-2.5 min-w-0">
+                  <div className="flex items-center space-x-2.5 min-w-0 flex-1">
                     <div className="relative flex-shrink-0">
                       <div 
                         className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px]"
@@ -720,10 +739,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </div>
                     )}
+                  </div>
 
+                  <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
                     {!isCollapsed && unread > 0 && (
                       <span
-                        className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center animate-numberFade"
+                        className="min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
                         style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}
                       >
                         {unread > 99 ? '99+' : unread}
@@ -917,6 +938,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }} className="flex-1 py-2 rounded-xl text-xs font-bold"
                 style={{ backgroundColor: '#ef4444', color: '#fff' }}>Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mute Duration Picker */}
+      {muteMenuUser && (
+        <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setMuteMenuUser(null)}>
+          <div className="w-full max-w-xs rounded-2xl p-5 animate-[scaleIn_0.15s_ease-out]"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-main)' }}>Mute for...</h3>
+            <div className="space-y-1">
+              {MUTE_DURATIONS.map((dur) => (
+                <button
+                  key={dur.label}
+                  onClick={() => handleMuteWithDuration(dur.ms)}
+                  className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-smooth"
+                  style={{ color: 'var(--text-main)' }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  {dur.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setMuteMenuUser(null)} className="w-full mt-3 py-2 rounded-xl text-xs font-bold"
+              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>Cancel</button>
           </div>
         </div>
       )}

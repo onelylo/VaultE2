@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Settings, X, Users, Trash2, UserPlus, UserMinus, Crown, Search } from 'lucide-react';
+import { Settings, X, Users, Trash2, UserPlus, UserMinus, Crown, Search, LogOut } from 'lucide-react';
 import type { Channel, User, UserKeyPair } from '../../types/chat';
 
 export function ChannelSettingsModal({
@@ -12,6 +12,7 @@ export function ChannelSettingsModal({
   allUsers,
   currentUser,
   onMemberClick,
+  onLeaveChannel,
 }: {
   channel?: Channel;
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function ChannelSettingsModal({
   allUsers: User[];
   currentUser?: User | UserKeyPair;
   onMemberClick?: (user: User) => void;
+  onLeaveChannel?: (channelId: string) => void;
 }) {
   if (!isOpen || !channel) return null;
   return (
@@ -32,6 +34,7 @@ export function ChannelSettingsModal({
       allUsers={allUsers}
       currentUser={currentUser}
       onMemberClick={onMemberClick}
+      onLeaveChannel={onLeaveChannel}
     />
   );
 }
@@ -44,6 +47,7 @@ function ChannelSettingsModalInner({
   allUsers,
   currentUser,
   onMemberClick,
+  onLeaveChannel,
 }: {
   channel: Channel;
   onClose: () => void;
@@ -52,6 +56,7 @@ function ChannelSettingsModalInner({
   allUsers: User[];
   currentUser?: User | UserKeyPair;
   onMemberClick?: (user: User) => void;
+  onLeaveChannel?: (channelId: string) => void;
 }) {
   const [name, setName] = useState(channel.name);
   const [description, setDescription] = useState(channel.description || '');
@@ -332,18 +337,33 @@ function ChannelSettingsModalInner({
         </div>
 
         <div className="flex items-center justify-between pt-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
-          <button
-            type="button"
-            onClick={() => { onDelete(channel.id); onClose(); }}
-            disabled={!canEditSettings}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-smooth"
-            style={{ color: '#f87171' }}
-            onMouseEnter={e => !canEditSettings || (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)')}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Channel
-          </button>
+          <div className="flex items-center gap-2">
+            {canEditSettings ? (
+              <button
+                type="button"
+                onClick={() => { onDelete(channel.id); onClose(); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition-smooth"
+                style={{ color: '#f87171' }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Channel
+              </button>
+            ) : (channel.type === 'team' || channel.type === 'private') && onLeaveChannel ? (
+              <button
+                type="button"
+                onClick={() => { onLeaveChannel(channel.id); onClose(); }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition-smooth"
+                style={{ color: '#f87171' }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <LogOut className="w-4 h-4" />
+                Leave Channel
+              </button>
+            ) : null}
+          </div>
 
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-xs font-bold transition-smooth" style={{ color: 'var(--text-muted)' }}

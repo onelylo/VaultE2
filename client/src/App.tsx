@@ -1272,6 +1272,12 @@ export const App: React.FC = () => {
       }
     };
 
+    const onChannelOwnershipTransferred = (data: { channelId: string; fromUserId: string; toUserId: string }) => {
+      setChannels(prev => prev.map(c =>
+        c.id === data.channelId ? { ...c, createdBy: data.toUserId } : c
+      ));
+    };
+
     socket.on('users:directory', onUsersDirectory);
     socket.on('users:presence',  onUsersPresence);
     socket.on('channels:update', onChannelsUpdate);
@@ -1292,6 +1298,7 @@ export const App: React.FC = () => {
     socket.on('channel:member_added', onChannelMemberAdded);
     socket.on('channel:member_removed', onChannelMemberRemoved);
     socket.on('channel:key_rotated', onChannelKeyRotated);
+    socket.on('channel:ownership_transferred', onChannelOwnershipTransferred);
 
     // Typing indicators
     const onUserTyping = (data: { userId: string; username: string; channelId?: string; recipientId?: string }) => {
@@ -1364,6 +1371,7 @@ export const App: React.FC = () => {
       socket.off('channel:member_added', onChannelMemberAdded);
       socket.off('channel:member_removed', onChannelMemberRemoved);
       socket.off('channel:key_rotated', onChannelKeyRotated);
+      socket.off('channel:ownership_transferred', onChannelOwnershipTransferred);
       socket.off('user:typing', onUserTyping);
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
@@ -1750,6 +1758,15 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error('[Channel] Delete error:', e);
       alert('Failed to delete channel');
+    }
+  };
+
+  const handleLeaveChannel = (channelId: string) => {
+    socket.emit('channel:leave', { channelId });
+    // If the left channel was selected, deselect it
+    if (selectedChannel?.id === channelId) {
+      setSelectedChannel(null);
+      setActiveView('channels');
     }
   };
 
@@ -2167,6 +2184,7 @@ export const App: React.FC = () => {
             setChannelSettings(null);
             handleSelectPeer(user);
           }}
+          onLeaveChannel={handleLeaveChannel}
         />
       )}
 

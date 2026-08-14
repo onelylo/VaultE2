@@ -13,7 +13,7 @@ export class VaultChatDatabase extends Dexie {
   trustedKeys!: Table<TrustedKey, string>;
   channels!: Table<Channel, string>;
   channelKeys!: Table<ChannelKey, string>;
-  mutedConversations!: Table<{ conversationId: string }, string>;
+  mutedConversations!: Table<{ conversationId: string; expiresAt?: number }, string>;
   blockedUsers!: Table<{ userId: string }, string>;
   hiddenConversations!: Table<{ conversationId: string }, string>;
   drafts!: Table<{ conversationId: string; text: string }, string>;
@@ -56,6 +56,20 @@ export class VaultChatDatabase extends Dexie {
 
     // v7: Add hidden conversations for close-DM feature
     this.version(7).stores({
+      keys:        'userId, username, role, createdAt',
+      messages:    'id, tempId, senderId, recipientId, channelId, timestamp, status, [senderId+recipientId]',
+      trustedKeys: 'peerUserId, fingerprint, firstSeenAt',
+      channels:    'id, name, type',
+      channelKeys: 'channelId',
+      mutedConversations: 'conversationId',
+      blockedUsers: 'userId',
+      drafts: 'conversationId',
+      forwardedMessages: 'messageId',
+      hiddenConversations: 'conversationId',
+    });
+
+    // v8: Add timed mute support (expiresAt field on mutedConversations)
+    this.version(8).stores({
       keys:        'userId, username, role, createdAt',
       messages:    'id, tempId, senderId, recipientId, channelId, timestamp, status, [senderId+recipientId]',
       trustedKeys: 'peerUserId, fingerprint, firstSeenAt',
@@ -225,8 +239,9 @@ export async function getChannelKey(channelId: string): Promise<ChannelKey | und
 
 // ── Muted Conversations ────────────────────────────────────────────────────────
 
-export async function muteConversation(conversationId: string): Promise<void> {
-  await db.mutedConversations.put({ conversationId });
+export async function muteConversation(conversationId: string, durationMs?: number): Promise<void> {
+  const expiresAt = durationMs ? Date.now() + durationMs : undefined;
+  await db.mutedConversations.put({ conversationId, expiresAt });
 }
 
 export async function unmuteConversation(conversationId: string): Promise<void> {
@@ -235,12 +250,27 @@ export async function unmuteConversation(conversationId: string): Promise<void> 
 
 export async function isConversationMuted(conversationId: string): Promise<boolean> {
   const entry = await db.mutedConversations.get(conversationId);
-  return !!entry;
+  if (!entry) return false;
+  // Check if timed mute has expired
+  if (entry.expiresAt && entry.expiresAt < Date.now()) {
+    await db.mutedConversations.delete(conversationId);
+    return false;
+  }
+  return true;
 }
 
 export async function getMutedConversations(): Promise<Set<string>> {
   const all = await db.mutedConversations.toArray();
-  return new Set(all.map(e => e.conversationId));
+  const now = Date.now();
+  const active = new Set<string>();
+  for (const entry of all) {
+    if (entry.expiresAt && entry.expiresAt < now) {
+      await db.mutedConversations.delete(entry.conversationId);
+    } else {
+      active.add(entry.conversationId);
+    }
+  }
+  return active;
 }
 
 // ── Blocked Users ──────────────────────────────────────────────────────────────

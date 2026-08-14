@@ -72,6 +72,7 @@ import {
   deleteChannelKeysForUser,
   deleteChannelKeysForChannel,
   getChannelKeysForChannel,
+  transferChannelOwnership,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -1393,11 +1394,10 @@ io.on('connection', (socket) => {
   socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[]; memberIds?: string[] }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
-    // Permission check: only ADMIN can create official/public/announcement channels
+    // Permission check: only ADMIN can create official/announcement channels
     const creator = activeUsers.get(authenticatedUserId);
     const creatorRole = creator?.role || 'MEMBER';
-    if ((data.type === 'official' || data.type === 'public' || data.isAnnouncement) && creatorRole !== 'ADMIN') {
-      console.log(`[Channel] Rejected: ${authenticatedUserId} tried to create ${data.type} channel (requires ADMIN)`);
+    if ((data.type === 'official' || data.isAnnouncement) && creatorRole !== 'ADMIN') {
       return;
     }
     
@@ -1432,6 +1432,46 @@ io.on('connection', (socket) => {
     const uid = (socket as any).authenticatedUserId;
     const channels = await getAllChannels(uid).catch(() => []);
     socket.emit('channels:update', channels);
+  });
+
+  // Channel Leave — user quits a team/private channel
+  socket.on('channel:leave', async (data: { channelId: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
+    const { channelId } = data;
+    try {
+      const channel = await getChannelById(channelId);
+      if (!channel) return;
+      // Only team and private channels can be left
+      if (channel.type !== 'team' && channel.type !== 'private') return;
+      const members = await getChannelMembers(channelId);
+      if (!members.includes(userId)) return;
+
+      // If the owner is leaving, delegate ownership to the next member
+      let updatedChannel = channel;
+      if (channel.createdBy === userId) {
+        const otherMembers = members.filter(m => m !== userId);
+        if (otherMembers.length > 0) {
+          const newOwnerId = otherMembers[0];
+          await transferChannelOwnership(channelId, newOwnerId);
+          updatedChannel = { ...channel, createdBy: newOwnerId };
+          io.emit('channel:ownership_transferred', { channelId, fromUserId: userId, toUserId: newOwnerId });
+        }
+      }
+
+      // Remove the user
+      await removeChannelMember(channelId, userId);
+      // Delete their channel key
+      await deleteChannelKeysForUser(channelId, userId);
+      // Remove from channel room
+      socket.leave(`channel:${channelId}`);
+      // Notify everyone
+      io.emit('channel:member_removed', { channelId, userId });
+      io.emit('channel:key_rotated', { channelId, removedMemberIds: [userId] });
+      await broadcastChannels();
+    } catch (e) {
+      console.error('[Channel] Leave error:', e);
+    }
   });
 
   // Direct Message Send — persisted to PostgreSQL

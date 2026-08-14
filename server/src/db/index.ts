@@ -474,6 +474,10 @@ export async function deleteChannelKeysForUser(channelId: string, userId: string
   await getPool().query(`DELETE FROM channel_keys WHERE channel_id = $1 AND user_id = $2`, [channelId, userId]);
 }
 
+export async function transferChannelOwnership(channelId: string, newOwnerId: string): Promise<void> {
+  await getPool().query('UPDATE channels SET created_by = $1 WHERE id = $2', [newOwnerId, channelId]);
+}
+
 export async function deleteChannelKeysForChannel(channelId: string): Promise<void> {
   await getPool().query(`DELETE FROM channel_keys WHERE channel_id = $1`, [channelId]);
 }
