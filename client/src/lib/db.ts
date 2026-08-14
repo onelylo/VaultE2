@@ -13,6 +13,7 @@ export class VaultChatDatabase extends Dexie {
   trustedKeys!: Table<TrustedKey, string>;
   channels!: Table<Channel, string>;
   channelKeys!: Table<ChannelKey, string>;
+  mutedConversations!: Table<{ conversationId: string }, string>;
 
   constructor() {
     super('VaultChatDB');
@@ -34,6 +35,16 @@ export class VaultChatDatabase extends Dexie {
     }).upgrade(trans => {
       // Dexie will drop tables not listed; nothing else to migrate
       console.log('[DB] Migrated to v5 — emergency/shift tables removed');
+    });
+
+    // v6: Add muted conversations
+    this.version(6).stores({
+      keys:        'userId, username, role, createdAt',
+      messages:    'id, tempId, senderId, recipientId, channelId, timestamp, status, [senderId+recipientId]',
+      trustedKeys: 'peerUserId, fingerprint, firstSeenAt',
+      channels:    'id, name, type',
+      channelKeys: 'channelId',
+      mutedConversations: 'conversationId',
     });
   }
 }
@@ -189,4 +200,24 @@ export async function saveChannelKey(key: ChannelKey): Promise<void> {
 
 export async function getChannelKey(channelId: string): Promise<ChannelKey | undefined> {
   return await db.channelKeys.get(channelId);
+}
+
+// ── Muted Conversations ────────────────────────────────────────────────────────
+
+export async function muteConversation(conversationId: string): Promise<void> {
+  await db.mutedConversations.put({ conversationId });
+}
+
+export async function unmuteConversation(conversationId: string): Promise<void> {
+  await db.mutedConversations.delete(conversationId);
+}
+
+export async function isConversationMuted(conversationId: string): Promise<boolean> {
+  const entry = await db.mutedConversations.get(conversationId);
+  return !!entry;
+}
+
+export async function getMutedConversations(): Promise<Set<string>> {
+  const all = await db.mutedConversations.toArray();
+  return new Set(all.map(e => e.conversationId));
 }

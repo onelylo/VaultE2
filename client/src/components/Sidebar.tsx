@@ -18,10 +18,12 @@ import {
   Users,
   Activity,
   Server,
+  VolumeX,
+  Volume2,
 } from 'lucide-react';
 import type { User, Channel, UserKeyPair } from '../types/chat';
 import { getFingerprint } from '../lib/crypto';
-import { db, getActiveDMPartners } from '../lib/db';
+import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation } from '../lib/db';
 import { CreateChannelModal } from './channels/CreateChannelModal';
 
 interface SidebarProps {
@@ -136,6 +138,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
     load();
   }, [users]);
+
+  // Muted conversations
+  const [mutedSet, setMutedSet] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    getMutedConversations().then(setMutedSet);
+  }, []);
+
+  const handleToggleMute = useCallback(async (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (mutedSet.has(conversationId)) {
+      await unmuteConversation(conversationId);
+      setMutedSet(prev => { const next = new Set(prev); next.delete(conversationId); return next; });
+    } else {
+      await muteConversation(conversationId);
+      setMutedSet(prev => new Set(prev).add(conversationId));
+    }
+  }, [mutedSet]);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -487,6 +506,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               <Settings className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          {!isCollapsed && (
+                            <button
+                              onClick={(e) => handleToggleMute(channel.id, e)}
+                              className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
+                              style={{ color: mutedSet.has(channel.id) ? '#ef4444' : 'var(--text-muted)' }}
+                              title={mutedSet.has(channel.id) ? 'Unmute' : 'Mute'}
+                            >
+                              {mutedSet.has(channel.id) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                         </button>
                       );
                     })}
@@ -562,6 +591,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               title="Channel Settings"
                             >
                               <Settings className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!isCollapsed && (
+                            <button
+                              onClick={(e) => handleToggleMute(channel.id, e)}
+                              className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
+                              style={{ color: mutedSet.has(channel.id) ? '#ef4444' : 'var(--text-muted)' }}
+                              title={mutedSet.has(channel.id) ? 'Unmute' : 'Mute'}
+                            >
+                              {mutedSet.has(channel.id) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                             </button>
                           )}
                         </button>
@@ -670,6 +709,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         {unread > 99 ? '99+' : unread}
                       </span>
+                    )}
+                    {!isCollapsed && (
+                      <button
+                        onClick={(e) => handleToggleMute(user.userId, e)}
+                        className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
+                        style={{ color: mutedSet.has(user.userId) ? '#ef4444' : 'var(--text-muted)' }}
+                        title={mutedSet.has(user.userId) ? 'Unmute' : 'Mute'}
+                      >
+                        {mutedSet.has(user.userId) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                      </button>
                     )}
                   </div>
                 </button>
