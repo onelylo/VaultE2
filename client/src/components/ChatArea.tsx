@@ -513,7 +513,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   <span className="font-semibold text-sm truncate hover:underline" style={{ color: 'var(--text-main)' }}>
                     {selectedUser.fullName || selectedUser.username}
                   </span>
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedUser.isOnline ? '#34d399' : 'var(--text-muted)', boxShadow: selectedUser.isOnline ? '0 0 6px #34d399' : 'none' }} />
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedUser.isOnline ? (selectedUser.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: selectedUser.isOnline ? (selectedUser.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
                 </div>
                 <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>@{selectedUser.username}</span>
                 {typingUsers.length > 0 && (

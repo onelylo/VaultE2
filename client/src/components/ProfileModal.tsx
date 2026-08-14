@@ -118,7 +118,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
                 )}
                 <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2"
-                  style={{ borderColor: 'var(--bg-surface)', backgroundColor: user.isOnline ? '#34d399' : 'var(--text-muted)', boxShadow: user.isOnline ? '0 0 8px #34d399' : 'none' }} />
+                  style={{ borderColor: 'var(--bg-surface)', backgroundColor: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: user.isOnline ? (user.isAway ? '0 0 8px #f59e0b' : '0 0 8px #34d399') : 'none' }} />
               </div>
               <div className="text-center">
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</h3>
@@ -131,8 +131,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
                 <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>STATUS</span>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: user.isOnline ? '#34d399' : 'var(--text-muted)', boxShadow: user.isOnline ? '0 0 6px #34d399' : 'none' }} />
-                  <span className="text-[11px]" style={{ color: user.isOnline ? '#34d399' : 'var(--text-muted)' }}>{user.isOnline ? 'Online' : 'Offline'}</span>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: user.isOnline ? (user.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
+                  <span className="text-[11px]" style={{ color: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)' }}>{user.isOnline ? (user.isAway ? 'Away' : 'Online') : 'Offline'}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>

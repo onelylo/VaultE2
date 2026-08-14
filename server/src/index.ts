@@ -180,6 +180,7 @@ interface ActiveUser {
   avatarUrl?: string;
   socketId: string;
   publicKey: string;
+  lastSeen: number;  // timestamp of last activity (heartbeat, send, etc.)
 }
 
 export interface AttachmentPayload {
@@ -337,6 +338,7 @@ function userToActive(data: { userId: string; username: string; fullName?: strin
     avatarUrl,
     socketId,
     publicKey: data.publicKey,
+    lastSeen: Date.now(),
   };
 }
 
@@ -1173,10 +1175,11 @@ io.on('connection', (socket) => {
     };
     socket.broadcast.emit('user:online', fullUser);
 
-    // Broadcast updated presence list to everyone
-    const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true }));
+    // Broadcast updated presence list to everyone (includes isAway for inactive users)
+    const now = Date.now();
+    const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (now - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
     io.emit('users:presence', presence);
-    io.emit('user:status_change', { userId: data.userId, isOnline: true, at: Date.now() });
+    io.emit('user:status_change', { userId: data.userId, isOnline: true, isAway: false, at: Date.now() });
 
     // Send channel list (persisted in PostgreSQL) — filtered per-user
     const channels = await getAllChannels(data.userId).catch(() => []);
@@ -1454,18 +1457,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Presence heartbeat — client sends every 60s, updates lastSeen timestamp
+  socket.on('user:heartbeat', () => {
+    const userId = socketToUser.get(socket.id);
+    if (userId) {
+      const user = activeUsers.get(userId);
+      if (user) {
+        user.lastSeen = Date.now();
+      }
+    }
+  });
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
       const user = activeUsers.get(userId);
+      const lastSeen = user?.lastSeen || Date.now();
       console.log(`[Registry] Disconnected: ${user?.username} (${userId})`);
       activeUsers.delete(userId);
       socketToUser.delete(socket.id);
       userToSocket.delete(userId);
-      // Broadcast updated presence
-      const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true }));
+      // Broadcast updated presence — user now offline
+      const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (Date.now() - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
       io.emit('users:presence', presence);
-      io.emit('user:status_change', { userId, isOnline: false, at: Date.now() });
+      io.emit('user:status_change', { userId, isOnline: false, isAway: true, at: lastSeen });
     }
   });
 });

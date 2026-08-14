@@ -596,6 +596,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isSelected = selectedUser?.userId === user.userId;
               const fp = fingerprints[user.userId] || '...';
               const isOnline = user.isOnline ?? false;
+              const isAway = user.isAway ?? false;
               const unread = unreadDMs[user.userId] || 0;
 
               return (
@@ -640,9 +641,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span
                         className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
                         style={{ 
-                          backgroundColor: isOnline ? '#34d399' : 'var(--text-muted)',
+                          backgroundColor: isOnline ? (isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)',
                           border: '2px solid var(--bg-sidebar)',
-                          boxShadow: isOnline ? '0 0 6px #34d399' : 'none'
+                          boxShadow: isOnline ? (isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none'
                         }}
                       />
                     </div>

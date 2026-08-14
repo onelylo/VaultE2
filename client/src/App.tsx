@@ -158,6 +158,7 @@ export const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const allUsersRef = useRef<User[]>([]);
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+  const [awayIds, setAwayIds] = useState<Set<string>>(new Set());
 
   // Always keep allUsersRef synchronized with latest state
   useEffect(() => {
@@ -994,9 +995,11 @@ export const App: React.FC = () => {
       setOnlineIds(online);
     };
 
-    const onUsersPresence = (presence: { userId: string; isOnline: boolean }[]) => {
+    const onUsersPresence = (presence: { userId: string; isOnline: boolean; isAway?: boolean }[]) => {
       const online = new Set(presence.filter(p => p.isOnline).map(p => p.userId));
+      const away = new Set(presence.filter(p => p.isAway && p.isOnline).map(p => p.userId));
       setOnlineIds(online);
+      setAwayIds(away);
     };
 
     const onChannelsUpdate = async (channelsList: Channel[]) => {
@@ -1857,7 +1860,11 @@ export const App: React.FC = () => {
     socket.emit('message:delete', { id: messageId, recipientId: selectedPeer?.userId, channelId: selectedChannel?.id });
   };
 
-  const usersWithPresence: User[] = allUsers.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) }));
+  const usersWithPresence: User[] = allUsers.map(u => ({
+    ...u,
+    isOnline: onlineIds.has(u.userId),
+    isAway: onlineIds.has(u.userId) && awayIds.has(u.userId),
+  }));
 
   // Live version of selectedPeer that updates when onlineIds changes
   const selectedPeerWithPresence = selectedPeer

@@ -51,9 +51,18 @@ export function useNetworkStatus(
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
+
+    // Send heartbeat every 60s so server knows we're still active
+    const heartbeat = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('user:heartbeat');
+      }
+    }, 60000);
+
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      clearInterval(heartbeat);
     };
   }, [socket]);
 
