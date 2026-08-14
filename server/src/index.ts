@@ -1550,7 +1550,7 @@ io.on('connection', (socket) => {
     if (recipientId) {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
-        io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId, timestamp: payload.timestamp ?? Date.now() });
+        io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
 
       } else {
 
@@ -1653,7 +1653,7 @@ io.on('connection', (socket) => {
     });
 
     // Broadcast to all other connected clients
-    socket.broadcast.emit('channel:message:receive', { ...payload, id: messageId, timestamp: payload.timestamp ?? Date.now() });
+    socket.broadcast.emit('channel:message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery

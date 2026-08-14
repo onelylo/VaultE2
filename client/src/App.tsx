@@ -419,8 +419,14 @@ export const App: React.FC = () => {
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           usersSource = usersData.users || [];
-          const onlineSet = new Set<string>(usersSource.filter((u: User) => u.isOnline).map((u: User) => u.userId));
-          setOnlineIds(onlineSet);
+          // Merge presence from HTTP response instead of replacing
+          setOnlineIds(prev => {
+            const next = new Set(prev);
+            for (const u of usersSource) {
+              if (u.isOnline) next.add(u.userId);
+            }
+            return next;
+          });
         }
       } catch { /* keep existing directory */ }
 
@@ -998,10 +1004,23 @@ export const App: React.FC = () => {
     };
 
     const onUsersPresence = (presence: { userId: string; isOnline: boolean; isAway?: boolean }[]) => {
-      const online = new Set(presence.filter(p => p.isOnline).map(p => p.userId));
-      const away = new Set(presence.filter(p => p.isAway && p.isOnline).map(p => p.userId));
-      setOnlineIds(online);
-      setAwayIds(away);
+      // Merge with existing presence instead of replacing
+      setOnlineIds(prev => {
+        const next = new Set(prev);
+        for (const p of presence) {
+          if (p.isOnline) next.add(p.userId);
+          else next.delete(p.userId);
+        }
+        return next;
+      });
+      setAwayIds(prev => {
+        const next = new Set(prev);
+        for (const p of presence) {
+          if (p.isAway && p.isOnline) next.add(p.userId);
+          else next.delete(p.userId);
+        }
+        return next;
+      });
     };
 
     const onChannelsUpdate = async (channelsList: Channel[]) => {

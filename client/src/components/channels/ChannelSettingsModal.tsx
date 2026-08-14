@@ -52,6 +52,7 @@ function ChannelSettingsInner({
   const [isAnnouncement, setIsAnnouncement] = useState(channel.isAnnouncement || false);
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
   const [shaking, setShaking] = useState(false);
+  const [editingField, setEditingField] = useState<'name' | 'description' | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isOwner = channel.createdBy === currentUser?.userId;
@@ -147,22 +148,27 @@ function ChannelSettingsInner({
         </button>
 
         <div className="overflow-y-auto flex-1 p-6">
-          {/* Channel Identity with inline-editable name and description */}
-          <div className="flex flex-col items-center space-y-3 mb-4">
+          {/* Channel Identity with double-click to edit */}
+          <div className="flex flex-col items-center space-y-2 mb-4">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '3px solid var(--border-color)', color: 'var(--accent-primary)' }}>
               #
             </div>
-            {/* Inline-editable channel name */}
-            {canEditSettings ? (
+            {/* Channel name - double-click to edit */}
+            {canEditSettings && editingField === 'name' ? (
               <input type="text" value={name} onChange={e => setName(e.target.value)}
-                className="font-bold text-sm text-center bg-transparent border-b-2 focus:outline-none w-full max-w-[200px]"
-                style={{ color: 'var(--text-main)', borderColor: 'var(--border-color)' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                onBlur={() => setEditingField(null)}
+                onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setName(channel.name); setEditingField(null); } }}
+                autoFocus
+                className="font-bold text-sm text-center bg-transparent border-b border-[var(--accent-primary)] focus:outline-none w-full max-w-[200px]"
+                style={{ color: 'var(--text-main)' }}
               />
             ) : (
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>#{channel.name}</h3>
+              <h3 className="font-bold text-sm cursor-pointer hover:underline"
+                style={{ color: 'var(--text-main)' }}
+                onDoubleClick={() => canEditSettings && setEditingField('name')}>
+                #{name}
+              </h3>
             )}
             <div className="flex items-center justify-center gap-1.5">
               <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"
@@ -176,22 +182,33 @@ function ChannelSettingsInner({
             </div>
           </div>
 
-          {/* Inline-editable description with label */}
-          {canEditSettings ? (
+          {/* Description - double-click to edit */}
+          {canEditSettings && editingField === 'description' ? (
             <div className="mb-3">
               <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</label>
               <input type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Set description..."
+                onBlur={() => setEditingField(null)}
+                onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setDescription(channel.description || ''); setEditingField(null); } }}
+                autoFocus
                 className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
-                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' }}
+              />
             </div>
-          ) : channel.description ? (
-            <div className="px-3 py-2 rounded-xl mb-3" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
+          ) : (
+            <div className="mb-3 cursor-pointer hover:opacity-80" onDoubleClick={() => canEditSettings && setEditingField('description')}>
+              {channel.description ? (
+                <div className="px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <span className="text-[9px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
+                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
+                </div>
+              ) : canEditSettings ? (
+                <div className="px-3 py-2 rounded-xl text-center" style={{ backgroundColor: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}>
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Double-click to add description</span>
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          )}
 
           {/* Editable fields for owner/admin */}
           {canEditSettings && (
