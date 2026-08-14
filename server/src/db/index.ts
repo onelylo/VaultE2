@@ -172,8 +172,11 @@ async function seedDefaultChannels(): Promise<void> {
 async function seedAdminAccount(): Promise<void> {
   const username = 'Onelylo';
   const userId = `usr_${username.replace(/[^a-zA-Z0-9]/g, '')}`;
-  const existing = await getPool().query('SELECT id FROM users WHERE id = $1', [userId]);
-  if (existing.rows.length > 0) return;
+
+  // Check if admin already exists by id OR username
+  const existingById = await getPool().query('SELECT id FROM users WHERE id = $1', [userId]);
+  const existingByName = await getPool().query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+  if (existingById.rows.length > 0 || existingByName.rows.length > 0) return;
 
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
