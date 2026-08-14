@@ -394,11 +394,11 @@ function ChannelSettingsInner({
 
         {/* Actions */}
         <div className="flex flex-col gap-2 p-4 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
-          {canEditSettings && (
-            <button onClick={hasChanges ? handleSave : onClose}
+          {canEditSettings && hasChanges && (
+            <button onClick={handleSave}
               className="w-full py-2.5 px-3 rounded-xl font-bold text-xs transition-all active:scale-95"
-              style={{ backgroundColor: hasChanges ? '#ef4444' : 'var(--accent-primary)', color: 'var(--accent-text)' }}>
-              {hasChanges ? 'SAVE CHANGES' : 'CLOSE'}
+              style={{ backgroundColor: '#ef4444', color: 'var(--accent-text)' }}>
+              SAVE CHANGES
             </button>
           )}
           {!canEditSettings && (channel.type === 'team' || channel.type === 'private') && onLeaveChannel && (

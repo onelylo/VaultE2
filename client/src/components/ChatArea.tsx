@@ -249,7 +249,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   type ReactionEntry = { userId: string; emoji: string };
   const [reactionsMap, setReactionsMap] = useState<Map<string, ReactionEntry[]>>(new Map());
 
-  // Fetch reactions for visible messages
+  // Fetch reactions once on mount for initial load
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
@@ -264,11 +264,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       .then((data: { reactions: Record<string, ReactionEntry[]> }) => {
         setReactionsMap(prev => {
           const next = new Map<string, ReactionEntry[]>();
-          // Start with server data
           for (const [msgId, reactions] of Object.entries(data.reactions || {})) {
             next.set(msgId, reactions);
           }
-          // Merge: for each message, preserve local reactions that server doesn't have
+          // Preserve any existing local reactions
           for (const [msgId, localReactions] of prev.entries()) {
             const serverReactions = next.get(msgId) || [];
             const merged = [...serverReactions];
@@ -283,7 +282,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         });
       })
       .catch(() => {});
-  }, [visibleMessages?.map(m => m.id).join(',')]);
+  }, []); // Only run once on mount
 
   // Listen for live reaction updates
   useEffect(() => {

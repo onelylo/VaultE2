@@ -1536,16 +1536,34 @@ export const App: React.FC = () => {
 
   // Also listen for socket connect event directly to catch edge cases
   useEffect(() => {
-    const handleConnect = () => { setTimeout(flushOfflineQueue, 500); };
+    const handleConnect = () => {
+      setTimeout(flushOfflineQueue, 500);
+      // Re-join socket rooms on reconnect so channel messages are delivered
+      if (currentUserKeys) {
+        socket.emit('user:join', {
+          userId: currentUserKeys.userId,
+          username: currentUserKeys.username,
+          fullName: currentUserKeys.fullName,
+          role: currentUserKeys.role,
+          publicKey: currentUserKeys.publicKeyBase64,
+          signingPublicKey: currentUserKeys.signingPublicKeyBase64,
+        });
+      }
+    };
     socket.on('connect', handleConnect);
     return () => { socket.off('connect', handleConnect); };
-  }, [flushOfflineQueue]);
+  }, [flushOfflineQueue, currentUserKeys]);
 
   // Load stored channels on mount, then clean up deleted ones when server data arrives
   useEffect(() => {
     getStoredChannels().then(channels => {
       setChannels(channels);
     });
+    // Also fetch from server to clean up deleted channels
+    const token = getJwtToken();
+    if (token) {
+      socket.emit('channels:get');
+    }
   }, []);
 
   // ── Selection Handlers ────────────────────────────────────────────────────────
