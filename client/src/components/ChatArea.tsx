@@ -201,7 +201,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (messages) setAllMessages(messages);
   }, [messages]);
 
-  // Poll for message status updates (ensures status changes are reflected)
+  // Poll for message status updates and new messages
   useEffect(() => {
     if (!selectedChannel && !selectedUser) return;
     const interval = setInterval(async () => {
@@ -212,7 +212,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           let changed = false;
           for (const msg of msgs) {
             const existing = prevMap.get(msg.id);
-            if (existing && existing.status !== msg.status) {
+            if (!existing) {
+              // New message not in current list
+              prevMap.set(msg.id, msg);
+              changed = true;
+            } else if (existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
               prevMap.set(msg.id, msg);
               changed = true;
             }
@@ -230,7 +234,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           let changed = false;
           for (const msg of msgs) {
             const existing = prevMap.get(msg.id);
-            if (existing && existing.status !== msg.status) {
+            if (!existing) {
+              prevMap.set(msg.id, msg);
+              changed = true;
+            } else if (existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
               prevMap.set(msg.id, msg);
               changed = true;
             }
@@ -238,7 +245,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           return changed ? [...prevMap.values()].sort((a, b) => a.timestamp - b.timestamp) : prev;
         });
       }
-    }, 2000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [selectedChannel?.id, selectedUser?.userId, currentUserId]);
 
@@ -255,10 +262,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const ids = visibleMessages.map(m => m.id);
     const token = localStorage.getItem('vaultchat_jwt');
     if (!token) return;
+    const controller = new AbortController();
     fetch(`${API_BASE}/api/reactions/batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messageIds: ids }),
+      signal: controller.signal,
     })
       .then(r => r.json())
       .then((data: { reactions: Record<string, ReactionEntry[]> }) => {
@@ -282,6 +291,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         });
       })
       .catch(() => {});
+    return () => controller.abort();
   }, [visibleMessages?.map(m => m.id).join(',')]);
 
   // Listen for live reaction updates

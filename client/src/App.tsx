@@ -76,6 +76,16 @@ function getJwtToken(): string | null {
   if (token) return token;
   return sessionStorage.getItem('vaultchat_jwt');
 }
+function isTokenExpired(): boolean {
+  const token = getJwtToken();
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+}
 function setJwtToken(token: string) {
   const stayLoggedIn = localStorage.getItem('vaultchat_stayLoggedIn') !== 'false';
   if (stayLoggedIn) {
@@ -1528,7 +1538,13 @@ export const App: React.FC = () => {
       sharedKeysCache: offlineQueueRef.current.sharedKeysCache,
       privateKey: offlineQueueRef.current.privateKeyObject,
       activeUsers: offlineQueueRef.current.allUsers,
-      onMessageFlushed: () => {},
+      onMessageFlushed: (msg) => {
+        // The message status was updated in IndexedDB by updateMessageStatus.
+        // Emit channels:get to refresh channels (in case of channel messages).
+        if (msg.channelId) {
+          socket.emit('channels:get');
+        }
+      },
       onQueueEmpty: () => { isFlushing.current = false; }
     }).catch(() => { isFlushing.current = false; });
   }, [currentUserKeys]);
@@ -1559,6 +1575,18 @@ export const App: React.FC = () => {
     socket.on('connect', handleConnect);
     return () => { socket.off('connect', handleConnect); };
   }, [flushOfflineQueue, currentUserKeys]);
+
+  // Check token expiry periodically and force logout if expired
+  useEffect(() => {
+    if (!currentUserKeys) return;
+    const check = () => {
+      if (isTokenExpired()) {
+        handleLogoutConfirm();
+      }
+    };
+    const interval = setInterval(check, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, [currentUserKeys]);
 
   // Load stored channels on mount, then clean up deleted ones when server data arrives
   useEffect(() => {
