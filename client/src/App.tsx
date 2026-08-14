@@ -588,7 +588,7 @@ export const App: React.FC = () => {
   }, [currentUserKeys, privateKeyObject]);
 
   // ── Profile Update ────────────────────────────────────────────────────────────
-  const handleUpdateProfile = useCallback(async (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string }) => {
+  const handleUpdateProfile = useCallback(async (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string }) => {
     if (!currentUserKeys) return;
     const token = getJwtToken();
     try {
@@ -607,6 +607,7 @@ export const App: React.FC = () => {
         if (data.avatar) updated.avatarUrl = data.avatar;
         if (data.username) updated.username = data.username;
         if (data.statusMessage !== undefined) updated.statusMessage = data.statusMessage;
+        if (data.phone !== undefined) updated.phone = data.phone;
         return updated;
       });
       if (data.fullName && socket.connected) {

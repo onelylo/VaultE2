@@ -9,6 +9,7 @@ interface EditUserModalProps {
     fullName?: string;
     role: string;
     status?: string;
+    phone?: string;
   } | null;
   isOpen: boolean;
   onClose: () => void;
@@ -17,6 +18,7 @@ interface EditUserModalProps {
     role: string;
     fullName: string;
     status: string;
+    phone?: string;
     newPassword?: string;
     revokeKeys?: boolean;
   }) => void;
@@ -26,6 +28,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
   const [role, setRole] = useState(user?.role || 'MEMBER');
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [status, setStatus] = useState(user?.status || 'ACTIVE');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [newPassword, setNewPassword] = useState('');
   const [revokeKeys, setRevokeKeys] = useState(false);
 
@@ -35,6 +38,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
       setRole(user.role || 'MEMBER');
       setFullName(user.fullName || '');
       setStatus(user.status || 'ACTIVE');
+      setPhone(user.phone || '');
       setNewPassword('');
       setRevokeKeys(false);
     }
@@ -49,6 +53,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
       role,
       fullName,
       status,
+      phone: phone.trim() || undefined,
       newPassword: newPassword.trim() ? newPassword : undefined,
       revokeKeys,
     });
@@ -77,6 +82,18 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Phone Number</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. +1 555 123 4567"
               className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)]"
             />
           </div>

@@ -14,7 +14,7 @@ interface ProfileDrawerProps {
   userFingerprint: string;
   onClose: () => void;
   onLogout: () => void;
-  onUpdateProfile: (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string }) => Promise<any>;
+  onUpdateProfile: (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string }) => Promise<any>;
   theme: string;
   onThemeChange: (theme: string) => void;
 }
@@ -55,6 +55,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   const [username, setUsername] = useState(currentUser.username || '');
   const [fullName] = useState(currentUser.fullName || '');
   const [email, setEmail] = useState(currentUser.email || '');
+  const [phone, setPhone] = useState(currentUser.phone || '');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -125,7 +126,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           if (res.ok) { const data = await res.json(); finalAvatarUrl = data.avatarUrl; }
         }
       }
-      await onUpdateProfile({ fullName, email, avatar: finalAvatarUrl, username });
+      await onUpdateProfile({ fullName, email, avatar: finalAvatarUrl, username, phone });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -263,6 +264,12 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">EMAIL</label>
                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">PHONE</label>
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. +1 555 123 4567"
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
                   </div>
                 </div>

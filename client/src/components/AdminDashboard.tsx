@@ -126,11 +126,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingUser(user);
   };
 
-  const handleSaveUser = async (data: { userId: string; role: string; fullName: string; status: string; newPassword?: string; revokeKeys?: boolean }) => {
+  const handleSaveUser = async (data: { userId: string; role: string; fullName: string; status: string; phone?: string; newPassword?: string; revokeKeys?: boolean }) => {
     if (data.role !== users.find(u => u.userId === data.userId)?.role) {
       const ok = await onSetRole(data.userId, data.role as UserRole);
       if (!ok) return;
     }
+    // Save profile fields (fullName, phone) via admin endpoint
+    try {
+      const token = localStorage.getItem('vaultchat_token');
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/admin/users/${data.userId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fullName: data.fullName, phone: data.phone }),
+      });
+    } catch {}
     await load();
     setEditingUser(null);
   };

@@ -110,6 +110,7 @@ export interface UserKeyPair {
   avatarUrl?: string;
   role: UserRole;
   statusMessage?: string;
+  phone?: string;
   publicKeyBase64: string;
   privateKeyJwk: JsonWebKey;
   publicKeyJwk: JsonWebKey;

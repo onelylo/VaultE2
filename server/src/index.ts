@@ -721,12 +721,28 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
       return res.status(400).json({ error: 'Cannot change your own role' });
     }
     await updateUserRole(target.userId, role);
-    console.log(`[Admin] ${adminId} set ${target.username} role → ${role}`);
     io.emit('user:role_change', { userId: target.userId, role });
     return res.json({ success: true, user: { ...publicUser(target), role } });
   } catch (e) {
-    console.error('[Admin] Role change error:', e);
     return res.status(500).json({ error: 'Role change failed' });
+  }
+});
+
+// Admin update user profile fields (fullName, phone)
+app.patch('/api/admin/users/:id/profile', async (req, res) => {
+  const adminId = requireAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const { fullName, phone } = req.body;
+    await updateUserProfile(target.userId, { fullName, phone });
+    const updated = await getUserById(target.userId);
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    io.emit('user:profile-update', { userId: updated.userId, fullName: updated.fullName, phone: updated.phone });
+    return res.json({ success: true, user: publicUser(updated) });
+  } catch (e) {
+    return res.status(500).json({ error: 'Profile update failed' });
   }
 });
 
