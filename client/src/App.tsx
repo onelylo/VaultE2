@@ -1036,6 +1036,9 @@ export const App: React.FC = () => {
       // 2. If recipient ALREADY has this conversation thread open, emit read receipt immediately!
       if (selectedPeerRef.current?.userId === payload.senderId) {
         socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: payload.senderId, lastReadMessageId: payload.id });
+        // Update lastViewed so this message won't show as unread after refresh
+        setLastViewedDms(prev => ({ ...prev, [payload.senderId]: localMsg.timestamp }));
+        lastViewedDmsRef.current = { ...lastViewedDmsRef.current, [payload.senderId]: localMsg.timestamp };
       }
     };
 
@@ -1053,6 +1056,9 @@ export const App: React.FC = () => {
       // If recipient ALREADY has this channel open, emit read receipt immediately
       if (selectedChannelRef.current?.id === payload.channelId) {
         socket.emit('message:read', { conversationId: payload.channelId, senderId: payload.senderId, lastReadMessageId: payload.id });
+        // Update lastViewed so this message won't show as unread after refresh
+        setLastViewedChannels(prev => ({ ...prev, [payload.channelId!]: localMsg.timestamp }));
+        lastViewedChannelsRef.current = { ...lastViewedChannelsRef.current, [payload.channelId!]: localMsg.timestamp };
       }
     };
 

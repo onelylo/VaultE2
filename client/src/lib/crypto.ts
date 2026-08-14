@@ -446,7 +446,7 @@ export async function derivePasswordWrappingKey(
     {
       name: 'PBKDF2',
       salt: saltBuffer.buffer as ArrayBuffer,
-      iterations: 600000,
+      iterations: 100000,
       hash: 'SHA-256'
     },
     baseKey,

@@ -225,6 +225,23 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return () => clearTimeout(timer);
   }, [visibleMessages?.length]);
 
+  // Auto-scroll to bottom on new messages when user is near bottom
+  const prevMsgCountRef = useRef(visibleMessages?.length || 0);
+  useEffect(() => {
+    const newCount = visibleMessages?.length || 0;
+    const prevCount = prevMsgCountRef.current;
+    prevMsgCountRef.current = newCount;
+
+    // Only auto-scroll if: message count increased AND user is near bottom AND not just switched
+    if (newCount > prevCount && isNearBottomRef.current && !justSwitchedRef.current) {
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      });
+    }
+  }, [visibleMessages?.length]);
+
   // Textarea auto-resize
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -259,6 +276,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setPreviewDataUrl(null);
       setText('');
       setActiveReply(null);
+      // Scroll to bottom after sending
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          isNearBottomRef.current = true;
+        }
+      });
       return;
     }
 
@@ -266,6 +290,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       onSendMessage(text.trim(), activeReply?.msgId);
       setText('');
       setActiveReply(null);
+      // Scroll to bottom after sending
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          isNearBottomRef.current = true;
+        }
+      });
     }
   };
 
