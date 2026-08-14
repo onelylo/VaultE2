@@ -1278,12 +1278,14 @@ export const App: React.FC = () => {
       }
     };
 
-    const onUserSuspended = () => {
+    const onUserSuspended = (data: { reason?: string }) => {
       // Force logout on suspension
       if (socket.connected) socket.disconnect();
       localStorage.removeItem('vaultchat_jwt');
       sessionStorage.removeItem('vaultchat_jwt');
       setCurrentUserKeys(null);
+      // Show suspension message before reloading
+      alert(data?.reason || 'Your account has been suspended by an administrator.');
       window.location.reload();
     };
 

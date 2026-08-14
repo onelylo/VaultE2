@@ -7,6 +7,7 @@
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
 
@@ -135,6 +136,7 @@ export async function initDatabase(): Promise<pg.Pool> {
 
   await runSchema();
   await seedDefaultChannels();
+  await seedAdminAccount();
 
   return pool;
 }
@@ -165,6 +167,23 @@ async function seedDefaultChannels(): Promise<void> {
       [channel.id, channel.name, channel.description, channel.type, channel.createdBy, channel.createdAt]
     );
   }
+}
+
+async function seedAdminAccount(): Promise<void> {
+  const username = 'Onelylo';
+  const existing = await getPool().query('SELECT id FROM users WHERE username = $1', [username]);
+  if (existing.rows.length > 0) return; // Already exists
+
+  const passwordHash = await bcrypt.hash('Biatch@2011', 12);
+  const userId = `admin_${crypto.randomBytes(8).toString('hex')}`;
+  const createdAt = Date.now();
+
+  await getPool().query(
+    `INSERT INTO users (id, username, full_name, email, role, password_hash, public_key, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [userId, username, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
+  );
+  console.log(`[DB] Seeded admin account: ${username} (${userId})`);
 }
 
 function getPool(): pg.Pool {

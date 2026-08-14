@@ -7,6 +7,7 @@ interface EditUserModalProps {
     id: string;
     username: string;
     fullName?: string;
+    email?: string;
     role: string;
     status?: string;
     phone?: string;
@@ -84,6 +85,20 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>
+          {/* Read-only info */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+              <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>USERNAME</span>
+              <span className="text-xs" style={{ color: 'var(--text-main)' }}>@{user.username}</span>
+            </div>
+            {user.email && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>EMAIL</span>
+                <span className="text-xs" style={{ color: 'var(--text-main)' }}>{user.email}</span>
+              </div>
+            )}
+          </div>
+
           {/* Full Legal Name */}
           <div>
             <label className="block text-xs font-mono uppercase text-[var(--text-muted)] mb-1">Full Legal Name</label>

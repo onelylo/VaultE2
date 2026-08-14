@@ -511,8 +511,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           id: editingUser.userId,
           username: editingUser.username,
           fullName: editingUser.fullName,
+          email: editingUser.email,
           role: editingUser.role,
-          status: editingUser.isOnline ? 'ACTIVE' : 'SUSPENDED',
+          status: editingUser.status || 'ACTIVE',
+          phone: editingUser.phone,
         } : null}
         isOpen={!!editingUser}
         onClose={() => setEditingUser(null)}
