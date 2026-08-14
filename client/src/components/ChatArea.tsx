@@ -201,6 +201,47 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (messages) setAllMessages(messages);
   }, [messages]);
 
+  // Poll for message status updates (ensures status changes are reflected)
+  useEffect(() => {
+    if (!selectedChannel && !selectedUser) return;
+    const interval = setInterval(async () => {
+      if (selectedChannel) {
+        const msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
+        setAllMessages(prev => {
+          const prevMap = new Map(prev.map(m => [m.id, m]));
+          let changed = false;
+          for (const msg of msgs) {
+            const existing = prevMap.get(msg.id);
+            if (existing && existing.status !== msg.status) {
+              prevMap.set(msg.id, msg);
+              changed = true;
+            }
+          }
+          return changed ? [...prevMap.values()].sort((a, b) => a.timestamp - b.timestamp) : prev;
+        });
+      } else if (selectedUser && currentUserId) {
+        const [sent, received] = await Promise.all([
+          db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
+          db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
+        ]);
+        const msgs = [...sent, ...received];
+        setAllMessages(prev => {
+          const prevMap = new Map(prev.map(m => [m.id, m]));
+          let changed = false;
+          for (const msg of msgs) {
+            const existing = prevMap.get(msg.id);
+            if (existing && existing.status !== msg.status) {
+              prevMap.set(msg.id, msg);
+              changed = true;
+            }
+          }
+          return changed ? [...prevMap.values()].sort((a, b) => a.timestamp - b.timestamp) : prev;
+        });
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [selectedChannel?.id, selectedUser?.userId, currentUserId]);
+
   // Visible messages (lazy loaded, filter out removed)
   const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
 
@@ -223,14 +264,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       .then((data: { reactions: Record<string, ReactionEntry[]> }) => {
         setReactionsMap(prev => {
           const next = new Map<string, ReactionEntry[]>();
+          // Start with server data
           for (const [msgId, reactions] of Object.entries(data.reactions || {})) {
             next.set(msgId, reactions);
           }
-          // Preserve local optimistic reactions that server doesn't have yet
+          // Merge: for each message, preserve local reactions that server doesn't have
           for (const [msgId, localReactions] of prev.entries()) {
-            if (!next.has(msgId)) {
-              next.set(msgId, localReactions);
+            const serverReactions = next.get(msgId) || [];
+            const merged = [...serverReactions];
+            for (const localR of localReactions) {
+              if (!serverReactions.some(r => r.userId === localR.userId && r.emoji === localR.emoji)) {
+                merged.push(localR);
+              }
             }
+            next.set(msgId, merged);
           }
           return next;
         });

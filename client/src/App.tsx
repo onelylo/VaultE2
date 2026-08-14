@@ -1009,23 +1009,11 @@ export const App: React.FC = () => {
     };
 
     const onUsersPresence = (presence: { userId: string; isOnline: boolean; isAway?: boolean }[]) => {
-      // Merge with existing presence instead of replacing
-      setOnlineIds(prev => {
-        const next = new Set(prev);
-        for (const p of presence) {
-          if (p.isOnline) next.add(p.userId);
-          else next.delete(p.userId);
-        }
-        return next;
-      });
-      setAwayIds(prev => {
-        const next = new Set(prev);
-        for (const p of presence) {
-          if (p.isAway && p.isOnline) next.add(p.userId);
-          else next.delete(p.userId);
-        }
-        return next;
-      });
+      // Replace with server data (server sends complete presence list)
+      const online = new Set(presence.filter(p => p.isOnline).map(p => p.userId));
+      const away = new Set(presence.filter(p => p.isAway && p.isOnline).map(p => p.userId));
+      setOnlineIds(online);
+      setAwayIds(away);
     };
 
     const onChannelsUpdate = async (channelsList: Channel[]) => {
@@ -1553,9 +1541,11 @@ export const App: React.FC = () => {
     return () => { socket.off('connect', handleConnect); };
   }, [flushOfflineQueue]);
 
-  // Load stored channels on mount
+  // Load stored channels on mount, then clean up deleted ones when server data arrives
   useEffect(() => {
-    getStoredChannels().then(setChannels);
+    getStoredChannels().then(channels => {
+      setChannels(channels);
+    });
   }, []);
 
   // ── Selection Handlers ────────────────────────────────────────────────────────
