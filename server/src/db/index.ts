@@ -107,6 +107,7 @@ export async function initDatabase(): Promise<pg.Pool> {
     password: DB_PASS,
     port: DB_PORT,
     persistent: true,
+    initdbFlags: ['--encoding=UTF8', '--locale=en_US.UTF-8'],
   });
 
   const isInitialised = fs.existsSync(path.join(DB_DIR, 'PG_VERSION'));
