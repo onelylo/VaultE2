@@ -1030,6 +1030,14 @@ export const App: React.FC = () => {
 
     const onChannelsUpdate = async (channelsList: Channel[]) => {
       setChannels(channelsList);
+      // Clean up deleted channels from IndexedDB
+      const serverIds = new Set(channelsList.map(c => c.id));
+      const stored = await getStoredChannels();
+      for (const ch of stored) {
+        if (!serverIds.has(ch.id)) {
+          await db.channels.delete(ch.id);
+        }
+      }
       for (const c of channelsList) await saveChannel(c);
     };
 

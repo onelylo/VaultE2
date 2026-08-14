@@ -221,11 +221,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     })
       .then(r => r.json())
       .then((data: { reactions: Record<string, ReactionEntry[]> }) => {
-        const map = new Map<string, ReactionEntry[]>();
-        for (const [msgId, reactions] of Object.entries(data.reactions || {})) {
-          map.set(msgId, reactions);
-        }
-        setReactionsMap(map);
+        setReactionsMap(prev => {
+          const next = new Map<string, ReactionEntry[]>();
+          for (const [msgId, reactions] of Object.entries(data.reactions || {})) {
+            next.set(msgId, reactions);
+          }
+          // Preserve local optimistic reactions that server doesn't have yet
+          for (const [msgId, localReactions] of prev.entries()) {
+            if (!next.has(msgId)) {
+              next.set(msgId, localReactions);
+            }
+          }
+          return next;
+        });
       })
       .catch(() => {});
   }, [visibleMessages?.map(m => m.id).join(',')]);

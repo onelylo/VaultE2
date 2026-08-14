@@ -53,6 +53,7 @@ function ChannelSettingsInner({
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
   const [shaking, setShaking] = useState(false);
   const [editingField, setEditingField] = useState<'name' | 'description' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isOwner = channel.createdBy === currentUser?.userId;
@@ -408,13 +409,35 @@ function ChannelSettingsInner({
             </button>
           )}
           {canEditSettings && (
-            <button onClick={() => { onDelete(channel.id); onClose(); }}
+            <button onClick={() => setConfirmDelete(true)}
               className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
               style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
               <Trash2 className="w-3 h-3" /> DELETE CHANNEL
             </button>
           )}
         </div>
+
+        {/* Delete Confirmation */}
+        {confirmDelete && (
+          <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setConfirmDelete(false)}>
+            <div className="w-full max-w-xs rounded-2xl p-5 animate-[scaleIn_0.15s_ease-out]"
+              style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-main)' }}>Delete Channel</h3>
+              <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                Are you sure you want to delete <strong>#{channel.name}</strong>? This will permanently delete all messages and remove all members.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDelete(false)} className="flex-1 py-2 rounded-xl text-xs font-bold"
+                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>Cancel</button>
+                <button onClick={() => { onDelete(channel.id); onClose(); }} className="flex-1 py-2 rounded-xl text-xs font-bold"
+                  style={{ backgroundColor: '#ef4444', color: '#fff' }}>Delete</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body
