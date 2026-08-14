@@ -105,6 +105,27 @@
 | 2026-08-13 | `763cd69` | ProfileDrawer relative URLs → `${API_BASE}/api/...` | `client/ProfileDrawer.tsx` |
 | 2026-08-13 | `763cd69` | ECDH key cache invalidated on peer key rotation (cache by publicKey prefix) | `client/App.tsx` |
 | 2026-08-13 | `763cd69` | **Replies persist** — `decryptPayload` was missing `replyTo` field | `client/App.tsx` |
+| 2026-08-13 | `ea62461` | Remote DoS fix: validate ciphertext before `.length` in socket handlers | `server/index.ts` |
+| 2026-08-13 | `ea62461` | Offline queue: channel message support (use channel symmetric key) | `client/lib/queue.ts` |
+| 2026-08-13 | `ea62461` | `arrayBufferToBase64` O(n²) → 32KB chunking | `client/lib/crypto.ts` |
+| 2026-08-13 | `ea62461` | Channel privacy: per-user filtered `broadcastChannels()` | `server/index.ts` |
+| 2026-08-13 | `ea62461` | Attachment N+1 → batch `getAttachmentsByMessageIds` | `server/index.ts`, `server/db/index.ts` |
+| 2026-08-13 | `ea62461` | `computeUnread` reactive via Dexie `liveQuery` (no 2s polling) | `client/App.tsx` |
+| 2026-08-13 | `a299017` | Channel read receipts now match `channelId` | `client/App.tsx` |
+| 2026-08-13 | `a299017` | `channel_members(user_id)` index added | `server/db/schema.sql` |
+| 2026-08-13 | `a299017` | `fs.writeFileSync` → async `fs.promises.writeFile` | `server/index.ts` |
+| 2026-08-13 | `a299017` | Token blocklist eviction via expiry map | `server/index.ts` |
+| 2026-08-13 | `a299017` | Username editing now persisted (server + client) | `server/index.ts`, `server/db/index.ts`, `client/App.tsx` |
+| 2026-08-13 | `a299017` | Typing indicator key mismatch fixed (username in stop event) | `server/index.ts`, `client/App.tsx` |
+| 2026-08-13 | `a299017` | `CreateChannelModal` grants SUPERVISOR create | `CreateChannelModal.tsx` |
+| 2026-08-13 | `a299017` | "Stay logged in" text corrected | `AuthModal.tsx` |
+| 2026-08-13 | `a299017` | Rules-of-hooks violation fixed (ChannelSettingsModal) | `ChannelSettingsModal.tsx` |
+| 2026-08-13 | `a299017` | N+1 channel member queries → batch | `server/db/index.ts` |
+| 2026-08-13 | `e8b752b` | Channel key redistribution on member add | `client/App.tsx` |
+| 2026-08-13 | `e8b752b` | Socket rate limiting (10 messages/sec) | `server/index.ts` |
+| 2026-08-13 | `e8b752b` | Key rotation rate limiting (3/hr/user) | `server/index.ts` |
+| 2026-08-13 | `e8b752b` | PBKDF2 iterations 100K → 600K (OWASP compliant) | `client/lib/crypto.ts` |
+| 2026-08-13 | `e8b752b` | Attachment upload rate limiting (10/min/user) | `server/index.ts` |
 
 ### Feature Additions
 | Date | Commit | Feature | File(s) |
@@ -152,6 +173,11 @@
 - All socket handlers use `(socket as any).authenticatedUserId` for identity verification
 - ECDH key cache keyed by peerId + publicKey prefix (invalidates on rotation)
 - Legacy SHA-256 passwords use timing-safe comparison
+- Socket message rate limiting: 10 messages/second per connection
+- Key rotation rate limiting: 3 rotations/hour per user
+- Attachment upload rate limiting: 10 uploads/minute per user
+- PBKDF2 iterations: 600,000 (OWASP 2023 compliant)
+- Channel keys re-distributed when new members are added
 
 ---
 
@@ -217,7 +243,7 @@ Client A                              Server                           Client B
 ### Key Management
 - ECDH P-256 for key exchange (client-to-client)
 - AES-256-GCM for message encryption
-- PBKDF2 for vault key wrapping (user password → vault key)
+- PBKDF2 for vault key wrapping (user password → vault key, 600K iterations)
 - ECDSA P-256 for key rotation signatures (separate from ECDH)
 - bcrypt for password hashing (server-side)
 - JWT HS256 for session tokens
