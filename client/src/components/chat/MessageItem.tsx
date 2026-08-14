@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
-  Camera, Mic, Paperclip, Copy, MoreHorizontal, Send,
+  Camera, Mic, Paperclip, Copy, MoreHorizontal, Send, Star,
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
@@ -61,6 +61,8 @@ interface MessageItemProps {
   onRemoveReaction?: (messageId: string, emoji: string) => void;
   allUsers?: User[];
   onForward?: (msg: LocalMessage) => void;
+  isStarred?: boolean;
+  onToggleStar?: (messageId: string, isStarred: boolean) => void;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -87,6 +89,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onRemoveReaction,
   allUsers = [],
   onForward,
+  isStarred = false,
+  onToggleStar,
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
@@ -295,6 +299,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
             {/* Timestamp + Lock + Delivery */}
             <div className="mt-1.5 flex items-center justify-end space-x-1.5">
+              {isStarred && <Star className="w-3 h-3 text-yellow-500" fill="#eab308" />}
               <span className="text-[10px] text-[var(--text-muted)] select-none">{timeStr}</span>
               <Lock className="w-2.5 h-2.5 text-emerald-500/60" />
               {isSelf && <DeliveryIcon status={msg.status} />}
@@ -433,6 +438,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   >
                     <Send className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
                     <span>Forward</span>
+                  </button>
+                )}
+
+                {/* Star / Unstar */}
+                {!msg.isDeleted && onToggleStar && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggleStar(msg.id, isStarred); setShowActions(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    <Star className="w-3.5 h-3.5" style={{ color: isStarred ? '#eab308' : 'var(--text-muted)' }} fill={isStarred ? '#eab308' : 'none'} />
+                    <span>{isStarred ? 'Unstar' : 'Star'}</span>
                   </button>
                 )}
 

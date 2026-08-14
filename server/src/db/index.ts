@@ -688,6 +688,37 @@ export async function getPinnedMessages(channelId: string): Promise<{ messageId:
   return res.rows.map((r: any) => ({ messageId: r.message_id, pinnedBy: r.pinned_by, pinnedAt: r.pinned_at }));
 }
 
+export async function starMessage(userId: string, messageId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO starred_messages (user_id, message_id, starred_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [userId, messageId, Date.now()]
+  );
+}
+
+export async function unstarMessage(userId: string, messageId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM starred_messages WHERE user_id = $1 AND message_id = $2', [userId, messageId]);
+}
+
+export async function getStarredMessages(userId: string): Promise<{ messageId: string; starredAt: number }[]> {
+  const db = getPool();
+  const res = await db.query('SELECT message_id, starred_at FROM starred_messages WHERE user_id = $1 ORDER BY starred_at DESC', [userId]);
+  return res.rows.map((r: any) => ({ messageId: r.message_id, starredAt: r.starred_at }));
+}
+
+export async function getStarredStatus(userId: string, messageIds: string[]): Promise<Record<string, boolean>> {
+  if (messageIds.length === 0) return {};
+  const db = getPool();
+  const res = await db.query(
+    'SELECT message_id FROM starred_messages WHERE user_id = $1 AND message_id = ANY($2)',
+    [userId, messageIds]
+  );
+  const map: Record<string, boolean> = {};
+  for (const r of res.rows) map[r.message_id] = true;
+  return map;
+}
+
 export async function getDatabaseStats(): Promise<{ users: number; channels: number; messages: number; attachments: number }> {
   const db = getPool();
   const [users, channels, messages, attachments] = await Promise.all([

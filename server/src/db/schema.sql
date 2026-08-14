@@ -117,3 +117,12 @@ CREATE TABLE IF NOT EXISTS pinned_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pinned_channel ON pinned_messages (channel_id);
+
+CREATE TABLE IF NOT EXISTS starred_messages (
+  user_id     TEXT NOT NULL,
+  message_id  TEXT NOT NULL,
+  starred_at  BIGINT NOT NULL,
+  PRIMARY KEY (user_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_starred_user ON starred_messages (user_id);

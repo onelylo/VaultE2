@@ -60,6 +60,10 @@ import {
   pinMessage,
   unpinMessage,
   getPinnedMessages,
+  starMessage,
+  unstarMessage,
+  getStarredMessages,
+  getStarredStatus,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -850,6 +854,61 @@ app.post('/api/reactions/batch', async (req, res) => {
     return res.json({ reactions });
   } catch (e) {
     console.error('[Reactions] Batch fetch error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Starred Messages ──────────────────────────────────────────────────────────
+app.post('/api/starred', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { messageId } = req.body;
+  if (!messageId) return res.status(400).json({ error: 'messageId required' });
+  try {
+    await starMessage(userId, messageId);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[Starred] Error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/starred/:messageId', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    await unstarMessage(userId, req.params.messageId);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[Unstarred] Error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/starred', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const starred = await getStarredMessages(userId);
+    return res.json({ starred });
+  } catch (e) {
+    console.error('[Starred] Fetch error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/starred/batch', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { messageIds } = req.body;
+  if (!Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({ error: 'messageIds array required' });
+  }
+  try {
+    const status = await getStarredStatus(userId, messageIds);
+    return res.json({ status });
+  } catch (e) {
+    console.error('[Starred] Batch error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 });

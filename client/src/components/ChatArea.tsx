@@ -221,6 +221,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     socket.emit('reaction:remove', { messageId, emoji });
   }, []);
 
+  // Starred messages
+  const [starredSet, setStarredSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!visibleMessages || visibleMessages.length === 0) return;
+    const ids = visibleMessages.map(m => m.id);
+    fetch('/api/starred/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageIds: ids }),
+    })
+      .then(r => r.json())
+      .then((data: { status: Record<string, boolean> }) => {
+        setStarredSet(new Set(Object.keys(data.status || {}).filter(k => data.status[k])));
+      })
+      .catch(() => {});
+  }, [visibleMessages?.map(m => m.id).join(',')]);
+
+  const handleToggleStar = useCallback(async (messageId: string, isStarred: boolean) => {
+    if (isStarred) {
+      setStarredSet(prev => { const next = new Set(prev); next.delete(messageId); return next; });
+      await fetch(`/api/starred/${messageId}`, { method: 'DELETE' }).catch(() => {});
+    } else {
+      setStarredSet(prev => new Set(prev).add(messageId));
+      await fetch('/api/starred', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      }).catch(() => {});
+    }
+  }, []);
+
   // Load more when scrolling to top
   const handleScrollTop = useCallback(() => {
     if (loadingMore || !allMessages || loadCount >= allMessages.length) return;
@@ -690,6 +722,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               onRemoveReaction={handleRemoveReaction}
               allUsers={allUsers}
               onForward={setForwardMsg}
+              isStarred={starredSet.has(msg.id)}
+              onToggleStar={handleToggleStar}
             />
           ))
         )}
