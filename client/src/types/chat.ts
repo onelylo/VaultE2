@@ -20,6 +20,7 @@ export interface User {
   createdAt?: number;
   blockedByMe?: boolean;
   blockedByThem?: boolean;
+  phone?: string;
 }
 
 export interface Channel {

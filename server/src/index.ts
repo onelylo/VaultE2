@@ -323,6 +323,7 @@ function publicUser(u: DbUser) {
     avatar:   avatar,
     status:   u.status || 'ACTIVE',
     statusMessage: u.statusMessage,
+    phone:    u.phone,
     publicKey: u.publicKey,
     signingPublicKey: u.signingPublicKey,
     keyVersion: u.keyVersion ?? 1,
@@ -390,7 +391,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   try {
-    const { fullName, email, avatarUrl, avatar, status, statusMessage, username } = req.body;
+    const { fullName, email, avatarUrl, avatar, status, statusMessage, username, phone } = req.body;
     // Security: Check username uniqueness if changing
     if (username) {
       const existing = await getUserByUsername(username).catch(() => undefined);
@@ -399,7 +400,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
       }
     }
     const finalAvatarUrl = avatarUrl || avatar;
-    await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username });
+    await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username, phone });
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });

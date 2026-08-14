@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ShieldCheck, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight, Ban, MessageSquare } from 'lucide-react';
+import { X, ShieldCheck, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight, Ban, MessageSquare, Phone } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import type { User, LocalMessage } from '../types/chat';
@@ -149,6 +149,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   {user.role}
                 </span>
               </div>
+              {user.phone && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>PHONE</span>
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                    <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{user.phone}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Actions */}

@@ -43,6 +43,7 @@ export interface DbUser {
   avatarUrl?: string;
   status?: string;
   statusMessage?: string;
+  phone?: string;
   deletedAt?: number | null;
   createdAt: number;
 }
@@ -172,7 +173,7 @@ function getPool(): pg.Pool {
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
-const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, deleted_at, created_at';
+const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
 
 function mapUserRow(row: any): DbUser {
   return {
@@ -193,6 +194,7 @@ function mapUserRow(row: any): DbUser {
     avatarUrl: row.avatar_url || undefined,
     status: row.status || 'ACTIVE',
     statusMessage: row.status_message || undefined,
+    phone: row.phone || undefined,
     deletedAt: row.deleted_at ? new Date(row.deleted_at).getTime() : null,
     createdAt: Number(row.created_at),
   };
@@ -273,7 +275,7 @@ export async function updateUserPassword(userId: string, passwordHash: string): 
   await getPool().query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [userId, passwordHash]);
 }
 
-export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string; username?: string }): Promise<void> {
+export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string; username?: string; phone?: string }): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [userId];
   let idx = 2;
@@ -283,6 +285,7 @@ export async function updateUserProfile(userId: string, data: { fullName?: strin
   if (data.status !== undefined) { sets.push(`status = $${idx++}`); vals.push(data.status); }
   if (data.statusMessage !== undefined) { sets.push(`status_message = $${idx++}`); vals.push(data.statusMessage); }
   if (data.username !== undefined) { sets.push(`username = $${idx++}`); vals.push(data.username); }
+  if (data.phone !== undefined) { sets.push(`phone = $${idx++}`); vals.push(data.phone); }
   if (sets.length === 0) return;
   await getPool().query(`UPDATE users SET ${sets.join(', ')} WHERE id = $1`, vals);
 }

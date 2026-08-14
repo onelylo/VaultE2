@@ -533,16 +533,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               {unread > 99 ? '99+' : unread}
                             </span>
                           )}
-                          {!isCollapsed && canEditChannel && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onOpenChannelSettings(channel); }}
-                              className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
-                              style={{ color: 'var(--text-muted)' }}
-                              title="Channel Settings"
-                            >
-                              <Settings className="w-3.5 h-3.5" />
-                            </button>
-                          )}
                           {!isCollapsed && (
                             <button
                               onClick={(e) => handleToggleMute(channel.id, e)}
@@ -619,16 +609,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             >
                               {unread > 99 ? '99+' : unread}
                             </span>
-                          )}
-                          {!isCollapsed && canEditChannel && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onOpenChannelSettings(channel); }}
-                              className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
-                              style={{ color: 'var(--text-muted)' }}
-                              title="Channel Settings"
-                            >
-                              <Settings className="w-3.5 h-3.5" />
-                            </button>
                           )}
                           {!isCollapsed && (
                             <button
