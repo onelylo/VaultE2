@@ -491,12 +491,10 @@ export async function updateChannel(channelId: string, data: Partial<Pick<DbChan
 
 export async function deleteChannel(channelId: string): Promise<void> {
   const db = getPool();
-  // Delete related data
   await db.query(`DELETE FROM channel_keys WHERE channel_id = $1`, [channelId]);
   await db.query(`DELETE FROM channel_members WHERE channel_id = $1`, [channelId]);
-  // Delete messages in this channel
+  await db.query(`DELETE FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE channel_id = $1)`, [channelId]);
   await db.query(`DELETE FROM messages WHERE channel_id = $1`, [channelId]);
-  // Delete the channel
   await db.query(`DELETE FROM channels WHERE id = $1`, [channelId]);
 }
 

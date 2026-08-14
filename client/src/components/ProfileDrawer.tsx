@@ -53,7 +53,6 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   onThemeChange,
 }) => {
   const [username, setUsername] = useState(currentUser.username || '');
-  const [fullName] = useState(currentUser.fullName || '');
   const [email, setEmail] = useState(currentUser.email || '');
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
@@ -127,7 +126,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           if (res.ok) { const data = await res.json(); finalAvatarUrl = data.avatarUrl; }
         }
       }
-      await onUpdateProfile({ fullName, email, avatar: finalAvatarUrl, username, phone });
+      await onUpdateProfile({ fullName: currentUser.fullName, email, avatar: finalAvatarUrl, username, phone });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -261,7 +260,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">FULL NAME</label>
-                    <input type="text" value={fullName} disabled
+                    <input type="text" value={currentUser.fullName || ''} disabled
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-muted)] cursor-not-allowed" />
                   </div>
                   <div>

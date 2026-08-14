@@ -1256,10 +1256,11 @@ export const App: React.FC = () => {
       }
     };
 
-    const onUserProfileUpdate = (data: { userId: string; fullName?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
+    const onUserProfileUpdate = (data: { userId: string; fullName?: string; username?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
       setAllUsers(prev => prev.map(u => u.userId === data.userId ? {
         ...u,
         fullName: data.fullName ?? u.fullName,
+        username: data.username ?? u.username,
         avatarUrl: data.avatarUrl ?? u.avatarUrl,
         statusMessage: data.statusMessage !== undefined ? data.statusMessage : u.statusMessage,
         phone: data.phone !== undefined ? data.phone : u.phone,
@@ -1268,6 +1269,7 @@ export const App: React.FC = () => {
         setCurrentUserKeys(prev => prev ? {
           ...prev,
           fullName: data.fullName ?? prev.fullName,
+          username: data.username ?? prev.username,
           avatarUrl: data.avatarUrl ?? prev.avatarUrl,
           statusMessage: data.statusMessage !== undefined ? data.statusMessage : prev.statusMessage,
           phone: data.phone !== undefined ? data.phone : prev.phone,
@@ -1847,8 +1849,6 @@ export const App: React.FC = () => {
       if (data.memberIds && currentUserKeys) {
         const channelKey = await getOrGenerateChannelKey(id);
         if (!channelKey) return;
-        const currentMembers = result.channel?.memberIds || [];
-        const newMemberIds = data.memberIds.filter(mid => !currentMembers.includes(mid) || currentMembers.indexOf(mid) === -1);
         const actualNewMembers = data.memberIds.filter(mid => {
           // Include members that were just added (not already in the previous list)
           const prevChannel = channels.find(c => c.id === id);

@@ -99,8 +99,6 @@ const JWT_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Token blocklist — PostgreSQL-backed (persistent across restarts)
-// In-memory fast-path for recently blocked tokens
-const tokenBlocklist = new Map<string, number>();
 // Rate limiting for key rotation: Map<userId, timestamps[]>
 const rotationsByUser = new Map<string, number[]>();
 // Rate limiting for uploads: Map<userId, timestamps[]>
@@ -176,6 +174,7 @@ async function verifyJwt(token: string): Promise<any> {
     if (await isTokenBlocked(tokenHash)) return null;
     const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64')
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    if (signature.length !== expected.length) return null;
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
     const decoded = JSON.parse(base64UrlDecode(payload));
     if (decoded.exp && Date.now() > decoded.exp) return null;
@@ -446,7 +445,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
     await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username, phone });
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage, phone: user.phone });
+    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
     return res.json({ user: publicUser(user, true) });
   } catch (e) {
     console.error('[Profile] Update error:', e);
@@ -822,6 +821,9 @@ app.patch('/api/admin/users/:id/password', async (req, res) => {
     const { newPassword } = req.body;
     if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a digit' });
     }
     await updateUserPassword(target.userId, await hashPassword(newPassword));
     await logAudit(adminId, 'force_password_reset', 'user', target.userId);
@@ -1335,14 +1337,14 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ATTACHMENT_BYTES },
   fileFilter: (_req, file, cb) => {
-    // L2: Only allow safe MIME types — encrypted payload looks opaque, so allow common types
     const allowed = [
       'image/', 'video/', 'audio/', 'application/pdf',
       'application/zip', 'application/x-7z-compressed', 'application/gzip',
       'text/plain', 'application/octet-stream',
     ];
     const ok = allowed.some(prefix => file.mimetype.startsWith(prefix));
-    cb(null, ok);
+    if (!ok) return cb(new Error('File type not allowed'));
+    cb(null, true);
   },
 });
 
@@ -1424,7 +1426,9 @@ app.get('/api/attachments/:id', async (req, res) => {
       }
     }
 
-    const abs = path.join(getUploadsDir(), attachment.filePath);
+    const uploadsDir = path.resolve(getUploadsDir());
+    const abs = path.resolve(path.join(uploadsDir, attachment.filePath));
+    if (!abs.startsWith(uploadsDir)) return res.status(400).json({ error: 'Invalid file path' });
     if (!fs.existsSync(abs)) return res.status(404).json({ error: 'File missing on disk' });
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment');
