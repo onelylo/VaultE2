@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '🎉', '🚀', '👀', '✅', '💯', '🤔', '👏', '💪', '🙏'];
 
@@ -15,7 +15,10 @@ interface ReactionPickerProps {
 export const ReactionPicker: React.FC<ReactionPickerProps> = ({ onSelect, existingEmojis = [], triggerClassName, triggerStyle, triggerOnMouseEnter, triggerOnMouseLeave, triggerLabel }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [customEmoji, setCustomEmoji] = useState('');
+  const [position, setPosition] = useState<'top' | 'bottom'>('top');
+  const [align, setAlign] = useState<'left' | 'right'>('left');
   const ref = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -26,6 +29,28 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({ onSelect, existi
     };
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
+  }, [isOpen]);
+
+  // Viewport boundary detection
+  useLayoutEffect(() => {
+    if (!isOpen || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const popupHeight = 280; // approximate height of reaction picker
+    const popupWidth = 270; // approximate width
+
+    // Vertical: prefer top, flip to bottom if not enough space
+    if (rect.top < popupHeight + 10) {
+      setPosition('bottom');
+    } else {
+      setPosition('top');
+    }
+
+    // Horizontal: prefer left, flip to right if overflow
+    if (rect.left + popupWidth > window.innerWidth) {
+      setAlign('right');
+    } else {
+      setAlign('left');
+    }
   }, [isOpen]);
 
   return (
@@ -42,7 +67,8 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({ onSelect, existi
       </button>
       {isOpen && (
         <div
-          className="absolute bottom-full left-0 mb-1 flex flex-col p-1.5 rounded-xl shadow-2xl z-50 animate-scaleIn"
+          ref={popupRef}
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} ${position === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} flex flex-col p-1.5 rounded-xl shadow-2xl z-50 animate-scaleIn`}
           style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
           onClick={e => e.stopPropagation()}
         >

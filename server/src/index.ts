@@ -1216,21 +1216,32 @@ app.patch('/api/channels/:channelId', async (req, res) => {
     }
     
     const { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds } = req.body;
+
+    // Detect new/removed members BEFORE mutation
+    const currentMemberIds = channel.memberIds || [];
+    const newMembers = memberIds ? memberIds.filter((id: string) => !currentMemberIds.includes(id)) : [];
+
     const { removedMembers } = await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds });
-    
+
     const updated = await getChannelById(req.params.channelId);
     await broadcastChannels();
-    
+
     // Emit member-specific events for real-time sidebar updates
     if (memberIds) {
-      const channel = await getChannelById(req.params.channelId);
-      const currentMembers = channel?.memberIds || [];
-      const newMembers = memberIds.filter((id: string) => !currentMembers.includes(id));
-      
       for (const memberId of newMembers) {
+        // Auto-join new member to channel room if they're online
+        const memberSocket = activeUsers.get(memberId);
+        if (memberSocket) {
+          io.to(memberSocket.socketId).socketsJoin(`channel:${req.params.channelId}`);
+        }
         io.emit('channel:member_added', { channelId: req.params.channelId, userId: memberId });
       }
       for (const memberId of removedMembers) {
+        // Remove from channel room
+        const memberSocket = activeUsers.get(memberId);
+        if (memberSocket) {
+          io.to(memberSocket.socketId).socketsLeave(`channel:${req.params.channelId}`);
+        }
         io.emit('channel:member_removed', { channelId: req.params.channelId, userId: memberId });
       }
       // Security: Notify remaining members that channel key needs rotation
@@ -1753,8 +1764,8 @@ io.on('connection', (socket) => {
       status: 'sent',
     });
 
-    // Broadcast to all other connected clients
-    socket.broadcast.emit('channel:message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
+    // Broadcast to channel members only (room-based delivery)
+    socket.to(`channel:${channelId}`).emit('channel:message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery

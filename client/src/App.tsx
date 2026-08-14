@@ -1699,17 +1699,24 @@ export const App: React.FC = () => {
       });
     }
 
-    // 3. Post channel key envelopes to server
-    if (token && keyEnvelopes.length > 0) {
-      await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ keys: keyEnvelopes })
-      });
-    }
-
-    // 4. Emit channel creation event
+    // 3. Emit channel creation event FIRST (server must create channel before we can post keys)
     socket.emit('channel:create', { ...channelData, createdBy: currentUserKeys.userId });
+
+    // 4. Post channel key envelopes AFTER a short delay (wait for server to create channel + members)
+    setTimeout(async () => {
+      if (token && keyEnvelopes.length > 0) {
+        try {
+          await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ keys: keyEnvelopes })
+          });
+        } catch (e) {
+          console.error('[ChannelKeys] Failed to distribute keys:', e);
+        }
+      }
+    }, 1000);
+
     // Fallback: re-fetch channels after a short delay in case broadcast is slow
     setTimeout(() => socket.emit('channels:get'), 500);
   };
