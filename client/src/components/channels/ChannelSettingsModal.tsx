@@ -156,13 +156,15 @@ function ChannelSettingsInner({
             </div>
             {/* Channel name - double-click to edit */}
             {canEditSettings && editingField === 'name' ? (
-              <input type="text" value={name} onChange={e => setName(e.target.value)}
-                onBlur={() => setEditingField(null)}
-                onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setName(channel.name); setEditingField(null); } }}
-                autoFocus
-                className="font-bold text-sm text-center bg-transparent border-b border-[var(--accent-primary)] focus:outline-none w-full max-w-[200px]"
-                style={{ color: 'var(--text-main)' }}
-              />
+              <div className="w-full max-w-[220px]">
+                <input type="text" value={name} onChange={e => setName(e.target.value)}
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setName(channel.name); setEditingField(null); } }}
+                  autoFocus
+                  className="w-full rounded-xl py-2 px-4 text-sm text-center font-bold focus:outline-none transition-all"
+                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' }}
+                />
+              </div>
             ) : (
               <h3 className="font-bold text-sm cursor-pointer hover:underline"
                 style={{ color: 'var(--text-main)' }}
@@ -185,13 +187,12 @@ function ChannelSettingsInner({
           {/* Description - double-click to edit */}
           {canEditSettings && editingField === 'description' ? (
             <div className="mb-3">
-              <label className="block text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</label>
               <input type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Set description..."
                 onBlur={() => setEditingField(null)}
                 onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setDescription(channel.description || ''); setEditingField(null); } }}
                 autoFocus
-                className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none"
+                className="w-full rounded-xl py-2 px-4 text-sm focus:outline-none transition-all"
                 style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' }}
               />
             </div>

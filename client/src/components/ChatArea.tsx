@@ -539,8 +539,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleConfirmDeleteForMe = async () => {
     if (!pendingDeleteForMeId) return;
-    const targetId = pendingDeleteForMeId;
-    if (db?.messages) await db.messages.delete(targetId);
+    onDeleteForMe?.(pendingDeleteForMeId);
     setPendingDeleteForMeId(null);
   };
 
