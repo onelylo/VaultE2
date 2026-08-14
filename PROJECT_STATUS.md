@@ -62,6 +62,24 @@
 | 2026-08-13 | `latest` | channel:create adds creator to channel_members | `server/index.ts` |
 | 2026-08-13 | `latest` | Offline queue: fixed stale closures using refs | `client/App.tsx` |
 | 2026-08-13 | `latest` | Offline queue: added try/catch to prevent isFlushing stuck on error | `client/App.tsx` |
+| 2026-08-13 | `ea62461` | Remote DoS fix: validate ciphertext before `.length` in socket handlers | `server/index.ts` |
+| 2026-08-13 | `ea62461` | Offline queue: channel message support (use channel symmetric key) | `client/lib/queue.ts` |
+| 2026-08-13 | `ea62461` | `arrayBufferToBase64` O(n²) → 32KB chunking | `client/lib/crypto.ts` |
+| 2026-08-13 | `ea62461` | channel:create persists invited `memberIds` | `server/index.ts` |
+| 2026-08-13 | `ea62461` | Channel privacy: per-user filtered `broadcastChannels()` | `server/index.ts` |
+| 2026-08-13 | `ea62461` | Attachment N+1 → batch `getAttachmentsByMessageIds` | `server/index.ts`, `server/db/index.ts` |
+| 2026-08-13 | `ea62461` | `computeUnread` reactive via Dexie `liveQuery` (no 2s polling) | `client/App.tsx` |
+| 2026-08-13 | `a299017` | Channel read receipts now match `channelId` | `client/App.tsx` |
+| 2026-08-13 | `a299017` | `channel_members(user_id)` index added | `server/db/schema.sql` |
+| 2026-08-13 | `a299017` | `fs.writeFileSync` → async `fs.promises.writeFile` | `server/index.ts` |
+| 2026-08-13 | `a299017` | Token blocklist eviction via expiry map | `server/index.ts` |
+| 2026-08-13 | `a299017` | Username editing now persisted (server + client) | `server/index.ts`, `server/db/index.ts`, `client/App.tsx` |
+| 2026-08-13 | `a299017` | Typing indicator key mismatch fixed (username in stop event) | `server/index.ts`, `client/App.tsx` |
+| 2026-08-13 | `a299017` | `CreateChannelModal` grants SUPERVISOR create | `CreateChannelModal.tsx` |
+| 2026-08-13 | `a299017` | "Stay logged in" text corrected (not 30 days) | `AuthModal.tsx` |
+| 2026-08-13 | `a299017` | Rules-of-hooks violation in ChannelSettingsModal | `ChannelSettingsModal.tsx` |
+| 2026-08-13 | `a299017` | Removed unused imports + temp files | multiple |
+| 2026-08-13 | `a299017` | N+1 channel member queries → batch | `server/db/index.ts` |
 | 2026-08-13 | `latest` | AttachmentMessage: use getJwtToken helper (localStorage + sessionStorage) | `client/AttachmentMessage.tsx` |
 | 2026-08-13 | `latest` | Reactions/pins: use socket.broadcast instead of io.emit | `server/index.ts` |
 | 2026-08-13 | `0ca9f09` | Message/reaction/pin spoofing prevention (server uses authenticatedUserId) | `server/index.ts` |
@@ -113,12 +131,17 @@
 ### Unfixed Issues
 | Severity | Issue | Status |
 |----------|-------|--------|
-| MEDIUM | Channel edit/delete broadcasts to ALL clients (no channel rooms) | Known limitation — needs channel room refactor |
 | MEDIUM | `EditUserModal` save handler ignores fullName/status/newPassword/revokeKeys | No backend endpoints exist |
 | MEDIUM | Browser `alert()` used for feedback (15 instances) | Should use inline UI |
+| MEDIUM | `/api/messages` returns unbounded history, no pagination | Needs pagination |
+| MEDIUM | Reaction/pin handlers don't verify participant membership | Needs membership check |
+| MEDIUM | JWT role changes take up to 1h to apply | By design (JWT expiry) |
+| MEDIUM | `DB_PASS` regenerates every boot without env var | Needs persistent secret |
 | LOW | `isMobile` computed once per render (no resize listener) | Low priority |
 | LOW | Fingerprint loading for all users runs expensive async crypto on every directory update | Performance |
 | LOW | `formatBytes` duplicated in server files | Code smell |
+| LOW | Hardcoded dev credentials in test scripts | Dev only, git-ignored |
+| LOW | ~40 console.log debug statements in production | Cleanup |
 
 ### Security Notes
 - JWT stored in localStorage (default) or sessionStorage (when "Stay logged in" unchecked)
