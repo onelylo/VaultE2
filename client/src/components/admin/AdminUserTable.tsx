@@ -1,5 +1,5 @@
-import React from 'react';
-import { Settings, Loader2, Shield, UserCog } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Loader2, Shield, UserCog, Trash2, AlertCircle } from 'lucide-react';
 import type { AdminUser } from '../../types/chat';
 
 interface AdminUserTableProps {
@@ -23,7 +23,7 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
 }) => {
   return (
     <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-      <div className="grid grid-cols-[1fr_100px_70px_110px_70px] gap-2 px-4 py-3 text-[10px] font-bold tracking-wider" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-card) 60%, transparent)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+      <div className="grid grid-cols-[1fr_100px_70px_110px_70px_70px] gap-2 px-4 py-3 text-[10px] font-bold tracking-wider" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-card) 60%, transparent)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
         <span>USER</span>
         <span>ROLE</span>
         <span className="text-center">STATUS</span>
@@ -34,10 +34,11 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
       {users.map(user => {
         const isSelf = user.userId === currentUser.userId;
         const isBusy = busyId === user.userId;
+        const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
         return (
           <div
             key={user.userId}
-            className="grid grid-cols-[1fr_100px_70px_110px_70px] gap-2 items-center px-4 py-3 transition-smooth"
+            className="grid grid-cols-[1fr_100px_70px_110px_70px_70px] gap-2 items-center px-4 py-3 transition-smooth"
             style={{ borderBottom: '1px solid var(--border-color)' }}
             onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -95,17 +96,70 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
               {isSelf ? (
                 <span className="text-[9px] px-2" style={{ color: 'var(--text-muted)' }}>SELF</span>
               ) : (
-                <button
-                  onClick={() => onEditUser(user)}
-                  disabled={isBusy}
-                  title="Manage User — Role, Status, Password, Keys"
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-smooth disabled:opacity-40"
-                  style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-primary)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent-primary) 50%, transparent)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-                >
-                  {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
-                </button>
+                <>
+                  <button
+                    onClick={() => onEditUser(user)}
+                    disabled={isBusy}
+                    title="Manage User — Role, Status, Password, Keys"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center transition-smooth disabled:opacity-40"
+                    style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-primary)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent-primary) 50%, transparent)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
+                  >
+                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={isBusy}
+                    title="Delete User (preserves message history & keys for decryption)"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center transition-smooth disabled:opacity-40 ml-1"
+                    style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
+                  >
+                    {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                  {showDeleteConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowDeleteConfirm(false)}>
+                      <div className="absolute inset-0 bg-black/70" />
+                      <div className="relative z-10 w-full max-w-md rounded-2xl p-6 animate-scaleIn" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <AlertCircle className="w-6 h-6 flex-shrink-0" style={{ color: '#ef4444' }} />
+                          <h3 className="text-lg font-bold" style={{ color: 'var(--text-main)' }}>Delete User</h3>
+                        </div>
+                        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+                          Delete <strong style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</strong> (@{user.username})?
+                          <br /><br />
+                          <strong style={{ color: '#fbbf24' }}>⚠ This action cannot be undone.</strong>
+                          <br /><br />
+                          Message history and encryption keys will be preserved so existing conversations remain decryptable.
+                          The user will not be able to log in.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="px-4 py-2 text-sm font-medium rounded-lg transition-smooth"
+                            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setShowDeleteConfirm(true); // Keep modal open during request
+                              await onDelete(user);
+                              setShowDeleteConfirm(false);
+                            }}
+                            disabled={isBusy}
+                            className="px-4 py-2 text-sm font-medium rounded-lg transition-smooth"
+                            style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}
+                          >
+                            {isBusy ? <Loader2 className="w-4 h-4 animate-spin inline-block" /> : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

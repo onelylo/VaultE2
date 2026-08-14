@@ -5,6 +5,66 @@ const FLAG_COUNTRY_MAP: Record<string, string> = {
   '🏁': 'Checkered Flag', '🚩': 'Triangular Flag', '🎌': 'Crossed Flags', '🏴': 'Black Flag', '🏳️': 'White Flag', '🏳️‍🌈': 'Rainbow Flag', '🏳️‍⚧️': 'Transgender Flag', '🏴‍☠️': 'Pirate Flag',
 };
 
+// Convert flag emoji to ISO country code (e.g., 🇺🇸 -> 'us')
+function flagEmojiToCountryCode(emoji: string): string | null {
+  // Regional indicator symbols range: U+1F1E6 to U+1F1FF (A-Z)
+  // Flag emoji is two regional indicators
+  const codePoints = [...emoji].map(c => c.codePointAt(0) || 0);
+  if (codePoints.length === 2 && codePoints[0] >= 0x1F1E6 && codePoints[0] <= 0x1F1FF && codePoints[1] >= 0x1F1E6 && codePoints[1] <= 0x1F1FF) {
+    const first = String.fromCharCode(codePoints[0] - 0x1F1E6 + 65).toLowerCase();
+    const second = String.fromCharCode(codePoints[1] - 0x1F1E6 + 65).toLowerCase();
+    return first + second;
+  }
+  // Special cases
+  const specialFlags: Record<string, string> = {
+    '🏳️‍🌈': 'rainbow',
+    '🏳️‍⚧️': 'transgender',
+    '🏴‍☠️': 'pirate',
+    '🏁': 'checkered',
+    '🚩': 'triangular',
+    '🎌': 'crossed',
+    '🏴': 'black',
+    '🏳️': 'white',
+  };
+  return specialFlags[emoji] || null;
+}
+
+// Render flag as SVG image (works on all platforms including Windows)
+function FlagIcon({ emoji, size = 24 }: { emoji: string; size?: number }) {
+  const countryCode = flagEmojiToCountryCode(emoji);
+  if (!countryCode) return <span style={EMOJI_STYLE}>{emoji}</span>;
+  
+  // Special non-country flags
+  const specialFlags: Record<string, string> = {
+    'rainbow': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/rainbow-flag.svg',
+    'transgender': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/transgender-flag.svg',
+    'pirate': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/jolly-roger.svg',
+    'checkered': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/checkered-flag.svg',
+    'triangular': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/triangular-flag.svg',
+    'crossed': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/crossed-flags.svg',
+    'black': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/black-flag.svg',
+    'white': 'https://raw.githubusercontent.com/hampusborgos/country-flags/main/svg/non/white-flag.svg',
+  };
+  
+  const url = specialFlags[countryCode] 
+    ? specialFlags[countryCode]
+    : `https://flagcdn.com/w${size * 2}/${countryCode}.png`; // Use PNG for better compatibility
+  
+  return (
+    <img
+      src={url}
+      alt={FLAG_COUNTRY_MAP[emoji] || emoji}
+      title={FLAG_COUNTRY_MAP[emoji] || emoji}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '2px',
+        objectFit: 'cover',
+      }}
+    />
+  );
+}
+
 function isFlagEmoji(emoji: string): boolean {
   return FLAG_COUNTRY_MAP.hasOwnProperty(emoji);
 }
@@ -159,7 +219,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <span style={EMOJI_STYLE}>{emoji}</span>
+                {isFlagEmoji(emoji) ? <FlagIcon emoji={emoji} size={24} /> : <span style={EMOJI_STYLE}>{emoji}</span>}
               </button>
             ))}
           </div>
@@ -184,7 +244,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, isOpen }) =>
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    <span style={EMOJI_STYLE}>{emoji}</span>
+                    {isFlagEmoji(emoji) ? <FlagIcon emoji={emoji} size={24} /> : <span style={EMOJI_STYLE}>{emoji}</span>}
                   </button>
                 ))}
               </div>
