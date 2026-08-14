@@ -80,9 +80,9 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fadeIn">
-      <div className="w-full max-w-md glass-modal rounded-2xl p-6 bg-[var(--bg-surface)] text-[var(--text-main)] border border-[var(--border-color)] shadow-2xl relative">
+      <div className="w-full max-w-md max-h-[85vh] glass-modal rounded-2xl bg-[var(--bg-surface)] text-[var(--text-main)] border border-[var(--border-color)] shadow-2xl relative flex flex-col overflow-hidden">
         
-        <div className="flex items-center justify-between pb-4 border-b border-[var(--border-color)] mb-4">
+        <div className="flex items-center justify-between p-4 pb-3 border-b border-[var(--border-color)] shrink-0">
           <div className="flex items-center gap-2 text-[var(--accent-primary)] font-bold text-sm">
             <Shield className="w-5 h-5"/>
             <span>Manage User Account — @{user.username}</span>
@@ -92,9 +92,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
           </button>
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>
-          {/* Read-only info */}
-          <div className="space-y-2">
+        <form ref={formRef} onSubmit={handleSubmit} className={`flex flex-col flex-1 min-h-0 ${shaking ? 'animate-shake' : ''}`}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
             <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
               <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>USERNAME</span>
               <span className="text-xs" style={{ color: 'var(--text-main)' }}>@{user.username}</span>
@@ -207,8 +206,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
             </label>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
+          {/* Actions - fixed footer */}
+          <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--border-color)] shrink-0">
             <button type="button" onClick={onClose} className="px-3 py-2 text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-main)]">
               CANCEL
             </button>

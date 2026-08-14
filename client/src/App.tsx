@@ -1151,19 +1151,16 @@ export const App: React.FC = () => {
     };
 
     const onMessageReadAck = async ({ conversationId }: { conversationId: string }) => {
-      // Sender's copy: upgrade messages sent to this conversation to 'read' status
-      const myId = currentUserKeys?.userId;
+      const myId = currentUserKeysRef.current?.userId;
       if (!myId) return;
-      // Use targeted query: only messages I sent to this recipient/channel that aren't read yet
       const sentMsgs = await db.messages.where('senderId').equals(myId).toArray();
       const unreadSent = sentMsgs.filter(m => 
         (m.recipientId === conversationId || m.channelId === conversationId) && 
         m.status !== 'read'
       );
-      if (unreadSent.length > 0) {
-        for (const m of unreadSent) {
-          await db.messages.update(m.id, { status: 'read' });
-        }
+      for (const m of unreadSent) {
+        // Use put() for reliable Dexie observable triggering
+        await db.messages.put({ ...m, status: 'read' as const });
       }
     };
 
