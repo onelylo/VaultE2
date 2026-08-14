@@ -171,10 +171,14 @@ export const App: React.FC = () => {
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const [awayIds, setAwayIds] = useState<Set<string>>(new Set());
 
-  // Always keep allUsersRef synchronized with latest state
-  useEffect(() => {
-    allUsersRef.current = allUsers;
-  }, [allUsers]);
+  // Keep allUsersRef synchronized with state (synchronous, not deferred)
+  const setAllUsersAndRef = useCallback((updater: User[] | ((prev: User[]) => User[])) => {
+    setAllUsersAndRef(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      allUsersRef.current = next;
+      return next;
+    });
+  }, []);
 
   // ── Navigation & Workspace State ──────────────────────────────────────────────
   const [activeView, setActiveView] = useState<'channels' | 'dms'>('dms');
@@ -250,7 +254,7 @@ export const App: React.FC = () => {
       if (!res.ok) return null;
       const data = await res.json();
       const freshUsers: User[] = data.users || [];
-      setAllUsers(prev => {
+      setAllUsersAndRef(prev => {
         const merged = [...prev];
         for (const u of freshUsers) {
           const idx = merged.findIndex(m => m.userId === u.userId);
@@ -651,7 +655,7 @@ export const App: React.FC = () => {
       const res = await fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data = await res.json();
-      setAllUsers(data.users || []);
+      setAllUsersAndRef(data.users || []);
       const onlineSet = new Set<string>((data.users || []).filter((u: User) => u.isOnline).map((u: User) => u.userId));
       setOnlineIds(onlineSet);
     } catch (e) {
@@ -934,7 +938,7 @@ export const App: React.FC = () => {
     setPrivateKeyObject(null);
     setSelectedPeer(null);
     setSelectedChannel(null);
-    setAllUsers([]);
+    setAllUsersAndRef([]);
     setOnlineIds(new Set());
     setShowAdmin(false);
     setAvatarMenu(null);
@@ -1015,7 +1019,7 @@ export const App: React.FC = () => {
   // ── Socket Event Listeners ────────────────────────────────────────────────────
   useEffect(() => {
     const onUsersDirectory = (usersList: User[]) => {
-      setAllUsers(usersList);
+      setAllUsersAndRef(usersList);
       const online = new Set(usersList.filter(u => u.isOnline).map(u => u.userId));
       setOnlineIds(online);
     };
@@ -1042,7 +1046,7 @@ export const App: React.FC = () => {
     };
 
     const onMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
-      if (!currentUserKeys || !privateKeyObject) return;
+      if (!currentUserKeysRef.current || !privateKeyObjectRef.current) return;
       const localMsg = await decryptPayloadRef.current(payload);
       if (!localMsg) return;
       await saveMessage(localMsg);
@@ -1074,7 +1078,7 @@ export const App: React.FC = () => {
 
       // 2. If recipient ALREADY has this conversation thread open, emit read receipt immediately!
       if (selectedPeerRef.current?.userId === payload.senderId) {
-        socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: payload.senderId, lastReadMessageId: payload.id });
+        socket.emit('message:read', { conversationId: currentUserKeysRef.current?.userId, senderId: payload.senderId, lastReadMessageId: payload.id });
         // Update lastViewed so this message won't show as unread after refresh
         setLastViewedDms(prev => ({ ...prev, [payload.senderId]: localMsg.timestamp }));
         lastViewedDmsRef.current = { ...lastViewedDmsRef.current, [payload.senderId]: localMsg.timestamp };
@@ -1167,7 +1171,7 @@ export const App: React.FC = () => {
     // Reactive roster: a user just came online — add their full data to allUsers
     // so E2EE decryption works for messages and attachments
     const onUserOnline = (user: User) => {
-      setAllUsers(prev => {
+      setAllUsersAndRef(prev => {
         const existing = prev.find(u => u.userId === user.userId);
         if (existing) {
           // Update existing user with fresh data (public key may have changed)
@@ -1196,7 +1200,7 @@ export const App: React.FC = () => {
 
     // Peer rotated their identity key — re-validate the signed chain locally.
     const onUserKeyRotated = async (data: { userId: string; publicKey: string; signingPublicKey: string; keyVersion: number; keyRotationSignature: string; oldPublicKey: string; oldSigningPublicKey?: string }) => {
-      setAllUsers(prev => prev.map(u => u.userId === data.userId ? {
+      setAllUsersAndRef(prev => prev.map(u => u.userId === data.userId ? {
         ...u,
         publicKey: data.publicKey,
         signingPublicKey: data.signingPublicKey,
@@ -1213,11 +1217,11 @@ export const App: React.FC = () => {
     const onUserRemoved = (data: { userId: string }) => {
       // Keep the user in allUsers but mark as deleted so their public key
       // is still available for decrypting cached messages
-      setAllUsers(prev => prev.map(u => u.userId === data.userId ? { ...u, isOnline: false, statusMessage: '[deleted]' } : u));
+      setAllUsersAndRef(prev => prev.map(u => u.userId === data.userId ? { ...u, isOnline: false, statusMessage: '[deleted]' } : u));
     };
 
     const onUserRoleChange = async (data: { userId: string; role: UserRole }) => {
-      setAllUsers(prev => prev.map(u => u.userId === data.userId ? { ...u, role: data.role } : u));
+      setAllUsersAndRef(prev => prev.map(u => u.userId === data.userId ? { ...u, role: data.role } : u));
       if (currentUserKeys?.userId === data.userId) {
         const updated: UserKeyPair = { ...currentUserKeys, role: data.role };
         await saveUserKeyPair(updated);
@@ -1226,7 +1230,7 @@ export const App: React.FC = () => {
     };
 
     const onUserProfileUpdate = (data: { userId: string; fullName?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
-      setAllUsers(prev => prev.map(u => u.userId === data.userId ? {
+      setAllUsersAndRef(prev => prev.map(u => u.userId === data.userId ? {
         ...u,
         fullName: data.fullName ?? u.fullName,
         avatarUrl: data.avatarUrl ?? u.avatarUrl,
@@ -1426,7 +1430,7 @@ export const App: React.FC = () => {
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
     };
-  }, [currentUserKeys, privateKeyObject]);
+  }, []); // Stable — handlers use refs for latest state
 
   // ── Ctrl+K Search Shortcut ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1891,6 +1895,10 @@ export const App: React.FC = () => {
   const historyFetchedRef = useRef(false);
 
   // Refs for callbacks that change frequently (to stabilize socket listener useEffect)
+  const currentUserKeysRef = useRef(currentUserKeys);
+  currentUserKeysRef.current = currentUserKeys;
+  const privateKeyObjectRef = useRef(privateKeyObject);
+  privateKeyObjectRef.current = privateKeyObject;
   const decryptPayloadRef = useRef(decryptPayload);
   decryptPayloadRef.current = decryptPayload;
   const fetchUserDirectoryRef = useRef(fetchUserDirectory);
@@ -2248,10 +2256,10 @@ export const App: React.FC = () => {
               onForwardMessage={handleForwardMessage}
               channels={channels}
               onBlockUser={(userId) => {
-                setAllUsers(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: true } : u));
+                setAllUsersAndRef(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: true } : u));
               }}
               onUnblockUser={(userId) => {
-                setAllUsers(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: false } : u));
+                setAllUsersAndRef(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: false } : u));
               }}
             />
           </div>
