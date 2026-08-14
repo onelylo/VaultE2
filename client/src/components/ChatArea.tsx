@@ -208,16 +208,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       if (selectedChannel) {
         const msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
         setAllMessages(prev => {
+          const dbMap = new Map(msgs.map(m => [m.id, m]));
           const prevMap = new Map(prev.map(m => [m.id, m]));
           let changed = false;
+          // Update existing entries and add new ones
           for (const msg of msgs) {
             const existing = prevMap.get(msg.id);
-            if (!existing) {
-              // New message not in current list
+            if (!existing || existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
               prevMap.set(msg.id, msg);
               changed = true;
-            } else if (existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
-              prevMap.set(msg.id, msg);
+            }
+          }
+          // Remove entries no longer in DB (handles tempId→serverId transition)
+          for (const id of prevMap.keys()) {
+            if (!dbMap.has(id)) {
+              prevMap.delete(id);
               changed = true;
             }
           }
@@ -230,15 +235,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         ]);
         const msgs = [...sent, ...received];
         setAllMessages(prev => {
+          const dbMap = new Map(msgs.map(m => [m.id, m]));
           const prevMap = new Map(prev.map(m => [m.id, m]));
           let changed = false;
           for (const msg of msgs) {
             const existing = prevMap.get(msg.id);
-            if (!existing) {
+            if (!existing || existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
               prevMap.set(msg.id, msg);
               changed = true;
-            } else if (existing.status !== msg.status || existing.isDeleted !== msg.isDeleted) {
-              prevMap.set(msg.id, msg);
+            }
+          }
+          // Remove entries no longer in DB (handles tempId→serverId transition)
+          for (const id of prevMap.keys()) {
+            if (!dbMap.has(id)) {
+              prevMap.delete(id);
               changed = true;
             }
           }

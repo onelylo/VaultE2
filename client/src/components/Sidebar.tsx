@@ -491,11 +491,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       const canEditChannel = currentUser?.role === 'ADMIN' || channel.createdBy === currentUser?.userId;
                       const unread = unreadChannels[channel.id] || 0;
                       return (
-                        <button
+                        <div
                           key={channel.id}
                           onClick={() => handleSelectChannelWrapper(channel)}
                           title={`#${channel.name}`}
-                          className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSelectChannelWrapper(channel); }}
+                          className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth cursor-pointer"
                           style={{
                             backgroundColor: isSelected ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)' : unread > 0 ? 'color-mix(in srgb, var(--accent-primary) 5%, transparent)' : 'transparent',
                             border: isSelected ? `1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)` : '1px solid transparent'
@@ -543,7 +546,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               {mutedSet.has(channel.id) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                             </button>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                 </div>
@@ -565,11 +568,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       const canEditChannel = currentUser?.role === 'ADMIN' || channel.createdBy === currentUser?.userId;
                       const unread = unreadChannels[channel.id] || 0;
                       return (
-                        <button
+                        <div
                           key={channel.id}
                           onClick={() => handleSelectChannelWrapper(channel)}
                           title={`#${channel.name}`}
-                          className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSelectChannelWrapper(channel); }}
+                          className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth cursor-pointer"
                           style={{
                             backgroundColor: isSelected ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)' : unread > 0 ? 'color-mix(in srgb, var(--accent-primary) 5%, transparent)' : 'transparent',
                             border: isSelected ? `1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)` : '1px solid transparent'
@@ -620,7 +626,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               {mutedSet.has(channel.id) ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                             </button>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                 </div>
@@ -659,11 +665,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const unread = unreadDMs[user.userId] || 0;
 
               return (
-                <button
+                <div
                   key={user.userId}
                   onClick={() => handleSelectUserWrapper(user)}
                   title={`${user.fullName || user.username} (${user.role})`}
-                  className="w-full text-left px-2 py-2 rounded-lg flex items-center group transition-smooth"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(user); }}
+                  className="w-full text-left px-2 py-2 rounded-lg flex items-center group transition-smooth cursor-pointer"
                   style={{
                     backgroundColor: isSelected
                       ? 'color-mix(in srgb, var(--accent-primary) 12%, transparent)'
@@ -751,7 +760,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </button>
                     )}
                   </div>
-                </button>
+                </div>
               );
             })}
             {hiddenDMUsers.length > 0 && !searchMode && (
@@ -765,11 +774,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   const isOnline = liveUser.isOnline ?? false;
                   const isAway = liveUser.isAway ?? false;
                   return (
-                    <button
+                    <div
                       key={`hidden-${user.userId}`}
                       onClick={() => handleSelectUserWrapper(user)}
                       title={`${user.fullName || user.username} - Click to open, hover to unhide`}
-                      className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(user); }}
+                      className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth cursor-pointer"
                       style={{ opacity: 0.5 }}
                     >
                       <div className="flex items-center space-x-2.5 min-w-0">
@@ -803,7 +815,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <MessageCircle className="w-3.5 h-3.5" />
                         </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

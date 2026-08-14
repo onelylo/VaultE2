@@ -326,6 +326,40 @@ export const App: React.FC = () => {
               // This candidate didn't encrypt this envelope, try next
             }
           }
+        } else if (res.status === 404) {
+          // No key exists for this channel (e.g., default seeded channel)
+          // Generate a new key and distribute it to all members
+          try {
+            const newKeyObj = await generateChannelSymmetricKey();
+            const newKeyJwk = await exportKeyToJwk(newKeyObj);
+            await saveChannelKey({ channelId, keyJwk: newKeyJwk });
+            setChannelKeysCache(prev => new Map(prev).set(channelId, newKeyObj));
+
+            // Encrypt for all members
+            const channel = channels.find(c => c.id === channelId);
+            const memberIds = channel?.memberIds || allUsers.map(u => u.userId);
+            const envelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
+            for (const mid of memberIds) {
+              const memberUser = allUsers.find(u => u.userId === mid);
+              if (!memberUser?.publicKey) continue;
+              try {
+                const sharedKey = await getOrDeriveSharedKey(mid, memberUser.publicKey);
+                if (!sharedKey) continue;
+                const encryptedData = await encryptChannelKeyForUser(newKeyJwk, sharedKey);
+                envelopes.push({ userId: mid, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv });
+              } catch {}
+            }
+            if (envelopes.length > 0) {
+              await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ keys: envelopes }),
+              }).catch(() => {});
+            }
+            return newKeyObj;
+          } catch (e) {
+            console.error('[ChannelKey] Failed to generate key for default channel:', e);
+          }
         }
       }
 
