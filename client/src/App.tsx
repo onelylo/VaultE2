@@ -657,11 +657,10 @@ export const App: React.FC = () => {
         const updated = { ...prev };
         if (data.fullName) updated.fullName = data.fullName;
         if (data.email) updated.email = data.email;
-        if (data.avatar) updated.avatarUrl = data.avatar;
+        if (data.avatar) updated.avatarUrl = result.user?.avatarUrl ?? data.avatar;
         if (data.username) updated.username = data.username;
         if (data.statusMessage !== undefined) updated.statusMessage = data.statusMessage;
         if (data.phone !== undefined) updated.phone = data.phone;
-        // Persist to IndexedDB so changes survive refresh
         saveUserKeyPair(updated).catch(() => {});
         return updated;
       });
