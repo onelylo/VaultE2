@@ -32,6 +32,7 @@
 - IndexedDB local storage with Dexie.js
 - Offline queue with auto-flush
 - Keyboard shortcuts (Ctrl+K search)
+- 3-state user presence: online (green), away >5min inactive (amber), offline (gray) with 60s heartbeat
 
 ### Tech Stack
 | Layer | Technology |
@@ -123,6 +124,8 @@
 | 2026-08-13 | `ce6e692` | Action menu closes on outside click and when another 3-dot is clicked | `client/MessageItem.tsx` |
 | 2026-08-13 | `e76d732` | Reduced enlarged avatar size from 90vw to 50vw | `client/ProfileModal.tsx` |
 | 2026-08-13 | `e76d732` | Image lightbox: hide title/X when zoomed, slide-down-to-close gesture | `client/modals/ImageLightboxModal.tsx` |
+| 2026-08-13 | `dd12368` | 3-state presence (online/away/offline) with 60s heartbeat | `server/index.ts`, `client/App.tsx`, `client/lib/queue.ts` |
+| 2026-08-13 | `dd12368` | Presence indicators: green=online, amber=away, gray=offline | `client/Sidebar.tsx`, `client/ChatArea.tsx`, `client/ProfileModal.tsx` |
 
 ---
 
