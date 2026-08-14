@@ -2,7 +2,6 @@ import React from 'react';
 
 export const EMOJI_STYLE: React.CSSProperties = {
   fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color", "Android Emoji", sans-serif',
-  fontSize: '1.5rem',
   lineHeight: 1,
   display: 'inline-flex',
   alignItems: 'center',
@@ -64,13 +63,18 @@ function FlagIconInner({ emoji, size = 24 }: { emoji: string; size?: number }) {
     ? specialFlags[countryCode]
     : `https://flagcdn.com/w${size * 2}/${countryCode}.png`;
 
+  const [imageError, setImageError] = React.useState(false);
+
+  if (imageError) {
+    return <span style={EMOJI_STYLE}>{emoji}</span>;
+  }
+
   return (
     <img
       src={url}
       alt={FLAG_COUNTRY_MAP[emoji] || emoji}
       title={FLAG_COUNTRY_MAP[emoji] || emoji}
-      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-      onLoad={(e) => { e.currentTarget.style.display = 'inline'; }}
+      onError={() => setImageError(true)}
       style={{
         width: size,
         height: size,
