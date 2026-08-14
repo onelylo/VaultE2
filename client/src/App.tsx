@@ -1398,9 +1398,12 @@ export const App: React.FC = () => {
   // ── Offline Queue Auto-Flush ──────────────────────────────────────────────────
   const offlineQueueRef = useRef({ sharedKeysCache, privateKeyObject, allUsers });
   useEffect(() => { offlineQueueRef.current = { sharedKeysCache, privateKeyObject, allUsers }; }, [sharedKeysCache, privateKeyObject, allUsers]);
-  useEffect(() => {
-    if (!currentUserKeys || !networkStatus.isSocketConnected || isFlushing.current) return;
+
+  const flushOfflineQueue = useCallback(() => {
+    if (!currentUserKeys || isFlushing.current || !getJwtToken()) return;
     isFlushing.current = true;
+    // Safety reset after 10s in case onQueueEmpty never fires
+    setTimeout(() => { isFlushing.current = false; }, 10000);
     processOfflineQueue({
       senderId: currentUserKeys.userId,
       socket,
@@ -1411,7 +1414,19 @@ export const App: React.FC = () => {
       onMessageFlushed: () => {},
       onQueueEmpty: () => { isFlushing.current = false; }
     }).catch(() => { isFlushing.current = false; });
-  }, [networkStatus.isSocketConnected]);
+  }, [currentUserKeys]);
+
+  // Flush when socket connects
+  useEffect(() => {
+    if (networkStatus.isSocketConnected) flushOfflineQueue();
+  }, [networkStatus.isSocketConnected, flushOfflineQueue]);
+
+  // Also listen for socket connect event directly to catch edge cases
+  useEffect(() => {
+    const handleConnect = () => { setTimeout(flushOfflineQueue, 500); };
+    socket.on('connect', handleConnect);
+    return () => { socket.off('connect', handleConnect); };
+  }, [flushOfflineQueue]);
 
   // Load stored channels on mount
   useEffect(() => {
