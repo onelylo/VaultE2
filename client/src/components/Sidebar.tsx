@@ -87,6 +87,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [activeDMPartners, setActiveDMPartners] = useState<string[]>([]);
   const [searchMode, setSearchMode] = useState(false);
 
+  // Muted conversations
+  const [mutedSet, setMutedSet] = useState<Set<string>>(new Set());
+
+  // Blocked users
+  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
+
   const otherUsers = users.filter(u => u.userId !== currentUser?.userId && u.statusMessage !== '[deleted]');
   const onlineCount = otherUsers.filter(u => u.isOnline).length;
 
@@ -141,14 +147,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     load();
   }, [users]);
 
-  // Muted conversations
-  const [mutedSet, setMutedSet] = useState<Set<string>>(new Set());
   useEffect(() => {
     getMutedConversations().then(setMutedSet);
   }, []);
 
-  // Blocked users
-  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
   useEffect(() => {
     getBlockedUsers().then(setBlockedSet);
   }, []);
