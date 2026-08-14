@@ -249,7 +249,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   type ReactionEntry = { userId: string; emoji: string };
   const [reactionsMap, setReactionsMap] = useState<Map<string, ReactionEntry[]>>(new Map());
 
-  // Fetch reactions once on mount for initial load
+  // Fetch reactions when visible messages change
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
@@ -282,7 +282,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         });
       })
       .catch(() => {});
-  }, []); // Only run once on mount
+  }, [visibleMessages?.map(m => m.id).join(',')]);
 
   // Listen for live reaction updates
   useEffect(() => {

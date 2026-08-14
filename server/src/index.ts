@@ -1488,12 +1488,17 @@ io.on('connection', (socket) => {
     // Store username on socket for typing indicators
     (socket as any).username = data.username;
 
-
-    // Auto-join user's channel rooms
+    // Auto-join user to ALL channels they should see (public/official + member-of)
     try {
-      const userChannels = await getChannelsForUser(data.userId).catch(() => []);
-      for (const ch of userChannels) {
+      const allCh = await getAllChannels(data.userId).catch(() => []);
+      const memberOf = await getChannelsForUser(data.userId).catch(() => []);
+      const memberIds = new Set(memberOf.map(c => c.id));
+      for (const ch of allCh) {
         socket.join(`channel:${ch.id}`);
+        // Auto-add as member for public/official channels
+        if (!memberIds.has(ch.id) && (ch.type === 'public' || ch.type === 'official')) {
+          await addChannelMember(ch.id, data.userId, 'system').catch(() => {});
+        }
       }
     } catch {}
 
