@@ -15,6 +15,7 @@ export class VaultChatDatabase extends Dexie {
   channelKeys!: Table<ChannelKey, string>;
   mutedConversations!: Table<{ conversationId: string }, string>;
   blockedUsers!: Table<{ userId: string }, string>;
+  drafts!: Table<{ conversationId: string; text: string }, string>;
 
   constructor() {
     super('VaultChatDB');
@@ -47,6 +48,7 @@ export class VaultChatDatabase extends Dexie {
       channelKeys: 'channelId',
       mutedConversations: 'conversationId',
       blockedUsers: 'userId',
+      drafts: 'conversationId',
     });
   }
 }
@@ -242,4 +244,23 @@ export async function isUserBlocked(userId: string): Promise<boolean> {
 export async function getBlockedUsers(): Promise<Set<string>> {
   const all = await db.blockedUsers.toArray();
   return new Set(all.map(e => e.userId));
+}
+
+// ── Drafts ─────────────────────────────────────────────────────────────────────
+
+export async function saveDraft(conversationId: string, text: string): Promise<void> {
+  if (!text.trim()) {
+    await db.drafts.delete(conversationId);
+  } else {
+    await db.drafts.put({ conversationId, text });
+  }
+}
+
+export async function getDraft(conversationId: string): Promise<string> {
+  const draft = await db.drafts.get(conversationId);
+  return draft?.text || '';
+}
+
+export async function deleteDraft(conversationId: string): Promise<void> {
+  await db.drafts.delete(conversationId);
 }

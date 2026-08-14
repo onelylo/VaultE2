@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../lib/db';
+import { db, saveDraft, getDraft, deleteDraft } from '../lib/db';
 import { socket } from '../lib/socket';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
@@ -97,6 +97,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+
+  // Drafts: load when switching conversations
+  useEffect(() => {
+    const convId = selectedChannel?.id || selectedUser?.userId;
+    if (!convId) return;
+    getDraft(convId).then(draft => {
+      if (draft) setText(draft);
+    });
+  }, [selectedChannel?.id, selectedUser?.userId]);
+
+  // Drafts: auto-save as user types (debounced)
+  useEffect(() => {
+    const convId = selectedChannel?.id || selectedUser?.userId;
+    if (!convId) return;
+    const timer = setTimeout(() => {
+      saveDraft(convId, text);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [text, selectedChannel?.id, selectedUser?.userId]);
 
   const [activeReply, setActiveReply] = useState<{ msgId: string; senderName: string; text: string } | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -371,6 +390,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setSelectedFile(null);
       setPreviewDataUrl(null);
       setText('');
+      const convId = selectedChannel?.id || selectedUser?.userId;
+      if (convId) deleteDraft(convId);
       setActiveReply(null);
       justSentRef.current = true;
       return;
@@ -379,6 +400,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (text.trim()) {
       onSendMessage(text.trim(), activeReply?.msgId);
       setText('');
+      const convId = selectedChannel?.id || selectedUser?.userId;
+      if (convId) deleteDraft(convId);
       setActiveReply(null);
       justSentRef.current = true;
     }
