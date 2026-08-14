@@ -1008,11 +1008,16 @@ export const App: React.FC = () => {
       for (const c of channelsList) await saveChannel(c);
     };
 
-    const onMessageReceive = async (payload: EncryptedPayload) => {
+    const onMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!currentUserKeys || !privateKeyObject) return;
       const localMsg = await decryptPayload(payload);
       if (!localMsg) return;
       await saveMessage(localMsg);
+
+      // Mark forwarded if sender flagged it
+      if (payload.isForwarded) {
+        await markForwarded(localMsg.id);
+      }
 
       // Instant DM list update — move sender to top of sidebar
       const senderUser = allUsersRef.current.find(u => u.userId === payload.senderId);
@@ -1043,11 +1048,16 @@ export const App: React.FC = () => {
       }
     };
 
-    const onChannelMessageReceive = async (payload: EncryptedPayload) => {
+    const onChannelMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!payload.channelId) return;
       const localMsg = await decryptPayload(payload);
       if (!localMsg) return;
       await saveMessage(localMsg);
+
+      // Mark forwarded if sender flagged it
+      if (payload.isForwarded) {
+        await markForwarded(localMsg.id);
+      }
 
       // Play notification sound if not the active channel
       if (selectedChannelRef.current?.id !== payload.channelId) {
@@ -1797,7 +1807,7 @@ export const App: React.FC = () => {
       await saveMessage(localMsg);
       await markForwarded(tempId);
       if (!isOffline) {
-        socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp });
+        socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp, isForwarded: true });
       }
     } else {
       const peer = allUsers.find(u => u.userId === target.userId);
@@ -1812,7 +1822,7 @@ export const App: React.FC = () => {
       await markForwarded(tempId);
       upsertDMConversation(peer, originalText);
       if (!isOffline) {
-        socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp });
+        socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp, isForwarded: true });
       }
     }
   };

@@ -394,6 +394,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const doSend = () => {
     const disabled = !selectedUser && !selectedChannel;
     if (disabled) return;
+    if (selectedUser && blockedUsers.has(selectedUser.userId)) return;
 
     if (selectedFile) {
       onSendFiles([selectedFile], text.trim() || undefined);
@@ -913,6 +914,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             ) : isReadOnly ? (
               <div className="py-2.5 px-3 text-sm text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] text-center">
                 Only Admins and Supervisors can post in this announcement channel.
+              </div>
+            ) : selectedUser && blockedUsers.has(selectedUser.userId) ? (
+              <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] text-center"
+                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
+                You blocked this user. Unblock to send messages.
               </div>
             ) : (
               <textarea
