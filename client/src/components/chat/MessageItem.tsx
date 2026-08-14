@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) => {
   if (status === 'pending_sync') {
@@ -269,9 +270,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
             {/* Message Text */}
             {(msg.text || !msg.attachment) && (
-              <p className="text-sm break-words whitespace-pre-wrap">
-                {msg.isDecrypted ? msg.text : 'Unable to decrypt message'}
-              </p>
+              <div className="text-sm break-words whitespace-pre-wrap">
+                {msg.isDecrypted ? <MarkdownRenderer text={msg.text} /> : 'Unable to decrypt message'}
+              </div>
             )}
 
             {/* Edited marker */}
