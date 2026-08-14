@@ -82,6 +82,7 @@ function ChannelSettingsInner({
   const [memberSearch, setMemberSearch] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [slowMode, setSlowMode] = useState(channel.slowModeSeconds || 0);
+  const [isAnnouncement, setIsAnnouncement] = useState(channel.isAnnouncement || false);
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
 
   const isOwner = channel.createdBy === currentUser?.userId;
@@ -147,7 +148,7 @@ function ChannelSettingsInner({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onUpdate(channel.id, { name, description, memberIds, slowModeSeconds: slowMode });
+    await onUpdate(channel.id, { name, description, memberIds, slowModeSeconds: slowMode, isAnnouncement });
     setHasChanges(false);
     onClose();
   };
@@ -216,22 +217,26 @@ function ChannelSettingsInner({
                 <span className="text-[11px] text-right max-w-[60%] truncate" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
               </div>
             )}
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>CREATED BY</span>
-              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
-                {allUsers.find(u => u.userId === channel.createdBy)?.fullName || allUsers.find(u => u.userId === channel.createdBy)?.username || 'Unknown'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>MEMBERS</span>
-              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{effectiveMemberIds.length}</span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>SLOW MODE</span>
-              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
-                {slowMode > 0 ? `${slowMode}s` : 'Off'}
-              </span>
-            </div>
+            {channel.type !== 'official' && (
+              <>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>CREATED BY</span>
+                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
+                    {allUsers.find(u => u.userId === channel.createdBy)?.fullName || allUsers.find(u => u.userId === channel.createdBy)?.username || 'Unknown'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>MEMBERS</span>
+                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{effectiveMemberIds.length}</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>SLOW MODE</span>
+                  <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
+                    {slowMode > 0 ? `${slowMode}s` : 'Off'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Actions */}
@@ -293,6 +298,20 @@ function ChannelSettingsInner({
                   <option value={300}>5 minutes</option>
                 </select>
               </div>
+              {channel.type === 'official' && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                  <div>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>READ ONLY</span>
+                    <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Only admins can post messages</p>
+                  </div>
+                  <button type="button" onClick={() => { setIsAnnouncement(prev => !prev); markChanged(); }}
+                    className="relative w-10 h-5 rounded-full transition-colors"
+                    style={{ backgroundColor: isAnnouncement ? 'var(--accent-primary)' : 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                    <span className="absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full transition-transform"
+                      style={{ backgroundColor: 'white', transform: isAnnouncement ? 'translateX(20px)' : 'translateX(0)' }} />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
