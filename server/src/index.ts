@@ -410,7 +410,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
     await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username, phone });
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
+    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage, phone: user.phone });
     return res.json({ user: publicUser(user, true) });
   } catch (e) {
     console.error('[Profile] Update error:', e);
@@ -1746,7 +1746,7 @@ io.on('connection', (socket) => {
     }
     await addReaction(data.messageId, userId, data.emoji).catch(() => {});
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
+    io.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
   socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
@@ -1762,7 +1762,7 @@ io.on('connection', (socket) => {
     }
     await removeReaction(data.messageId, userId, data.emoji).catch(() => {});
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
+    io.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
   // Message Pinning — verify channel membership

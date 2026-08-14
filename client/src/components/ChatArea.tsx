@@ -212,9 +212,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
-    fetch('/api/reactions/batch', {
+    const token = localStorage.getItem('vaultchat_jwt');
+    if (!token) return;
+    fetch(`${API_BASE}/api/reactions/batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messageIds: ids }),
     })
       .then(r => r.json())
@@ -258,9 +260,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
-    fetch('/api/starred/batch', {
+    const token = localStorage.getItem('vaultchat_jwt');
+    if (!token) return;
+    fetch(`${API_BASE}/api/starred/batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messageIds: ids }),
     })
       .then(r => r.json())
@@ -273,14 +277,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [visibleMessages?.map(m => m.id).join(',')]);
 
   const handleToggleStar = useCallback(async (messageId: string, isStarred: boolean) => {
+    const token = localStorage.getItem('vaultchat_jwt');
+    if (!token) return;
     if (isStarred) {
       setStarredSet(prev => { const next = new Set(prev); next.delete(messageId); return next; });
-      await fetch(`/api/starred/${messageId}`, { method: 'DELETE' }).catch(() => {});
+      await fetch(`${API_BASE}/api/starred/${messageId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     } else {
       setStarredSet(prev => new Set(prev).add(messageId));
-      await fetch('/api/starred', {
+      await fetch(`${API_BASE}/api/starred`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messageId }),
       }).catch(() => {});
     }
@@ -1032,6 +1038,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           }}
           onJumpToMessage={(messageId) => {
             setShowProfileModal(false);
+            // Find message position in allMessages and ensure it's loaded
+            const msgIndex = allMessages.findIndex(m => m.id === messageId);
+            if (msgIndex >= 0) {
+              const nonRemoved = allMessages.filter(m => !m.removed);
+              const nonRemovedIndex = nonRemoved.findIndex(m => m.id === messageId);
+              const visibleStart = nonRemoved.length - loadCount;
+              if (nonRemovedIndex < visibleStart) {
+                // Message is outside visible window — increase loadCount
+                const needed = nonRemoved.length - nonRemovedIndex + 10;
+                setLoadCount(prev => Math.max(prev, needed));
+              }
+            }
+            // Scroll after a tick to let React re-render with new loadCount
             setTimeout(() => {
               const el = document.getElementById(`msg-${messageId}`);
               if (el) {
@@ -1047,7 +1066,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   target.style.backgroundColor = 'transparent';
                 }, 1500);
               }
-            }, 100);
+            }, 200);
           }}
         />
       )}

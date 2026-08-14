@@ -204,10 +204,11 @@ export const App: React.FC = () => {
 
   // ── Recent DMs (instant sidebar updates) ─────────────────────────────────────
   const [recentDMs, setRecentDMs] = useState<User[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // Load recent DM partners from IndexedDB on mount so sidebar order persists across refresh
   useEffect(() => {
-    if (!currentUserKeys || allUsers.length === 0) return;
+    if (!currentUserKeys || allUsers.length === 0 || !historyLoaded) return;
     (async () => {
       const partnerIds = await getActiveDMPartners(currentUserKeys.userId);
       const ordered = partnerIds
@@ -217,7 +218,7 @@ export const App: React.FC = () => {
         setRecentDMs(ordered.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) })));
       }
     })();
-  }, [currentUserKeys, allUsers.length]);
+  }, [currentUserKeys, allUsers.length, historyLoaded]);
 
   const upsertDMConversation = useCallback((peer: User, lastMessageText: string) => {
     setRecentDMs(prev => {
@@ -275,7 +276,8 @@ export const App: React.FC = () => {
   );
 
   // ── Helpers: Group Channel Key Fetch / Distribution ─────────────────────────
-  const getOrGenerateChannelKey = useCallback(async (channelId: string): Promise<CryptoKey | null> => {    if (channelKeysCache.has(channelId)) return channelKeysCache.get(channelId)!;
+  const getOrGenerateChannelKey = useCallback(async (channelId: string): Promise<CryptoKey | null> => {
+    if (channelKeysCache.has(channelId)) return channelKeysCache.get(channelId)!;
     try {
       // 1. Check local Dexie IndexedDB
       const stored = await getChannelKey(channelId);
@@ -294,33 +296,32 @@ export const App: React.FC = () => {
         if (res.ok) {
           const data = await res.json();
           const { encryptedChannelKey, iv } = data.key;
-          // Find creator/distributor public key or self shared key
-          const creatorUserId = channels.find(c => c.id === channelId)?.createdBy || currentUserKeys.userId;
-          const creatorUser = allUsers.find(u => u.userId === creatorUserId) || {
-            userId: currentUserKeys.userId,
-            publicKey: currentUserKeys.publicKeyBase64
-          };
-
-          const sharedKey = await getOrDeriveSharedKey(creatorUser.userId, creatorUser.publicKey);
-          if (sharedKey) {
-            const keyJwk = await decryptChannelKeyForUser(encryptedChannelKey, iv, sharedKey);
-            const imported = await importSymmetricKeyFromJwk(keyJwk);
-            await saveChannelKey({ channelId, keyJwk });
-            setChannelKeysCache(prev => new Map(prev).set(channelId, imported));
-            console.log(`[ChannelKeys] Successfully decrypted & stored channel key for #${channelId}`);
-            return imported;
+          // Try all possible encryptors: creator first, then all channel members
+          const channel = channels.find(c => c.id === channelId);
+          const candidateIds = channel
+            ? [channel.createdBy, ...(channel.memberIds || [])].filter((v, i, a) => a.indexOf(v) === i)
+            : [currentUserKeys.userId];
+          for (const candidateId of candidateIds) {
+            const candidateUser = allUsers.find(u => u.userId === candidateId);
+            if (!candidateUser?.publicKey) continue;
+            try {
+              const sharedKey = await getOrDeriveSharedKey(candidateId, candidateUser.publicKey);
+              if (!sharedKey) continue;
+              const keyJwk = await decryptChannelKeyForUser(encryptedChannelKey, iv, sharedKey);
+              const imported = await importSymmetricKeyFromJwk(keyJwk);
+              await saveChannelKey({ channelId, keyJwk });
+              setChannelKeysCache(prev => new Map(prev).set(channelId, imported));
+              return imported;
+            } catch {
+              // This candidate didn't encrypt this envelope, try next
+            }
           }
         }
       }
 
-      // 3. Fallback: generate local key if newly created
-      const keyObj = await generateChannelSymmetricKey();
-      const jwk = await exportKeyToJwk(keyObj);
-      await saveChannelKey({ channelId, keyJwk: jwk });
-      setChannelKeysCache(prev => new Map(prev).set(channelId, keyObj));
-      return keyObj;
+      // No key available — messages will show as undecryptable
+      return null;
     } catch (e) {
-      console.error('[E2EE] Channel key retrieval error:', e);
       return null;
     }
   }, [channelKeysCache, channels, allUsers, currentUserKeys, getOrDeriveSharedKey]);
@@ -451,6 +452,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error('[History] Global history fetch error:', e);
     }
+    setHistoryLoaded(true);
   }, [currentUserKeys, decryptPayload]);
 
   // ── TOFU Key Pinning & Signed Rotation Chain Verification ────────────────────
@@ -614,6 +616,8 @@ export const App: React.FC = () => {
         if (data.username) updated.username = data.username;
         if (data.statusMessage !== undefined) updated.statusMessage = data.statusMessage;
         if (data.phone !== undefined) updated.phone = data.phone;
+        // Persist to IndexedDB so changes survive refresh
+        saveUserKeyPair(updated).catch(() => {});
         return updated;
       });
       if (data.fullName && socket.connected) {
@@ -665,6 +669,7 @@ export const App: React.FC = () => {
               email: data.user.email || keyPair.email,
               avatarUrl: data.user.avatarUrl || keyPair.avatarUrl,
               statusMessage: data.user.statusMessage || keyPair.statusMessage,
+              phone: data.user.phone || keyPair.phone,
             };
             setPrivateKeyObject(privKey);
             setCurrentUserKeys(enrichedKeyPair);
@@ -1208,12 +1213,13 @@ export const App: React.FC = () => {
       }
     };
 
-    const onUserProfileUpdate = (data: { userId: string; fullName?: string; avatarUrl?: string; statusMessage?: string }) => {
+    const onUserProfileUpdate = (data: { userId: string; fullName?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
       setAllUsers(prev => prev.map(u => u.userId === data.userId ? {
         ...u,
         fullName: data.fullName ?? u.fullName,
         avatarUrl: data.avatarUrl ?? u.avatarUrl,
         statusMessage: data.statusMessage !== undefined ? data.statusMessage : u.statusMessage,
+        phone: data.phone !== undefined ? data.phone : u.phone,
       } : u));
       if (currentUserKeys?.userId === data.userId) {
         setCurrentUserKeys(prev => prev ? {
@@ -1221,6 +1227,7 @@ export const App: React.FC = () => {
           fullName: data.fullName ?? prev.fullName,
           avatarUrl: data.avatarUrl ?? prev.avatarUrl,
           statusMessage: data.statusMessage !== undefined ? data.statusMessage : prev.statusMessage,
+          phone: data.phone !== undefined ? data.phone : prev.phone,
         } : prev);
       }
     };
