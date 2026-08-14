@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Settings, X, Users, Trash2, UserPlus, UserMinus, Crown, Search, LogOut, Hash, Lock, Megaphone, Mic, Paperclip, Image, FileText, Film, Calendar, ArrowRight } from 'lucide-react';
+import { X, Users, Trash2, UserPlus, UserMinus, Crown, Search, LogOut, Hash, Lock, Megaphone, Paperclip, Image, FileText, Film, Calendar, Pencil, Mic } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import type { Channel, User, UserKeyPair, LocalMessage } from '../../types/chat';
@@ -80,16 +80,24 @@ function ChannelSettingsInner({
   const [description, setDescription] = useState(channel.description || '');
   const [memberIds, setMemberIds] = useState<string[]>(channel.memberIds || []);
   const [memberSearch, setMemberSearch] = useState('');
-  const [hasChanges, setHasChanges] = useState(false);
   const [slowMode, setSlowMode] = useState(channel.slowModeSeconds || 0);
   const [isAnnouncement, setIsAnnouncement] = useState(channel.isAnnouncement || false);
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
+
+  // Inline editing states
+  const [editingField, setEditingField] = useState<'name' | 'description' | 'slowMode' | null>(null);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
 
   const isOwner = channel.createdBy === currentUser?.userId;
   const canEditSettings = channel.type === 'official'
     ? currentUser?.role === 'ADMIN'
     : isOwner;
   const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private');
+
+  const hasChanges = name !== channel.name || description !== (channel.description || '') ||
+    slowMode !== (channel.slowModeSeconds || 0) || isAnnouncement !== (channel.isAnnouncement || false) ||
+    JSON.stringify(memberIds) !== JSON.stringify(channel.memberIds || []);
 
   // For official channels, all users are members
   const effectiveMemberIds = channel.type === 'official'
@@ -112,7 +120,6 @@ function ChannelSettingsInner({
   const currentMedia = activeTab === 'all' ? sharedMessages : activeTab === 'images' ? images : activeTab === 'video' ? video : activeTab === 'audio' ? audio : docs;
   const totalSize = sharedMessages.reduce((s, m) => s + (m.attachmentMeta?.fileSize || 0), 0);
 
-  // Group by date
   const grouped: { label: string; items: LocalMessage[] }[] = [];
   let lastGroup = '';
   for (const msg of currentMedia) {
@@ -133,25 +140,94 @@ function ChannelSettingsInner({
     );
   }, [allUsers, memberIds, memberSearch]);
 
-  const markChanged = () => setHasChanges(true);
-
   const handleAddMember = (userId: string) => {
     setMemberIds(prev => [...prev, userId]);
     setMemberSearch('');
-    markChanged();
   };
 
   const handleRemoveMember = (userId: string) => {
     setMemberIds(prev => prev.filter(id => id !== userId));
-    markChanged();
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     await onUpdate(channel.id, { name, description, memberIds, slowModeSeconds: slowMode, isAnnouncement });
-    setHasChanges(false);
+    setEditingField(null);
+  };
+
+  const handleClose = useCallback(() => {
+    if (hasChanges) {
+      setShowUnsavedConfirm(true);
+      setPendingClose(true);
+    } else {
+      onClose();
+    }
+  }, [hasChanges, onClose]);
+
+  const handleBackdropClose = useCallback(() => {
+    if (hasChanges) {
+      setShowUnsavedConfirm(true);
+      setPendingClose(true);
+    } else {
+      onClose();
+    }
+  }, [hasChanges, onClose]);
+
+  const handleDiscard = () => {
+    // Reset all changes
+    setName(channel.name);
+    setDescription(channel.description || '');
+    setSlowMode(channel.slowModeSeconds || 0);
+    setIsAnnouncement(channel.isAnnouncement || false);
+    setMemberIds(channel.memberIds || []);
+    setEditingField(null);
+    setShowUnsavedConfirm(false);
+    if (pendingClose) {
+      onClose();
+      setPendingClose(false);
+    }
+  };
+
+  const handleSaveAndClose = async () => {
+    await handleSave();
+    setShowUnsavedConfirm(false);
+    setPendingClose(false);
     onClose();
   };
+
+  // Unsaved changes confirm dialog
+  if (showUnsavedConfirm) {
+    return createPortal(
+      <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
+        style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+        <div className="w-full max-w-xs rounded-2xl p-5 animate-[scaleIn_0.15s_ease-out]"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+          onClick={e => e.stopPropagation()}>
+          <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-main)' }}>Unsaved Changes</h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+            You have unsaved changes. What would you like to do?
+          </p>
+          <div className="flex flex-col gap-2">
+            <button onClick={handleSaveAndClose}
+              className="w-full py-2 rounded-xl text-xs font-bold"
+              style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}>
+              SAVE & CLOSE
+            </button>
+            <button onClick={handleDiscard}
+              className="w-full py-2 rounded-xl text-xs font-bold"
+              style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+              DISCARD
+            </button>
+            <button onClick={() => { setShowUnsavedConfirm(false); setPendingClose(false); }}
+              className="w-full py-2 rounded-xl text-xs font-bold"
+              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+              CANCEL
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   const typeConfig: Record<string, { label: string; color: string; icon: typeof Hash }> = {
     official: { label: 'OFFICIAL', color: '#f87171', icon: Megaphone },
@@ -171,35 +247,62 @@ function ChannelSettingsInner({
   ];
   const tabCounts = { all: sharedMessages.length, images: images.length, video: video.length, audio: audio.length, docs: docs.length };
 
+  const SLOW_OPTIONS = [
+    { value: 0, label: 'Off' },
+    { value: 5, label: '5 seconds' },
+    { value: 10, label: '10 seconds' },
+    { value: 30, label: '30 seconds' },
+    { value: 60, label: '1 minute' },
+    { value: 120, label: '2 minutes' },
+    { value: 300, label: '5 minutes' },
+  ];
+
   return createPortal(
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}>
+      onClick={handleBackdropClose}>
       <div className="w-full max-w-sm rounded-2xl relative animate-[scaleIn_0.15s_ease-out] max-h-[85vh] flex flex-col overflow-hidden"
         style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 30px var(--glow-color)' }}
         onClick={e => e.stopPropagation()}>
 
-        <button onClick={onClose} className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center z-10"
+        <button onClick={handleClose} className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center z-10"
           style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
           <X className="w-4 h-4" />
         </button>
 
         <div className="overflow-y-auto flex-1 p-6">
-          {/* Channel Identity */}
+          {/* Channel Identity - name is clickable to edit */}
           <div className="flex flex-col items-center space-y-3 mb-4">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', border: '3px solid var(--border-color)', color: 'var(--accent-primary)' }}>
               #
             </div>
             <div className="text-center">
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>#{channel.name}</h3>
+              {canEditSettings && editingField === 'name' ? (
+                <input type="text" value={name} onChange={e => setName(e.target.value)}
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setName(channel.name); setEditingField(null); } }}
+                  autoFocus
+                  className="font-bold text-sm text-center bg-transparent border-b-2 focus:outline-none w-full"
+                  style={{ color: 'var(--text-main)', borderColor: 'var(--accent-primary)' }}
+                />
+              ) : (
+                <h3
+                  className="font-bold text-sm cursor-pointer hover:underline"
+                  style={{ color: 'var(--text-main)' }}
+                  onClick={() => canEditSettings && setEditingField('name')}
+                >
+                  #{name}
+                  {canEditSettings && <Pencil className="w-3 h-3 inline ml-1 opacity-40" />}
+                </h3>
+              )}
               <div className="flex items-center justify-center gap-1.5 mt-1">
                 <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1"
                   style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: typeInfo.color, border: `1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)` }}>
                   <TypeIcon className="w-2.5 h-2.5" />{typeInfo.label}
                 </span>
-                {channel.isAnnouncement && (
+                {isAnnouncement && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded font-bold"
                     style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
                     READ ONLY
@@ -209,15 +312,91 @@ function ChannelSettingsInner({
             </div>
           </div>
 
-          {/* Info Rows - only description */}
-          {channel.description && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl mb-4" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-              <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
-              <span className="text-[11px] text-right max-w-[60%] truncate" style={{ color: 'var(--text-main)' }}>{channel.description}</span>
+          {/* Description - clickable to edit */}
+          <div className="mb-4">
+            {canEditSettings && editingField === 'description' ? (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</label>
+                <input type="text" value={description} onChange={e => setDescription(e.target.value)}
+                  placeholder="Set channel description..."
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={e => { if (e.key === 'Enter') setEditingField(null); if (e.key === 'Escape') { setDescription(channel.description || ''); setEditingField(null); } }}
+                  autoFocus
+                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none transition-smooth"
+                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' }}
+                />
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+                onClick={() => canEditSettings && setEditingField('description')}
+              >
+                <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>DESCRIPTION</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-right max-w-[50%] truncate" style={{ color: description ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                    {description || 'Click to add...'}
+                  </span>
+                  {canEditSettings && <Pencil className="w-3 h-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Slow Mode - clickable to edit */}
+          {canEditSettings && (
+            <div className="mb-4">
+              {editingField === 'slowMode' ? (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>SLOW MODE</label>
+                  <select value={slowMode} onChange={e => { setSlowMode(Number(e.target.value)); setEditingField(null); }}
+                    onBlur={() => setEditingField(null)}
+                    autoFocus
+                    className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none transition-smooth"
+                    style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' }}>
+                    {SLOW_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
+                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+                  onClick={() => setEditingField('slowMode')}
+                >
+                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>SLOW MODE</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>
+                      {slowMode > 0 ? SLOW_OPTIONS.find(o => o.value === slowMode)?.label || `${slowMode}s` : 'Off'}
+                    </span>
+                    <Pencil className="w-3 h-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Shared Media - under Description */}
+          {/* Read Only toggle for official channels */}
+          {canEditSettings && channel.type === 'official' && (
+            <div
+              className="flex items-center justify-between px-3 py-2 rounded-xl mb-4 cursor-pointer hover:opacity-80 transition-opacity"
+              style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+              onClick={() => { setIsAnnouncement(prev => !prev); }}
+            >
+              <div>
+                <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>READ ONLY</span>
+                <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Only admins can post</p>
+              </div>
+              <div className="relative w-10 h-5 rounded-full transition-colors"
+                style={{ backgroundColor: isAnnouncement ? 'var(--accent-primary)' : 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                <span className="absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full transition-transform"
+                  style={{ backgroundColor: 'white', transform: isAnnouncement ? 'translateX(20px)' : 'translateX(0)' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Shared Media */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-[10px] font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
@@ -277,57 +456,6 @@ function ChannelSettingsInner({
               </div>
             )}
           </div>
-
-          {/* Editable fields for owner/admin */}
-          {canEditSettings && (
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Channel Name</label>
-                <input type="text" value={name} onChange={e => { setName(e.target.value); markChanged(); }}
-                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none transition-smooth"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Description</label>
-                <input type="text" value={description} onChange={e => { setDescription(e.target.value); markChanged(); }}
-                  placeholder="Set channel description..."
-                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none transition-smooth"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Slow Mode</label>
-                <select value={slowMode} onChange={e => { setSlowMode(Number(e.target.value)); markChanged(); }}
-                  className="w-full rounded-xl py-2 px-3 text-xs focus:outline-none transition-smooth"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}>
-                  <option value={0}>Off</option>
-                  <option value={5}>5 seconds</option>
-                  <option value={10}>10 seconds</option>
-                  <option value={30}>30 seconds</option>
-                  <option value={60}>1 minute</option>
-                  <option value={120}>2 minutes</option>
-                  <option value={300}>5 minutes</option>
-                </select>
-              </div>
-              {channel.type === 'official' && (
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  <div>
-                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>READ ONLY</span>
-                    <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Only admins can post messages</p>
-                  </div>
-                  <button type="button" onClick={() => { setIsAnnouncement(prev => !prev); markChanged(); }}
-                    className="relative w-10 h-5 rounded-full transition-colors"
-                    style={{ backgroundColor: isAnnouncement ? 'var(--accent-primary)' : 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                    <span className="absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full transition-transform"
-                      style={{ backgroundColor: 'white', transform: isAnnouncement ? 'translateX(20px)' : 'translateX(0)' }} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Editable Members (team/private) */}
           {canManageMembers && (
