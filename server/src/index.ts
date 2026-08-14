@@ -860,6 +860,47 @@ app.post('/api/reactions/batch', async (req, res) => {
   }
 });
 
+// ── URL Preview Endpoint ───────────────────────────────────────────────────────
+app.get('/api/url-preview', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { url } = req.query;
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
+
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Only HTTP(S) URLs allowed' });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaultChat/1.0)' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return res.json({ url, title: null, description: null, image: null });
+
+    const html = await response.text();
+    // Extract OG tags
+    const getMeta = (property: string): string | null => {
+      const match = html.match(new RegExp(`<meta[^>]*(?:property|name)=["']${property}["'][^>]*content=["']([^"']+)["']`, 'i'))
+        || html.match(new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']${property}["']`, 'i'));
+      return match?.[1] || null;
+    };
+
+    const title = getMeta('og:title') || getMeta('twitter:title')
+      || html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || null;
+    const description = getMeta('og:description') || getMeta('twitter:description') || getMeta('description') || null;
+    const image = getMeta('og:image') || getMeta('twitter:image') || null;
+
+    return res.json({ url, title: title?.slice(0, 200), description: description?.slice(0, 300), image: image?.slice(0, 500) });
+  } catch (e) {
+    return res.json({ url, title: null, description: null, image: null });
+  }
+});
+
 // ── Starred Messages ──────────────────────────────────────────────────────────
 app.post('/api/starred', async (req, res) => {
   const userId = requireAuth(req, res);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { LinkPreview } from './LinkPreview';
 
 type Token = { type: string; content: string };
 
@@ -68,6 +69,10 @@ function renderTokens(tokens: Token[]): React.ReactNode[] {
 }
 
 export const MarkdownRenderer: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
+  // Extract URLs for link previews
+  const urlRegex = /https?:\/\/[^\s<>"')\]]+/g;
+  const urls = [...new Set(text.match(urlRegex) || [])];
+
   // Handle multi-line messages: split by newlines, render code blocks separately
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
@@ -119,5 +124,16 @@ export const MarkdownRenderer: React.FC<{ text: string; className?: string }> = 
     );
   }
 
-  return <div className={className}>{elements}</div>;
+  return (
+    <div className={className}>
+      {elements}
+      {urls.length > 0 && (
+        <div className="mt-1.5 space-y-1.5">
+          {urls.slice(0, 3).map(url => (
+            <LinkPreview key={url} url={url} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
