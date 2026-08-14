@@ -400,7 +400,7 @@ export async function getChannelById(channelId: string): Promise<DbChannel | und
   return channel;
 }
 
-export async function updateChannel(channelId: string, data: Partial<Pick<DbChannel, 'name' | 'description' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>> & { memberIds?: string[] }): Promise<void> {
+export async function updateChannel(channelId: string, data: Partial<Pick<DbChannel, 'name' | 'description' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>> & { memberIds?: string[] }): Promise<{ removedMembers: string[] }> {
   const sets: string[] = [];
   const vals: any[] = [channelId];
   let idx = 2;
@@ -409,13 +409,20 @@ export async function updateChannel(channelId: string, data: Partial<Pick<DbChan
   if (data.isAnnouncement !== undefined) { sets.push(`is_announcement = $${idx++}`); vals.push(data.isAnnouncement); }
   if (data.allowedRoles !== undefined) { sets.push(`allowed_roles = $${idx++}`); vals.push(data.allowedRoles); }
   if (data.slowModeSeconds !== undefined) { sets.push(`slow_mode_seconds = $${idx++}`); vals.push(data.slowModeSeconds); }
-  if (sets.length === 0 && !data.memberIds) return;
+  if (sets.length === 0 && !data.memberIds) return { removedMembers: [] };
   if (sets.length > 0) {
     await getPool().query(`UPDATE channels SET ${sets.join(', ')} WHERE id = $1`, vals);
   }
   
+  const removedMembers: string[] = [];
+
   // Handle memberIds separately
   if (data.memberIds !== undefined) {
+    // Get current members before removing
+    const currentMembers = await getChannelMembers(channelId);
+    const newMemberSet = new Set(data.memberIds);
+    removedMembers.push(...currentMembers.filter(m => !newMemberSet.has(m)));
+
     // Remove all existing members
     await getPool().query(`DELETE FROM channel_members WHERE channel_id = $1`, [channelId]);
     // Add new members
@@ -427,7 +434,14 @@ export async function updateChannel(channelId: string, data: Partial<Pick<DbChan
         [channelId, memberId, 'system', Date.now()]
       );
     }
+
+    // Security: Delete channel keys for removed members so they can no longer decrypt
+    for (const removedId of removedMembers) {
+      await deleteChannelKeysForUser(channelId, removedId);
+    }
   }
+
+  return { removedMembers };
 }
 
 export async function deleteChannel(channelId: string): Promise<void> {
@@ -454,6 +468,27 @@ export async function upsertChannelKeys(channelId: string, keys: DbChannelKey[])
       [channelId, key.userId, key.encryptedChannelKey, key.iv]
     );
   }
+}
+
+export async function deleteChannelKeysForUser(channelId: string, userId: string): Promise<void> {
+  await getPool().query(`DELETE FROM channel_keys WHERE channel_id = $1 AND user_id = $2`, [channelId, userId]);
+}
+
+export async function deleteChannelKeysForChannel(channelId: string): Promise<void> {
+  await getPool().query(`DELETE FROM channel_keys WHERE channel_id = $1`, [channelId]);
+}
+
+export async function getChannelKeysForChannel(channelId: string): Promise<DbChannelKey[]> {
+  const res = await getPool().query(
+    `SELECT channel_id, user_id, encrypted_channel_key, iv FROM channel_keys WHERE channel_id = $1`,
+    [channelId]
+  );
+  return res.rows.map(r => ({
+    channelId: r.channel_id,
+    userId: r.user_id,
+    encryptedChannelKey: r.encrypted_channel_key,
+    iv: r.iv,
+  }));
 }
 
 export async function getChannelKey(channelId: string, userId: string): Promise<DbChannelKey | undefined> {

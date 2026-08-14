@@ -1231,6 +1231,47 @@ export const App: React.FC = () => {
       ));
     };
 
+    // Security: Channel key rotation when members are removed (forward secrecy)
+    const onChannelKeyRotated = async (data: { channelId: string; removedMemberIds: string[] }) => {
+      // If I was removed, clear my local channel key
+      if (data.removedMemberIds.includes(currentUserKeys?.userId || '')) {
+        setChannelKeysCache(prev => { const next = new Map(prev); next.delete(data.channelId); return next; });
+        try { await db.channelKeys.delete(data.channelId); } catch {}
+        return;
+      }
+      // If I'm a remaining member, rotate the channel key (forward secrecy)
+      const channel = channels.find(c => c.id === data.channelId);
+      if (!channel || !currentUserKeys) return;
+      try {
+        const newKeyObj = await generateChannelSymmetricKey();
+        const newKeyJwk = await exportKeyToJwk(newKeyObj);
+        setChannelKeysCache(prev => new Map(prev).set(data.channelId, newKeyObj));
+        await saveChannelKey({ channelId: data.channelId, keyJwk: newKeyJwk });
+        // Re-encrypt for all remaining members
+        const currentMembers = (channel.memberIds || []).filter(id => !data.removedMemberIds.includes(id));
+        const envelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
+        for (const memberId of currentMembers) {
+          const memberUser = allUsers.find(u => u.userId === memberId);
+          if (!memberUser?.publicKey) continue;
+          const sharedKey = await getOrDeriveSharedKey(memberId, memberUser.publicKey);
+          if (!sharedKey) continue;
+          const exportedKey = await crypto.subtle.exportKey('jwk', newKeyObj);
+          const encryptedData = await encryptChannelKeyForUser(exportedKey, sharedKey);
+          envelopes.push({ userId: memberId, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv });
+        }
+        const token = getJwtToken();
+        if (token && envelopes.length > 0) {
+          await fetch(`${API_BASE}/api/channels/${data.channelId}/keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ keys: envelopes }),
+          });
+        }
+      } catch (e) {
+        console.error('[ChannelKey] Rotation failed:', e);
+      }
+    };
+
     socket.on('users:directory', onUsersDirectory);
     socket.on('users:presence',  onUsersPresence);
     socket.on('channels:update', onChannelsUpdate);
@@ -1250,6 +1291,7 @@ export const App: React.FC = () => {
     socket.on('user:profile-update', onUserProfileUpdate);
     socket.on('channel:member_added', onChannelMemberAdded);
     socket.on('channel:member_removed', onChannelMemberRemoved);
+    socket.on('channel:key_rotated', onChannelKeyRotated);
 
     // Typing indicators
     const onUserTyping = (data: { userId: string; username: string; channelId?: string; recipientId?: string }) => {
@@ -1321,6 +1363,7 @@ export const App: React.FC = () => {
       socket.off('user:profile-update', onUserProfileUpdate);
       socket.off('channel:member_added', onChannelMemberAdded);
       socket.off('channel:member_removed', onChannelMemberRemoved);
+      socket.off('channel:key_rotated', onChannelKeyRotated);
       socket.off('user:typing', onUserTyping);
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);

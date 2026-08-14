@@ -69,6 +69,9 @@ import {
   unblockUserOnServer,
   getBlockedUsersOf,
   getBlockedByUsers,
+  deleteChannelKeysForUser,
+  deleteChannelKeysForChannel,
+  getChannelKeysForChannel,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -387,6 +390,13 @@ const handleProfileUpdate = async (req: any, res: any) => {
   if (!userId) return;
   try {
     const { fullName, email, avatarUrl, avatar, status, statusMessage, username } = req.body;
+    // Security: Check username uniqueness if changing
+    if (username) {
+      const existing = await getUserByUsername(username).catch(() => undefined);
+      if (existing && existing.userId !== userId) {
+        return res.status(409).json({ error: 'Username already taken' });
+      }
+    }
     const finalAvatarUrl = avatarUrl || avatar;
     await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username });
     const user = await getUserById(userId);
@@ -442,10 +452,14 @@ app.put('/api/auth/password', async (req, res) => {
     }
     // Always store new passwords as bcrypt (even if old was SHA-256)
     await updateUserPassword(userId, await hashPassword(newPassword));
-    console.log(`[Auth] Password changed for ${sanitizeLog(user.username)}`);
+    // Security: Invalidate current session by blocking the token
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer ')) {
+      const token = auth.slice(7);
+      tokenBlocklist.set(token, Date.now() + JWT_EXPIRY_MS);
+    }
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Auth] Password change error:', e);
     return res.status(500).json({ error: 'Password change failed' });
   }
 });
@@ -537,11 +551,10 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     if (!await verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
-    // One-time migration: re-hash legacy SHA-256 passwords with bcrypt
+    // Security: Migrate legacy SHA-256 passwords to bcrypt
     if (user.passwordHash.length === 64 && !user.passwordHash.startsWith('$')) {
       const newBcryptHash = await hashPassword(password);
       await updateUserPassword(userId, newBcryptHash).catch(() => {});
-      console.log(`[Auth] Migrated ${user.username} password from SHA-256 to bcrypt`);
     }
     // Update vault keys if key rotation requested or missing
     if (forceKeyRotation && publicKey && encryptedPrivateKey && keySalt) {
@@ -1037,7 +1050,7 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
         iv: item.iv,
       }));
     await upsertChannelKeys(channelId, validKeys);
-    console.log(`[ChannelKeys] Stored ${validKeys.length} key envelope(s) for channel #${sanitizeLog(channelId)}`);
+
     return res.json({ success: true, count: validKeys.length });
   } catch (e) {
     console.error('[ChannelKeys] Store error:', e);
@@ -1077,7 +1090,7 @@ app.patch('/api/channels/:channelId', async (req, res) => {
     }
     
     const { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds } = req.body;
-    await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds });
+    const { removedMembers } = await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds });
     
     const updated = await getChannelById(req.params.channelId);
     await broadcastChannels();
@@ -1087,13 +1100,16 @@ app.patch('/api/channels/:channelId', async (req, res) => {
       const channel = await getChannelById(req.params.channelId);
       const currentMembers = channel?.memberIds || [];
       const newMembers = memberIds.filter((id: string) => !currentMembers.includes(id));
-      const removedMembers = currentMembers.filter((id: string) => !memberIds.includes(id));
       
       for (const memberId of newMembers) {
         io.emit('channel:member_added', { channelId: req.params.channelId, userId: memberId });
       }
       for (const memberId of removedMembers) {
         io.emit('channel:member_removed', { channelId: req.params.channelId, userId: memberId });
+      }
+      // Security: Notify remaining members that channel key needs rotation
+      if (removedMembers.length > 0) {
+        io.emit('channel:key_rotated', { channelId: req.params.channelId, removedMemberIds: removedMembers });
       }
     }
     
@@ -1189,7 +1205,7 @@ app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
       metadataIv: metadataIv || '',
       createdAt: Date.now(),
     });
-    console.log(`[Attachment] Stored ${diskName} (${req.file.size} bytes) from ${userId}`);
+
     return res.json({ attachmentId });
   } catch (e) {
     console.error('[Attachment] Upload error:', e);
@@ -1305,7 +1321,6 @@ async function broadcastChannels(): Promise<void> {
 }
 
 io.on('connection', (socket) => {
-  console.log(`[Socket] Connected: ${socket.id}`);
 
   // Simple per-socket rate limiter for message sends
   const msgTimestamps: number[] = [];
@@ -1335,7 +1350,7 @@ io.on('connection', (socket) => {
     userToSocket.set(data.userId, socket.id);
     // Store username on socket for typing indicators
     (socket as any).username = data.username;
-    console.log(`[Registry] Joined: ${activeUser.username} (${data.userId}) [${activeUser.role}]`);
+
 
     // Auto-join user's channel rooms
     try {
@@ -1409,7 +1424,7 @@ io.on('connection', (socket) => {
     }
     // Auto-join creator to channel room
     socket.join(`channel:${channelId}`);
-    console.log(`[Channel] Created #${newChannel.name}`);
+
     await broadcastChannels();
   });
 
@@ -1425,7 +1440,11 @@ io.on('connection', (socket) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { recipientId, ciphertext, tempId, id, attachment } = payload;
     if (!ciphertext || typeof ciphertext !== 'string') {
-      console.warn('[DM] Rejected: missing ciphertext');
+      return;
+    }
+    // Security: Message length limit (10KB ciphertext max)
+    if (ciphertext.length > 10240) {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed' });
       return;
     }
     // Verify senderId matches authenticated user (prevent spoofing)
@@ -1433,7 +1452,6 @@ io.on('connection', (socket) => {
 
     // Check if recipient has blocked the sender
     if (recipientId && await isUserBlockedBy(recipientId, senderId)) {
-      console.log(`[DM] Blocked: ${senderId} → ${recipientId} (recipient blocked sender)`);
       // Still ACK to sender so they know it was sent (E2EE: server can't modify content)
       socket.emit('message:ack', {
         tempId: tempId || id,
@@ -1445,7 +1463,6 @@ io.on('connection', (socket) => {
     }
 
     const messageId = id || `srv_${Date.now()}`;
-    console.log(`[DM] ${senderId} → ${recipientId} | ${ciphertext.length} chars`);
 
     try {
       await insertMessage(toDbMessage({ ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
@@ -1467,9 +1484,9 @@ io.on('connection', (socket) => {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
         io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId, timestamp: payload.timestamp ?? Date.now() });
-        console.log(`[DM] Relayed to ${recipient.username} (${recipient.socketId})`);
+
       } else {
-        console.log(`[DM] Recipient ${recipientId} offline — stored in PostgreSQL for later fetch`);
+
       }
     }
   });
@@ -1481,46 +1498,54 @@ io.on('connection', (socket) => {
     const { channelId, ciphertext, tempId, id, attachment } = payload;
     if (!channelId) return;
     if (!ciphertext || typeof ciphertext !== 'string') {
-      console.warn('[Channel] Rejected: missing ciphertext');
+      return;
+    }
+    // Security: Message length limit (10KB ciphertext max)
+    if (ciphertext.length > 10240) {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed' });
       return;
     }
     const senderId = authenticatedUserId;
     const messageId = id || `srv_${Date.now()}`;
-    console.log(`[Channel] ${senderId} → #${channelId} | ${ciphertext.length} chars`);
 
-    // Permission check for announcement channels: only ADMIN and SUPERVISOR can post
-    try {
-      const channel = await getChannelById(channelId);
-      if (channel && channel.isAnnouncement) {
-        const sender = activeUsers.get(senderId);
-        const senderRole = sender?.role || 'MEMBER';
-        if (senderRole === 'MEMBER') {
-          socket.emit('message:ack', {
-            tempId: tempId || messageId,
-            serverId: messageId,
-            timestamp: Date.now(),
-            status: 'failed',
-            error: 'Only Admins and Supervisors can post in official announcement channels.'
-          });
-          return;
-        }
-      }
-    } catch (e) {
-      console.error('[Channel] Permission check error:', e);
+    // Check channel exists and membership
+    const channel = await getChannelById(channelId);
+    if (!channel) {
+      socket.emit('message:ack', { tempId: tempId || messageId, serverId: messageId, timestamp: Date.now(), status: 'failed', error: 'Channel not found' });
+      return;
     }
 
-    // Check membership for private/team channels
-    const channel = await getChannelById(channelId);
-    const userChannels = await getChannelMembers(channelId);
-    if (channel && (channel.type === 'private' || channel.type === 'team') && !userChannels.includes(senderId)) {
-      socket.emit('message:ack', {
-        tempId: tempId || messageId,
-        serverId: messageId,
-        timestamp: Date.now(),
-        status: 'failed',
-        error: 'You are not a member of this channel.'
-      });
+    // Security: Check membership for ALL channel types
+    const members = await getChannelMembers(channelId);
+    if (!members.includes(senderId)) {
+      socket.emit('message:ack', { tempId: tempId || messageId, serverId: messageId, timestamp: Date.now(), status: 'failed', error: 'You are not a member of this channel.' });
       return;
+    }
+
+    // Security: Check allowedRoles
+    if (channel.allowedRoles && channel.allowedRoles.length > 0) {
+      const sender = activeUsers.get(senderId);
+      const senderRole = sender?.role || 'MEMBER';
+      if (!channel.allowedRoles.includes(senderRole)) {
+        socket.emit('message:ack', { tempId: tempId || messageId, serverId: messageId, timestamp: Date.now(), status: 'failed', error: 'You do not have permission to post in this channel.' });
+        return;
+      }
+    }
+
+    // Permission check for announcement channels: only ADMIN and SUPERVISOR can post
+    if (channel.isAnnouncement) {
+      const sender = activeUsers.get(senderId);
+      const senderRole = sender?.role || 'MEMBER';
+      if (senderRole === 'MEMBER') {
+        socket.emit('message:ack', {
+          tempId: tempId || messageId,
+          serverId: messageId,
+          timestamp: Date.now(),
+          status: 'failed',
+          error: 'Only Admins and Supervisors can post in official announcement channels.'
+        });
+        return;
+      }
     }
 
     // Slow mode enforcement
@@ -1620,11 +1645,22 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Reactions
+  // Reactions — verify message exists and user has access
   socket.on('reaction:add', async (data: { messageId: string; emoji: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
-    await addReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Add error:', e));
+    // Security: Verify the message exists
+    const msg = await getMessageById(data.messageId).catch(() => undefined);
+    if (!msg) return;
+    // Security: For channel messages, verify membership
+    if (msg.channelId) {
+      const members: string[] = await getChannelMembers(msg.channelId).catch(() => []);
+      if (!members.includes(userId)) return;
+    } else if (msg.recipientId) {
+      // DM: verify user is sender or recipient
+      if (msg.senderId !== userId && msg.recipientId !== userId) return;
+    }
+    await addReaction(data.messageId, userId, data.emoji).catch(() => {});
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
     socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
   });
@@ -1632,16 +1668,27 @@ io.on('connection', (socket) => {
   socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
-    await removeReaction(data.messageId, userId, data.emoji).catch(e => console.error('[Reaction] Remove error:', e));
+    const msg = await getMessageById(data.messageId).catch(() => undefined);
+    if (!msg) return;
+    if (msg.channelId) {
+      const members: string[] = await getChannelMembers(msg.channelId).catch(() => []);
+      if (!members.includes(userId)) return;
+    } else if (msg.recipientId) {
+      if (msg.senderId !== userId && msg.recipientId !== userId) return;
+    }
+    await removeReaction(data.messageId, userId, data.emoji).catch(() => {});
     const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
     socket.broadcast.emit('message:reactions', { messageId: data.messageId, reactions });
   });
 
-  // Message Pinning
+  // Message Pinning — verify channel membership
   socket.on('message:pin', async (data: { channelId: string; messageId: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
-    await pinMessage(data.channelId, data.messageId, userId).catch(e => console.error('[Pin] Error:', e));
+    // Security: Verify channel membership
+    const members: string[] = await getChannelMembers(data.channelId).catch(() => []);
+    if (!members.includes(userId)) return;
+    await pinMessage(data.channelId, data.messageId, userId).catch(() => {});
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
     socket.to(`channel:${data.channelId}`).emit('channel:pinned', { channelId: data.channelId, pinned });
   });
@@ -1649,7 +1696,9 @@ io.on('connection', (socket) => {
   socket.on('message:unpin', async (data: { channelId: string; messageId: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
-    await unpinMessage(data.channelId, data.messageId).catch(e => console.error('[Unpin] Error:', e));
+    const members: string[] = await getChannelMembers(data.channelId).catch(() => []);
+    if (!members.includes(userId)) return;
+    await unpinMessage(data.channelId, data.messageId).catch(() => {});
     const pinned = await getPinnedMessages(data.channelId).catch(() => []);
     socket.to(`channel:${data.channelId}`).emit('channel:pinned', { channelId: data.channelId, pinned });
   });
