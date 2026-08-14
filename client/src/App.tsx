@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { liveQuery } from 'dexie';
 import { socket, connectSocket } from './lib/socket';
 import { Loader2 } from 'lucide-react';
 import { ConfirmModal } from './components/modals/ConfirmModal';
@@ -1391,8 +1392,12 @@ export const App: React.FC = () => {
     };
     computeUnreadRef.current = computeUnread;
     computeUnread();
-    const interval = setInterval(computeUnread, 2000);
-    return () => clearInterval(interval);
+    // Reactively recompute when messages change (instead of polling every 2s)
+    const sub = liveQuery(() => db.messages.count()).subscribe({
+      next: () => { computeUnread(); },
+      error: (e) => console.error('[Unread] Live query error:', e),
+    });
+    return () => sub.unsubscribe();
   }, [currentUserKeys]);
 
   // ── Offline Queue Auto-Flush ──────────────────────────────────────────────────

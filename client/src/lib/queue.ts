@@ -6,8 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 import type { EncryptedPayload, LocalMessage, AttachmentPayload } from '../types/chat';
-import { getPendingSyncMessages, updateMessageStatus, clearPendingUpload } from './db';
-import { encryptMessage, deriveSharedKey, importPublicKey } from './crypto';
+import { getPendingSyncMessages, updateMessageStatus, clearPendingUpload, getChannelKey } from './db';
+import { encryptMessage, deriveSharedKey, importPublicKey, importSymmetricKeyFromJwk } from './crypto';
 import { uploadEncryptedAttachment } from './attachments';
 
 // ─── Network Status Hook ──────────────────────────────────────────────────────
@@ -122,21 +122,35 @@ export async function processOfflineQueue(opts: QueueProcessorOptions): Promise<
 
   for (const msg of pending) {
     try {
-      // Ensure we have a shared key for the recipient
-      let sharedKey = sharedKeysCache.get(msg.recipientId!);
+      let sharedKey: CryptoKey | null = null;
 
-      if (!sharedKey && privateKey) {
-        const peer = activeUsers.find(u => u.userId === msg.recipientId);
-        if (peer) {
-          const peerPubKey = await importPublicKey(peer.publicKey);
-          sharedKey = await deriveSharedKey(privateKey, peerPubKey);
-          sharedKeysCache.set(msg.recipientId!, sharedKey);
+      // Channel messages: use the channel symmetric key
+      if (msg.channelId) {
+        const stored = await getChannelKey(msg.channelId);
+        if (stored?.keyJwk) {
+          sharedKey = await importSymmetricKeyFromJwk(stored.keyJwk);
         }
-      }
+        if (!sharedKey) {
+          console.warn(`[Queue] No channel key for ${msg.channelId} — skipping message ${msg.id}`);
+          continue;
+        }
+      } else {
+        // DM messages: derive shared ECDH key for the recipient
+        sharedKey = sharedKeysCache.get(msg.recipientId!) || null;
 
-      if (!sharedKey) {
-        console.warn(`[Queue] No shared key for ${msg.recipientId} — skipping message ${msg.id}`);
-        continue;
+        if (!sharedKey && privateKey) {
+          const peer = activeUsers.find(u => u.userId === msg.recipientId);
+          if (peer) {
+            const peerPubKey = await importPublicKey(peer.publicKey);
+            sharedKey = await deriveSharedKey(privateKey, peerPubKey);
+            sharedKeysCache.set(msg.recipientId!, sharedKey);
+          }
+        }
+
+        if (!sharedKey) {
+          console.warn(`[Queue] No shared key for ${msg.recipientId} — skipping message ${msg.id}`);
+          continue;
+        }
       }
 
       let ciphertext = msg.ciphertext;

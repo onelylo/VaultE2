@@ -49,6 +49,7 @@ import {
   insertAttachment,
   getAttachmentById,
   getAttachmentByMessageId,
+  getAttachmentsByMessageIds,
   getMessageById,
   linkAttachmentToMessage,
   getDatabaseStats,
@@ -242,10 +243,11 @@ function toApiMessage(m: DbMessage): StoredMessage {
 
 /** Attach the linked encrypted payload to each stored message in history */
 async function enrichMessagesWithAttachments(msgs: DbMessage[]): Promise<StoredMessage[]> {
+  const attachments = await getAttachmentsByMessageIds(msgs.map(m => m.id));
   const out: StoredMessage[] = [];
   for (const m of msgs) {
     const api = toApiMessage(m);
-    const att = await getAttachmentByMessageId(m.id);
+    const att = attachments.get(m.id);
     if (att) {
       api.attachment = {
         attachmentId: att.id,
@@ -903,8 +905,7 @@ app.patch('/api/channels/:channelId', async (req, res) => {
     await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds });
     
     const updated = await getChannelById(req.params.channelId);
-    const allChannels = await getAllChannels();
-    io.emit('channels:update', allChannels);
+    await broadcastChannels();
     
     // Emit member-specific events for real-time sidebar updates
     if (memberIds) {
@@ -942,7 +943,7 @@ app.delete('/api/channels/:channelId', async (req, res) => {
     }
     
     await deleteChannel(req.params.channelId);
-    io.emit('channels:update', await getAllChannels());
+    await broadcastChannels();
     return res.json({ success: true });
   } catch (e) {
     console.error('[Channel] Delete error:', e);
@@ -1108,6 +1109,18 @@ io.use((socket, next) => {
   next();
 });
 
+// Broadcast per-user filtered channel lists (respects private/team membership)
+async function broadcastChannels(): Promise<void> {
+  for (const [userId, user] of activeUsers) {
+    try {
+      const filtered = await getAllChannels(userId);
+      io.to(user.socketId).emit('channels:update', filtered);
+    } catch (e) {
+      console.error('[Channel] Broadcast error for user:', e);
+    }
+  }
+}
+
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
@@ -1160,13 +1173,13 @@ io.on('connection', (socket) => {
     io.emit('users:presence', presence);
     io.emit('user:status_change', { userId: data.userId, isOnline: true, at: Date.now() });
 
-    // Send channel list (persisted in PostgreSQL)
-    const channels = await getAllChannels().catch(() => []);
+    // Send channel list (persisted in PostgreSQL) — filtered per-user
+    const channels = await getAllChannels(data.userId).catch(() => []);
     socket.emit('channels:update', channels);
   });
 
   // Channel CRUD
-  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[] }) => {
+  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[]; memberIds?: string[] }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
     // Permission check: only ADMIN can create official/public/announcement channels
@@ -1193,15 +1206,20 @@ io.on('connection', (socket) => {
     await insertChannel(newChannel).catch(e => console.error('[Channel] Persist error:', e));
     // Add creator to channel_members so they can see the channel
     await addChannelMember(channelId, authenticatedUserId, authenticatedUserId).catch(() => {});
+    // Add invited members
+    const invitedIds = (data.memberIds || []).filter(mid => mid !== authenticatedUserId);
+    for (const mid of invitedIds) {
+      await addChannelMember(channelId, mid, authenticatedUserId).catch(() => {});
+    }
     // Auto-join creator to channel room
     socket.join(`channel:${channelId}`);
     console.log(`[Channel] Created #${newChannel.name}`);
-    const updated = await getAllChannels().catch(() => [newChannel]);
-    io.emit('channels:update', updated);
+    await broadcastChannels();
   });
 
   socket.on('channels:get', async () => {
-    const channels = await getAllChannels().catch(() => []);
+    const uid = (socket as any).authenticatedUserId;
+    const channels = await getAllChannels(uid).catch(() => []);
     socket.emit('channels:update', channels);
   });
 
@@ -1209,6 +1227,10 @@ io.on('connection', (socket) => {
   socket.on('message:send', async (payload: StoredMessage) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { recipientId, ciphertext, tempId, id, attachment } = payload;
+    if (!ciphertext || typeof ciphertext !== 'string') {
+      console.warn('[DM] Rejected: missing ciphertext');
+      return;
+    }
     // Verify senderId matches authenticated user (prevent spoofing)
     const senderId = authenticatedUserId;
     const messageId = id || `srv_${Date.now()}`;
@@ -1246,6 +1268,10 @@ io.on('connection', (socket) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { channelId, ciphertext, tempId, id, attachment } = payload;
     if (!channelId) return;
+    if (!ciphertext || typeof ciphertext !== 'string') {
+      console.warn('[Channel] Rejected: missing ciphertext');
+      return;
+    }
     const senderId = authenticatedUserId;
     const messageId = id || `srv_${Date.now()}`;
     console.log(`[Channel] ${senderId} → #${channelId} | ${ciphertext.length} chars`);

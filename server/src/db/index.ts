@@ -585,6 +585,27 @@ export async function getAttachmentByMessageId(messageId: string): Promise<DbAtt
     : undefined;
 }
 
+export async function getAttachmentsByMessageIds(messageIds: string[]): Promise<Map<string, DbAttachment>> {
+  if (messageIds.length === 0) return new Map();
+  const res = await getPool().query(
+    `SELECT id, message_id, file_path, encrypted_metadata, iv, metadata_iv, created_at FROM attachments WHERE message_id = ANY($1)`,
+    [messageIds]
+  );
+  const map = new Map<string, DbAttachment>();
+  for (const row of res.rows) {
+    map.set(row.message_id, {
+      id: row.id,
+      messageId: row.message_id,
+      filePath: row.file_path,
+      encryptedMetadata: row.encrypted_metadata,
+      iv: row.iv,
+      metadataIv: row.metadata_iv,
+      createdAt: Number(row.created_at),
+    });
+  }
+  return map;
+}
+
 export async function linkAttachmentToMessage(attachmentId: string, messageId: string): Promise<void> {
   await getPool().query(`UPDATE attachments SET message_id = $2 WHERE id = $1`, [attachmentId, messageId]);
 }

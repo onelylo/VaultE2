@@ -73,6 +73,7 @@ export interface EncryptedPayload {
   timestamp: number;
   isEdited?: boolean;
   isDeleted?: boolean;
+  replyTo?: string;
   attachment?: AttachmentPayload;
 }
 
