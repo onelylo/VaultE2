@@ -1130,12 +1130,12 @@ export const App: React.FC = () => {
       // Check if this is a channel message
       const existing = await db.messages.get(id);
       if (existing?.channelId) {
-        const channelKey = await getOrGenerateChannelKey(existing.channelId);
+        const channelKey = await getOrGenerateChannelKeyRef.current(existing.channelId);
         if (channelKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, channelKey); } catch {} }
       } else {
         const peer = selectedPeerRef.current;
         if (peer?.publicKey) {
-          const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
+          const sharedKey = await getOrDeriveSharedKeyRef.current(peer.userId, peer.publicKey);
           if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
         }
       }
@@ -1289,7 +1289,7 @@ export const App: React.FC = () => {
         for (const memberId of currentMembers) {
           const memberUser = allUsers.find(u => u.userId === memberId);
           if (!memberUser?.publicKey) continue;
-          const sharedKey = await getOrDeriveSharedKey(memberId, memberUser.publicKey);
+          const sharedKey = await getOrDeriveSharedKeyRef.current(memberId, memberUser.publicKey);
           if (!sharedKey) continue;
           const exportedKey = await crypto.subtle.exportKey('jwk', newKeyObj);
           const encryptedData = await encryptChannelKeyForUser(exportedKey, sharedKey);
@@ -1414,7 +1414,7 @@ export const App: React.FC = () => {
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
     };
-  }, [currentUserKeys, privateKeyObject, getOrDeriveSharedKey, getOrGenerateChannelKey]);
+  }, [currentUserKeys, privateKeyObject]);
 
   // ── Ctrl+K Search Shortcut ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1838,6 +1838,10 @@ export const App: React.FC = () => {
   fetchUserDirectoryRef.current = fetchUserDirectory;
   const validatePeerKeyTofuRef = useRef(validatePeerKeyTofu);
   validatePeerKeyTofuRef.current = validatePeerKeyTofu;
+  const getOrDeriveSharedKeyRef = useRef(getOrDeriveSharedKey);
+  getOrDeriveSharedKeyRef.current = getOrDeriveSharedKey;
+  const getOrGenerateChannelKeyRef = useRef(getOrGenerateChannelKey);
+  getOrGenerateChannelKeyRef.current = getOrGenerateChannelKey;
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
