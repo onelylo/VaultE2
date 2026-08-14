@@ -25,6 +25,7 @@ import { getFingerprint } from '../lib/crypto';
 import { API_BASE } from '../lib/attachments';
 import { EditUserModal } from './admin/EditUserModal';
 import { AdminUserTable } from './admin/AdminUserTable';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface AdminDashboardProps {
   currentUser: UserKeyPair;
@@ -69,6 +70,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [health, setHealth] = useState<HealthData | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant: 'danger' | 'primary';
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const loadStats = useCallback(async () => {
     const token = localStorage.getItem('vaultchat_jwt');
@@ -105,20 +114,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const roleCycle: UserRole[] = ['MEMBER', 'SUPERVISOR', 'ADMIN'];
     const currentIdx = roleCycle.indexOf(user.role);
     const next: UserRole = roleCycle[(currentIdx + 1) % roleCycle.length];
-    if (!window.confirm(`Change ${user.username}'s role to ${next}?`)) return;
-    setBusyId(user.userId);
-    const ok = await onSetRole(user.userId, next);
-    setBusyId(null);
-    if (ok) await load();
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Change Role',
+      message: `Change ${user.username}'s role to <strong>${next}</strong>?`,
+      variant: 'primary',
+      onConfirm: async () => {
+        setBusyId(user.userId);
+        const ok = await onSetRole(user.userId, next);
+        setBusyId(null);
+        if (ok) await load();
+      },
+    });
   };
 
   const handleDelete = async (user: AdminUser) => {
     if (user.userId === currentUser.userId) return;
-    if (!window.confirm(`Delete ${user.username}? This will remove their account and revoke all keys. This cannot be undone.`)) return;
-    setBusyId(user.userId);
-    const ok = await onDeleteUser(user.userId);
-    setBusyId(null);
-    if (ok) await load();
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete User',
+      message: `Delete <strong>${user.username}</strong>? This will remove their account. Message history and encryption keys will be preserved so existing conversations remain decryptable. <strong>This cannot be undone.</strong>`,
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setBusyId(user.userId);
+        const ok = await onDeleteUser(user.userId);
+        setBusyId(null);
+        if (ok) await load();
+      },
+    });
   };
 
   const handleEditUser = (user: AdminUser) => {
@@ -519,6 +543,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isOpen={!!editingUser}
         onClose={() => setEditingUser(null)}
         onSave={handleSaveUser}
+      />
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title || ''}
+        message={confirmDialog?.message || ''}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        variant={confirmDialog?.variant || 'primary'}
+        onConfirm={async () => { await confirmDialog?.onConfirm(); setConfirmDialog(null); }}
+        onCancel={() => setConfirmDialog(null)}
       />
     </div>
   );

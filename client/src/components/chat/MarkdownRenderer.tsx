@@ -1,5 +1,6 @@
 import React from 'react';
 import { LinkPreview } from './LinkPreview';
+import { renderEmojiText } from '../../lib/emoji';
 
 type Token = { type: string; content: string };
 
@@ -63,7 +64,7 @@ function renderTokens(tokens: Token[]): React.ReactNode[] {
           </span>
         );
       default:
-        return <span key={i}>{token.content}</span>;
+        return <span key={i}>{renderEmojiText(token.content)}</span>;
     }
   });
 }
