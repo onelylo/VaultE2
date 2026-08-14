@@ -929,6 +929,8 @@ export const App: React.FC = () => {
     setShowAdmin(false);
     setAvatarMenu(null);
     if (socket.connected) socket.disconnect();
+    // Reset history ref so fetchAllHistory runs on re-login
+    historyFetchedRef.current = false;
     // Clear IndexedDB tables (not db.delete() which closes Dexie permanently)
     db.transaction('rw', [db.keys, db.messages, db.trustedKeys, db.channels, db.channelKeys], async () => {
       await db.keys.clear();
@@ -1123,16 +1125,20 @@ export const App: React.FC = () => {
 
     const onMessageEdited = async ({ id, newCiphertext, newIv }: { id: string; newCiphertext: string; newIv: string }) => {
       let decryptedText = '🔒 Unable to decrypt edited message';
-      // Check if this is a channel message
       const existing = await db.messages.get(id);
       if (existing?.channelId) {
         const channelKey = await getOrGenerateChannelKeyRef.current(existing.channelId);
         if (channelKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, channelKey); } catch {} }
       } else {
-        const peer = selectedPeerRef.current;
-        if (peer?.publicKey) {
-          const sharedKey = await getOrDeriveSharedKeyRef.current(peer.userId, peer.publicKey);
-          if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
+        // Find the actual peer from the message, not the currently selected peer
+        const myId = currentUserKeys?.userId;
+        const peerId = existing?.senderId === myId ? existing?.recipientId : existing?.senderId;
+        if (peerId) {
+          const peer = allUsersRef.current.find(u => u.userId === peerId);
+          if (peer?.publicKey) {
+            const sharedKey = await getOrDeriveSharedKeyRef.current(peer.userId, peer.publicKey);
+            if (sharedKey) { try { decryptedText = await decryptMessage(newCiphertext, newIv, sharedKey); } catch {} }
+          }
         }
       }
       await editMessageLocally(id, decryptedText, newCiphertext, newIv);
@@ -1921,7 +1927,6 @@ export const App: React.FC = () => {
       const { ciphertext, iv } = await encryptMessage(text, sharedKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
       await saveMessage(localMsg);
-      // Instant DM list update — move peer to top of sidebar
       upsertDMConversation(selectedPeer, text);
       if (!isOffline) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, ciphertext, iv, timestamp, replyTo });

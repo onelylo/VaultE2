@@ -118,6 +118,11 @@ export async function saveMessage(msg: LocalMessage): Promise<void> {
   if (existing) {
     // If message was removed by user, don't re-add it
     if (existing.removed) return;
+    // Don't overwrite a successfully decrypted message with an undecryptable version
+    if (!msg.isDecrypted && existing.isDecrypted) {
+      await db.messages.put({ ...msg, text: existing.text, isDecrypted: true, attachmentMeta: existing.attachmentMeta });
+      return;
+    }
     const existingStatusRank = STATUS_RANK[existing.status] ?? 0;
     const incomingStatusRank = STATUS_RANK[msg.status ?? ''] ?? 0;
     const finalStatus = existingStatusRank > incomingStatusRank ? existing.status : msg.status;

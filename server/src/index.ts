@@ -1654,7 +1654,7 @@ io.on('connection', (socket) => {
     const messageId = id || `srv_${Date.now()}`;
 
     try {
-      await insertMessage(toDbMessage({ ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
+      await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
       if (attachment?.attachmentId) await linkAttachmentToMessage(attachment.attachmentId, messageId);
     } catch (e) {
       console.error('[DM] Persist error:', e);
@@ -1672,7 +1672,7 @@ io.on('connection', (socket) => {
     if (recipientId) {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
-        io.to(recipient.socketId).emit('message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
+        io.to(recipient.socketId).emit('message:receive', { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
 
       } else {
 
@@ -1760,7 +1760,7 @@ io.on('connection', (socket) => {
     }
 
     try {
-      await insertMessage(toDbMessage({ ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
+      await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
       if (attachment?.attachmentId) await linkAttachmentToMessage(attachment.attachmentId, messageId);
     } catch (e) {
       console.error('[Channel] Persist error:', e);
@@ -1775,7 +1775,7 @@ io.on('connection', (socket) => {
     });
 
     // Broadcast to channel members only (room-based delivery)
-    socket.to(`channel:${channelId}`).emit('channel:message:receive', { ...payload, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
+    socket.to(`channel:${channelId}`).emit('channel:message:receive', { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
@@ -1838,20 +1838,22 @@ io.on('connection', (socket) => {
   socket.on('reaction:add', async (data: { messageId: string; emoji: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
-    // Security: Verify the message exists
     const msg = await getMessageById(data.messageId).catch(() => undefined);
     if (!msg) return;
-    // Security: For channel messages, verify membership
     if (msg.channelId) {
       const members: string[] = await getChannelMembers(msg.channelId).catch(() => []);
       if (!members.includes(userId)) return;
     } else if (msg.recipientId) {
-      // DM: verify user is sender or recipient
       if (msg.senderId !== userId && msg.recipientId !== userId) return;
     }
-    await addReaction(data.messageId, userId, data.emoji).catch(() => {});
-    const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    io.emit('message:reactions', { messageId: data.messageId, reactions });
+    try {
+      await addReaction(data.messageId, userId, data.emoji);
+      const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
+      io.emit('message:reactions', { messageId: data.messageId, reactions });
+    } catch (e) {
+      // Only log, don't broadcast stale data that would overwrite optimistic update
+      console.error('[Reaction] Add failed:', e);
+    }
   });
 
   socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
@@ -1865,9 +1867,13 @@ io.on('connection', (socket) => {
     } else if (msg.recipientId) {
       if (msg.senderId !== userId && msg.recipientId !== userId) return;
     }
-    await removeReaction(data.messageId, userId, data.emoji).catch(() => {});
-    const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
-    io.emit('message:reactions', { messageId: data.messageId, reactions });
+    try {
+      await removeReaction(data.messageId, userId, data.emoji);
+      const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
+      io.emit('message:reactions', { messageId: data.messageId, reactions });
+    } catch (e) {
+      console.error('[Reaction] Remove failed:', e);
+    }
   });
 
   // Message Pinning — verify channel membership
