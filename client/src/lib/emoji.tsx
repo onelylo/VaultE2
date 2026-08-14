@@ -69,6 +69,8 @@ function FlagIconInner({ emoji, size = 24 }: { emoji: string; size?: number }) {
       src={url}
       alt={FLAG_COUNTRY_MAP[emoji] || emoji}
       title={FLAG_COUNTRY_MAP[emoji] || emoji}
+      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      onLoad={(e) => { e.currentTarget.style.display = 'inline'; }}
       style={{
         width: size,
         height: size,
@@ -85,26 +87,10 @@ export function FlagIcon({ emoji, size = 24 }: { emoji: string; size?: number })
 }
 
 export function renderEmojiText(text: string): React.ReactNode {
-  const segments: React.ReactNode[] = [];
-  let lastIndex = 0;
-
-  // Match regional indicator pairs (flags) and special flag sequences
-  const flagRegex = /(\uD83C[\uDDE6-\uDDFF]){2}|🏳️‍🌈|🏳️‍⚧️|🏴‍☠️|🏁|🚩|🎌|🏴|🏳️/gu;
-  let match: RegExpExecArray | null;
-
-  while ((match = flagRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push(<span key={`text-${lastIndex}`} style={EMOJI_STYLE}>{text.slice(lastIndex, match.index)}</span>);
-    }
-    segments.push(<FlagIconInner key={`flag-${match.index}`} emoji={match[0]} size={20} />);
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push(<span key={`text-${lastIndex}`} style={EMOJI_STYLE}>{text.slice(lastIndex)}</span>);
-  }
-
-  return segments.length === 1 ? segments[0] : <>{segments}</>;
+  // Simple and safe: just render text with emoji font stack
+  // Flags will render as system emojis (or fallback to letters on Windows)
+  // This avoids regex issues with complex emoji sequences
+  return <span style={EMOJI_STYLE}>{text}</span>;
 }
 
 export function EmojiSpan({ emoji, size = 24 }: { emoji: string; size?: number }) {
