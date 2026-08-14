@@ -133,8 +133,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     // Save profile fields (fullName, phone) via admin endpoint
     try {
-      const token = localStorage.getItem('vaultchat_token');
-      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/admin/users/${data.userId}/profile`, {
+      const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
+      await fetch(`${API_BASE}/api/admin/users/${data.userId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ fullName: data.fullName, phone: data.phone }),

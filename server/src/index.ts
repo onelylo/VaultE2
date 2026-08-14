@@ -175,11 +175,14 @@ function requireAuth(req: express.Request, res: express.Response): string | null
   return decoded.userId as string;
 }
 
-function requireAdmin(req: express.Request, res: express.Response): string | null {
+async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return null; }
   const decoded = verifyJwt(auth.split(' ')[1]);
-  if (!decoded?.userId || decoded.role !== 'ADMIN') {
+  if (!decoded?.userId) { res.status(401).json({ error: 'Invalid token' }); return null; }
+  // Re-verify role from database — don't trust JWT claim
+  const user = await getUserById(decoded.userId).catch(() => undefined);
+  if (!user || user.role !== 'ADMIN') {
     res.status(403).json({ error: 'Admin access required' });
     return null;
   }
@@ -311,19 +314,17 @@ function dmKey(a: string, b: string) {
   return [a, b].sort().join('::');
 }
 
-function publicUser(u: DbUser) {
+function publicUser(u: DbUser, includePrivate = false) {
   const avatar = u.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((u.fullName || u.username).trim())}`;
-  return {
+  const base: any = {
     userId:   u.userId,
     username: u.username,
     fullName: u.fullName,
-    email:    u.email,
     role:     u.role,
     avatarUrl: avatar,
     avatar:   avatar,
     status:   u.status || 'ACTIVE',
     statusMessage: u.statusMessage,
-    phone:    u.phone,
     publicKey: u.publicKey,
     signingPublicKey: u.signingPublicKey,
     keyVersion: u.keyVersion ?? 1,
@@ -332,6 +333,12 @@ function publicUser(u: DbUser) {
     oldSigningPublicKey: u.oldSigningPublicKey,
     createdAt: u.createdAt,
   };
+  // Only include sensitive fields for the user themselves or admin views
+  if (includePrivate) {
+    base.email = u.email;
+    base.phone = u.phone;
+  }
+  return base;
 }
 
 async function buildUserDirectory(requestingUserId?: string) {
@@ -376,7 +383,7 @@ app.get('/api/auth/me', async (req, res) => {
   try {
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const pUser = publicUser(user);
+    const pUser = publicUser(user, true);
     return res.json({
       user: { ...pUser, encryptedPrivateKey: user.encryptedPrivateKey, keySalt: user.keySalt },
       avatar: pUser.avatarUrl
@@ -404,7 +411,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, avatar: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
-    return res.json({ user: publicUser(user) });
+    return res.json({ user: publicUser(user, true) });
   } catch (e) {
     console.error('[Profile] Update error:', e);
     return res.status(500).json({ error: 'Server error' });
@@ -528,7 +535,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     io.emit('user:registered', { user: publicUser(newUser) });
     return res.json({
       token,
-      user: { ...publicUser(newUser), encryptedPrivateKey, keySalt }
+      user: { ...publicUser(newUser, true), encryptedPrivateKey, keySalt }
     });
   } catch (e) {
     console.error('[Auth] Register error:', e);
@@ -570,7 +577,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     return res.json({
       token,
       user: {
-        ...publicUser(user),
+        ...publicUser(user, true),
         encryptedPrivateKey: user.encryptedPrivateKey,
         keySalt: user.keySalt,
       }
@@ -691,13 +698,13 @@ app.get('/api/users', async (req, res) => {
 // ── Admin RBAC Routes ─────────────────────────────────────────────────────────
 
 app.get('/api/admin/users', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const users = await getAllUsers();
     return res.json({
       users: users.map(u => ({
-        ...publicUser(u),
+        ...publicUser(u, true),
         isOnline: activeUsers.has(u.userId),
       })),
     });
@@ -708,7 +715,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 app.patch('/api/admin/users/:id/role', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   const { role } = req.body;
   if (role !== 'ADMIN' && role !== 'SUPERVISOR' && role !== 'MEMBER') {
@@ -730,7 +737,7 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
 
 // Admin update user profile fields (fullName, phone)
 app.patch('/api/admin/users/:id/profile', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const target = await getUserById(req.params.id);
@@ -739,15 +746,15 @@ app.patch('/api/admin/users/:id/profile', async (req, res) => {
     await updateUserProfile(target.userId, { fullName, phone });
     const updated = await getUserById(target.userId);
     if (!updated) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId: updated.userId, fullName: updated.fullName, phone: updated.phone });
-    return res.json({ success: true, user: publicUser(updated) });
+    io.emit('user:profile-update', { userId: updated.userId, fullName: updated.fullName, username: updated.username, avatarUrl: updated.avatarUrl });
+    return res.json({ success: true, user: publicUser(updated, true) });
   } catch (e) {
     return res.status(500).json({ error: 'Profile update failed' });
   }
 });
 
 app.delete('/api/admin/users/:id', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const target = await getUserById(req.params.id);
@@ -768,7 +775,7 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 // ── Admin Stats Route ─────────────────────────────────────────────────────────
 
 app.get('/api/admin/stats', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const stats = await getDatabaseStats();
@@ -801,7 +808,7 @@ function formatBytes(bytes: number): string {
 // ── Admin Health / Infrastructure Route ───────────────────────────────────────
 
 app.get('/api/admin/health', async (req, res) => {
-  const adminId = requireAdmin(req, res);
+  const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const uptimeSec = process.uptime();
@@ -912,6 +919,13 @@ app.get('/api/url-preview', async (req, res) => {
   try {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Only HTTP(S) URLs allowed' });
+
+    // SSRF protection: block private/internal IP ranges
+    const hostname = parsed.hostname;
+    const isPrivateIP = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.|localhost|::1|fc|fd)/i.test(hostname)
+      || hostname === 'localhost'
+      || hostname === '[::1]';
+    if (isPrivateIP) return res.status(400).json({ error: 'Private/internal URLs not allowed' });
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
