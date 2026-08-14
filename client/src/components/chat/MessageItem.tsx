@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Lock, Check, CheckCheck, Clock, Reply, Pencil, Trash2, Trash,
-  Camera, Mic, Paperclip, Copy, MoreHorizontal,
+  Camera, Mic, Paperclip, Copy, MoreHorizontal, Send,
 } from 'lucide-react';
 import type { LocalMessage, User, Channel } from '../../types/chat';
 import { AttachmentMessage } from '../AttachmentMessage';
@@ -60,6 +60,7 @@ interface MessageItemProps {
   onAddReaction?: (messageId: string, emoji: string) => void;
   onRemoveReaction?: (messageId: string, emoji: string) => void;
   allUsers?: User[];
+  onForward?: (msg: LocalMessage) => void;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -85,6 +86,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onAddReaction,
   onRemoveReaction,
   allUsers = [],
+  onForward,
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
@@ -418,6 +420,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   >
                     <Copy className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
                     <span>Copy</span>
+                  </button>
+                )}
+
+                {/* Forward */}
+                {!msg.isDeleted && msg.text && onForward && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onForward(msg); setShowActions(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    <Send className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                    <span>Forward</span>
                   </button>
                 )}
 

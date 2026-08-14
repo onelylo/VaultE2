@@ -1781,6 +1781,39 @@ export const App: React.FC = () => {
     }
   };
 
+  // ── Forward Message ─────────────────────────────────────────────────────────
+  const handleForwardMessage = async (originalText: string, target: { type: 'dm'; userId: string } | { type: 'channel'; channelId: string }) => {
+    if (!currentUserKeys || !privateKeyObject) return;
+    const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+    const timestamp = Date.now();
+    const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
+
+    if (target.type === 'channel') {
+      const channelKey = await getOrGenerateChannelKey(target.channelId);
+      if (!channelKey) return;
+      const { ciphertext, iv } = await encryptMessage(originalText, channelKey);
+      const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
+      await saveMessage(localMsg);
+      if (!isOffline) {
+        socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp });
+      }
+    } else {
+      const peer = allUsers.find(u => u.userId === target.userId);
+      if (!peer) return;
+      const isValidKey = await validatePeerKeyTofu(peer);
+      if (!isValidKey) { alert('⚠️ Security Alert: Peer identity key mismatch.'); return; }
+      const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
+      if (!sharedKey) return;
+      const { ciphertext, iv } = await encryptMessage(originalText, sharedKey);
+      const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
+      await saveMessage(localMsg);
+      upsertDMConversation(peer, originalText);
+      if (!isOffline) {
+        socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp });
+      }
+    }
+  };
+
   // ── Send Encrypted File Attachment ──────────────────────────────────────────
   const handleSendFiles = async (files: File[], text?: string) => {
     if (!currentUserKeys || (!selectedPeer && !selectedChannel) || !privateKeyObject || files.length === 0) return;
@@ -2010,6 +2043,8 @@ export const App: React.FC = () => {
               onOpenFingerprintModal={() => setShowFingerprintModal(true)}
               onCloseFingerprintModal={() => setShowFingerprintModal(false)}
               onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
+              onForwardMessage={handleForwardMessage}
+              channels={channels}
             />
           </div>
         </div>

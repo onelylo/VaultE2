@@ -13,6 +13,7 @@ import { ImageLightboxModal } from './modals/ImageLightboxModal';
 import { ConfirmModal } from './modals/ConfirmModal';
 import { ProfileModal } from './ProfileModal';
 import { MessageItem } from './chat/MessageItem';
+import { ForwardModal } from './modals/ForwardModal';
 import { MAX_ATTACHMENT_BYTES, formatFileSize, generateImageThumbnail } from '../lib/attachments';
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -46,6 +47,8 @@ interface ChatAreaProps {
   onOpenFingerprintModal?: () => void;
   onCloseFingerprintModal?: () => void;
   onToggleSidebar?: () => void;
+  onForwardMessage?: (originalText: string, target: { type: 'dm'; userId: string } | { type: 'channel'; channelId: string }) => void;
+  channels?: Channel[];
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -77,6 +80,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onOpenFingerprintModal,
   onCloseFingerprintModal,
   onToggleSidebar,
+  onForwardMessage,
+  channels = [],
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +101,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [activeReply, setActiveReply] = useState<{ msgId: string; senderName: string; text: string } | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string } | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<LocalMessage | null>(null);
   const [inspectedUser, setInspectedUser] = useState<User | null>(null);
   const [pendingDeleteForMeId, setPendingDeleteForMeId] = useState<string | null>(null);
   const [pendingDeleteEveryoneId, setPendingDeleteEveryoneId] = useState<string | null>(null);
@@ -683,6 +689,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               onAddReaction={handleAddReaction}
               onRemoveReaction={handleRemoveReaction}
               allUsers={allUsers}
+              onForward={setForwardMsg}
             />
           ))
         )}
@@ -945,6 +952,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         isDangerous={true}
         onConfirm={handleConfirmDeleteEveryone}
         onClose={() => setPendingDeleteEveryoneId(null)}
+      />
+
+      <ForwardModal
+        isOpen={!!forwardMsg}
+        onClose={() => setForwardMsg(null)}
+        onForward={(target) => {
+          if (forwardMsg && onForwardMessage) {
+            onForwardMessage(forwardMsg.text, target);
+          }
+        }}
+        allUsers={allUsers}
+        channels={channels}
+        currentUserId={currentUserId}
+        messageText={forwardMsg?.text || ''}
       />
     </div>
   );
