@@ -1993,6 +1993,12 @@ export const App: React.FC = () => {
             unreadChannels={unreadChannels}
             recentDMs={recentDMs}
             latestDMMessages={latestDMMessages}
+            onCloseDM={(userId) => {
+              if (selectedPeer?.userId === userId) {
+                setSelectedPeer(null);
+                setActiveView('channels');
+              }
+            }}
           />
           </div>
         </>

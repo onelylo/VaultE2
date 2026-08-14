@@ -20,11 +20,11 @@ import {
   Server,
   VolumeX,
   Volume2,
-  Ban,
+  XCircle,
 } from 'lucide-react';
 import type { User, Channel, UserKeyPair } from '../types/chat';
 import { getFingerprint } from '../lib/crypto';
-import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
+import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation, getBlockedUsers, getHiddenConversations, hideConversation, unhideConversation } from '../lib/db';
 import { CreateChannelModal } from './channels/CreateChannelModal';
 
 interface SidebarProps {
@@ -52,6 +52,8 @@ interface SidebarProps {
   unreadChannels?: Record<string, number>;
   recentDMs?: User[];
   latestDMMessages?: Record<string, string>;
+  onCloseDM?: (userId: string) => void;
+  hiddenConversations?: Set<string>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -75,6 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectAdminTab,
   onLogout,
   onOpenChannelSettings,
+  onCloseDM,
   unreadDMs = {},
   unreadChannels = {},
   recentDMs = [],
@@ -90,13 +93,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Muted conversations
   const [mutedSet, setMutedSet] = useState<Set<string>>(new Set());
 
-  // Blocked users
-  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
+  // Hidden conversations
+  const [hiddenSet, setHiddenSet] = useState<Set<string>>(new Set());
+
+  // Confirm dialog for closing DM
+  const [closeConfirmUser, setCloseConfirmUser] = useState<User | null>(null);
 
   const otherUsers = users.filter(u => u.userId !== currentUser?.userId && u.statusMessage !== '[deleted]');
   const onlineCount = otherUsers.filter(u => u.isOnline).length;
 
-  // Filter users based on mode (excluding blocked users)
+  // Filter users based on mode
   const filteredUsers = (searchMode
     ? otherUsers.filter(u =>
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,7 +115,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // recentDMs first (already ordered by most recent), then Dexie matches
         return [...recentDMs.filter(u => otherUsers.some(o => o.userId === u.userId)), ...dexieMatches];
       })()
-  ).filter(u => !blockedSet.has(u.userId));
+  );
+  const visibleDMUsers = filteredUsers.filter(u => !hiddenSet.has(u.userId));
+  const hiddenDMUsers = filteredUsers.filter(u => hiddenSet.has(u.userId));
 
   const filteredChannels = channels.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -152,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   useEffect(() => {
-    getBlockedUsers().then(setBlockedSet);
+    getHiddenConversations().then(setHiddenSet);
   }, []);
 
   const handleToggleMute = useCallback(async (conversationId: string, e: React.MouseEvent) => {
@@ -165,17 +173,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setMutedSet(prev => new Set(prev).add(conversationId));
     }
   }, [mutedSet]);
-
-  const handleToggleBlock = useCallback(async (userId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (blockedSet.has(userId)) {
-      await unblockUser(userId);
-      setBlockedSet(prev => { const next = new Set(prev); next.delete(userId); return next; });
-    } else {
-      await blockUser(userId);
-      setBlockedSet(prev => new Set(prev).add(userId));
-    }
-  }, [blockedSet]);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -652,7 +649,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )
           ) : (
-            filteredUsers.map(user => {
+            <>
+            {visibleDMUsers.map(user => {
               const isSelected = selectedUser?.userId === user.userId;
               const fp = fingerprints[user.userId] || '...';
               // Always look up live presence from the users prop, not from recentDMs which may be stale
@@ -743,18 +741,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                     {!isCollapsed && (
                       <button
-                        onClick={(e) => handleToggleBlock(user.userId, e)}
+                        onClick={(e) => { e.stopPropagation(); setCloseConfirmUser(user); }}
                         className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
-                        style={{ color: blockedSet.has(user.userId) ? '#ef4444' : 'var(--text-muted)' }}
-                        title={blockedSet.has(user.userId) ? 'Unblock' : 'Block'}
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Close chat"
                       >
-                        <Ban className="w-3.5 h-3.5" />
+                        <XCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
                 </button>
               );
-            })
+            })}
+            {hiddenDMUsers.length > 0 && !searchMode && (
+              <div className="mt-2 pt-2" style={{ borderTop: '1px dashed var(--border-color)' }}>
+                {!isCollapsed && (
+                  <p className="text-[9px] font-bold px-2 mb-1.5" style={{ color: 'var(--text-muted)' }}>HIDDEN</p>
+                )}
+                {hiddenDMUsers.map(user => {
+                  const fp = fingerprints[user.userId] || '...';
+                  const liveUser = users.find(u => u.userId === user.userId) || user;
+                  const isOnline = liveUser.isOnline ?? false;
+                  const isAway = liveUser.isAway ?? false;
+                  return (
+                    <button
+                      key={`hidden-${user.userId}`}
+                      onClick={() => handleSelectUserWrapper(user)}
+                      title={`${user.fullName || user.username} - Click to open, hover to unhide`}
+                      className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                      style={{ opacity: 0.5 }}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="relative flex-shrink-0">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px]"
+                            style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                            {user.avatarUrl ? null : user.username.substring(0, 2).toUpperCase()}
+                          </div>
+                          {user.avatarUrl && (
+                            <img src={user.avatarUrl} alt={user.username} className="w-8 h-8 rounded-lg absolute inset-0 object-cover" style={{ opacity: 0.5 }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          )}
+                        </div>
+                        {!isCollapsed && (
+                          <span className="font-semibold text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                            {user.fullName || user.username}
+                          </span>
+                        )}
+                      </div>
+                      {!isCollapsed && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await unhideConversation(user.userId);
+                            setHiddenSet(prev => { const next = new Set(prev); next.delete(user.userId); return next; });
+                          }}
+                          className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-smooth"
+                          style={{ color: '#34d399' }}
+                          title="Unhide chat"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </>
           )
         )}
       </div>
@@ -840,6 +893,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
         users={users}
         currentUser={currentUser ?? undefined}
       />
+
+      {/* Close DM Confirmation */}
+      {closeConfirmUser && (
+        <div className="fixed inset-0 z-[99998] flex items-center justify-center p-4 animate-[fadeIn_0.15s_ease-out]"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setCloseConfirmUser(null)}>
+          <div className="w-full max-w-xs rounded-2xl p-5 animate-[scaleIn_0.15s_ease-out]"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-main)' }}>Close Chat</h3>
+            <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+              Hide {closeConfirmUser.fullName || closeConfirmUser.username} from your chat list? You can still find them in the user list.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setCloseConfirmUser(null)} className="flex-1 py-2 rounded-xl text-xs font-bold"
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>Cancel</button>
+              <button onClick={async () => {
+                await hideConversation(closeConfirmUser.userId);
+                setHiddenSet(prev => new Set(prev).add(closeConfirmUser.userId));
+                if (onCloseDM) onCloseDM(closeConfirmUser.userId);
+                setCloseConfirmUser(null);
+              }} className="flex-1 py-2 rounded-xl text-xs font-bold"
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };

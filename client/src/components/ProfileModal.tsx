@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ShieldCheck, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight } from 'lucide-react';
+import { X, ShieldCheck, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight, Ban, MessageSquare } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import type { User, LocalMessage } from '../types/chat';
@@ -10,6 +10,8 @@ interface ProfileModalProps {
   onClose: () => void;
   onStartDM?: () => void;
   onBlock?: () => void;
+  onUnblock?: () => void;
+  isBlocked?: boolean;
   onImageClick?: (url: string, name?: string) => void;
   onJumpToMessage?: (messageId: string) => void;
 }
@@ -31,7 +33,7 @@ function formatSize(bytes: number) {
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
-  user, currentUserId, onClose, onStartDM, onBlock, onImageClick, onJumpToMessage,
+  user, currentUserId, onClose, onStartDM, onBlock, onUnblock, isBlocked, onImageClick, onJumpToMessage,
 }) => {
   const [showFullAvatar, setShowFullAvatar] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
@@ -154,10 +156,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <button onClick={onStartDM} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs"
                   style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--accent-text)' }}>MESSAGE</button>
               )}
-              {onBlock && (
-                <button onClick={onBlock} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs"
-                  style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: '#f87171' }}>BLOCK</button>
-              )}
+              {isBlocked && onUnblock ? (
+                <button onClick={onUnblock} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+                  style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e' }}>
+                  <MessageSquare className="w-3 h-3" /> UNBLOCK
+                </button>
+              ) : onBlock ? (
+                <button onClick={onBlock} className="flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+                  style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                  <Ban className="w-3 h-3" /> BLOCK
+                </button>
+              ) : null}
             </div>
 
             {/* Shared Media */}

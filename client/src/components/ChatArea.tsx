@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus } from '../lib/db';
+import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
 import { socket } from '../lib/socket';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
@@ -133,6 +133,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    getBlockedUsers().then(setBlockedUsers);
+  }, []);
 
   // Cleanup voice recorder on unmount
   useEffect(() => {
@@ -966,6 +971,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           currentUserId={currentUserId}
           onClose={() => setInspectedUser(null)}
           onImageClick={(url, name) => setActiveLightbox({ url, name })}
+          isBlocked={blockedUsers.has(inspectedUser.userId)}
+          onBlock={async () => {
+            await blockUser(inspectedUser.userId);
+            setBlockedUsers(prev => new Set(prev).add(inspectedUser.userId));
+          }}
+          onUnblock={async () => {
+            await unblockUser(inspectedUser.userId);
+            setBlockedUsers(prev => { const next = new Set(prev); next.delete(inspectedUser.userId); return next; });
+          }}
         />
       )}
 
@@ -975,6 +989,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           currentUserId={currentUserId}
           onClose={() => setShowProfileModal(false)}
           onImageClick={(url, name) => setActiveLightbox({ url, name })}
+          isBlocked={blockedUsers.has(selectedUser.userId)}
+          onBlock={async () => {
+            await blockUser(selectedUser.userId);
+            setBlockedUsers(prev => new Set(prev).add(selectedUser.userId));
+          }}
+          onUnblock={async () => {
+            await unblockUser(selectedUser.userId);
+            setBlockedUsers(prev => { const next = new Set(prev); next.delete(selectedUser.userId); return next; });
+          }}
           onJumpToMessage={(messageId) => {
             setShowProfileModal(false);
             setTimeout(() => {

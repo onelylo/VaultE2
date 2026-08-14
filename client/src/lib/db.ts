@@ -15,6 +15,7 @@ export class VaultChatDatabase extends Dexie {
   channelKeys!: Table<ChannelKey, string>;
   mutedConversations!: Table<{ conversationId: string }, string>;
   blockedUsers!: Table<{ userId: string }, string>;
+  hiddenConversations!: Table<{ conversationId: string }, string>;
   drafts!: Table<{ conversationId: string; text: string }, string>;
   forwardedMessages!: Table<{ messageId: string }, string>;
 
@@ -51,6 +52,20 @@ export class VaultChatDatabase extends Dexie {
       blockedUsers: 'userId',
       drafts: 'conversationId',
       forwardedMessages: 'messageId',
+    });
+
+    // v7: Add hidden conversations for close-DM feature
+    this.version(7).stores({
+      keys:        'userId, username, role, createdAt',
+      messages:    'id, tempId, senderId, recipientId, channelId, timestamp, status, [senderId+recipientId]',
+      trustedKeys: 'peerUserId, fingerprint, firstSeenAt',
+      channels:    'id, name, type',
+      channelKeys: 'channelId',
+      mutedConversations: 'conversationId',
+      blockedUsers: 'userId',
+      drafts: 'conversationId',
+      forwardedMessages: 'messageId',
+      hiddenConversations: 'conversationId',
     });
   }
 }
@@ -246,6 +261,21 @@ export async function isUserBlocked(userId: string): Promise<boolean> {
 export async function getBlockedUsers(): Promise<Set<string>> {
   const all = await db.blockedUsers.toArray();
   return new Set(all.map(e => e.userId));
+}
+
+// ── Hidden Conversations ──────────────────────────────────────────────────────
+
+export async function hideConversation(conversationId: string): Promise<void> {
+  await db.hiddenConversations.put({ conversationId });
+}
+
+export async function unhideConversation(conversationId: string): Promise<void> {
+  await db.hiddenConversations.delete(conversationId);
+}
+
+export async function getHiddenConversations(): Promise<Set<string>> {
+  const all = await db.hiddenConversations.toArray();
+  return new Set(all.map(e => e.conversationId));
 }
 
 // ── Drafts ─────────────────────────────────────────────────────────────────────
