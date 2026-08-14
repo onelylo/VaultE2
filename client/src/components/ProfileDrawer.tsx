@@ -276,7 +276,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">PHONE</label>
-                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9+\-\s()]/g, ''))}
                       placeholder="e.g. +1 555 123 4567"
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
                   </div>

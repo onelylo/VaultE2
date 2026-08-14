@@ -49,6 +49,8 @@ interface ChatAreaProps {
   onToggleSidebar?: () => void;
   onForwardMessage?: (originalText: string, target: { type: 'dm'; userId: string } | { type: 'channel'; channelId: string }) => void;
   channels?: Channel[];
+  onBlockUser?: (userId: string) => void;
+  onUnblockUser?: (userId: string) => void;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -82,6 +84,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onToggleSidebar,
   onForwardMessage,
   channels = [],
+  onBlockUser,
+  onUnblockUser,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -993,11 +997,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             await blockUser(inspectedUser.userId);
             await fetch(`/api/block/${inspectedUser.userId}`, { method: 'POST' }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(inspectedUser.userId));
+            onBlockUser?.(inspectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(inspectedUser.userId);
             await fetch(`/api/block/${inspectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(inspectedUser.userId); return next; });
+            onUnblockUser?.(inspectedUser.userId);
           }}
         />
       )}
@@ -1013,11 +1019,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             await blockUser(selectedUser.userId);
             await fetch(`/api/block/${selectedUser.userId}`, { method: 'POST' }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(selectedUser.userId));
+            onBlockUser?.(selectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(selectedUser.userId);
             await fetch(`/api/block/${selectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(selectedUser.userId); return next; });
+            onUnblockUser?.(selectedUser.userId);
           }}
           onJumpToMessage={(messageId) => {
             setShowProfileModal(false);

@@ -2154,6 +2154,12 @@ export const App: React.FC = () => {
               onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
               onForwardMessage={handleForwardMessage}
               channels={channels}
+              onBlockUser={(userId) => {
+                setAllUsers(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: true } : u));
+              }}
+              onUnblockUser={(userId) => {
+                setAllUsers(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: false } : u));
+              }}
             />
           </div>
         </div>
