@@ -995,13 +995,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isBlocked={blockedUsers.has(inspectedUser.userId)}
           onBlock={async () => {
             await blockUser(inspectedUser.userId);
-            await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'POST' }).catch(() => {});
+            const token = localStorage.getItem('vaultchat_jwt');
+            if (token) await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(inspectedUser.userId));
             onBlockUser?.(inspectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(inspectedUser.userId);
-            await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
+            const token = localStorage.getItem('vaultchat_jwt');
+            if (token) await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(inspectedUser.userId); return next; });
             onUnblockUser?.(inspectedUser.userId);
           }}
@@ -1017,13 +1019,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isBlocked={blockedUsers.has(selectedUser.userId)}
           onBlock={async () => {
             await blockUser(selectedUser.userId);
-            await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'POST' }).catch(() => {});
+            const token = localStorage.getItem('vaultchat_jwt');
+            if (token) await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(selectedUser.userId));
             onBlockUser?.(selectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(selectedUser.userId);
-            await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
+            const token = localStorage.getItem('vaultchat_jwt');
+            if (token) await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(selectedUser.userId); return next; });
             onUnblockUser?.(selectedUser.userId);
           }}

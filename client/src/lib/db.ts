@@ -203,7 +203,8 @@ export async function clearPendingUpload(id: string): Promise<void> {
 }
 
 export async function deleteMessageLocally(id: string): Promise<void> {
-  await db.messages.delete(id);
+  const msg = await db.messages.get(id);
+  if (msg) await db.messages.update(id, { isDeleted: true });
 }
 
 export async function markMessageDeletedLocally(id: string): Promise<void> {
