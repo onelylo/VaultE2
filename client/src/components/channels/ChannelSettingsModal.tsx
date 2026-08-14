@@ -84,8 +84,16 @@ function ChannelSettingsInner({
   const [slowMode, setSlowMode] = useState(channel.slowModeSeconds || 0);
   const [activeTab, setActiveTab] = useState<'all' | 'images' | 'audio' | 'video' | 'docs'>('all');
 
-  const canEditSettings = currentUser?.role === 'ADMIN' || channel.createdBy === currentUser?.userId;
+  const isOwner = channel.createdBy === currentUser?.userId;
+  const canEditSettings = channel.type === 'official'
+    ? currentUser?.role === 'ADMIN'
+    : isOwner;
   const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private');
+
+  // For official channels, all users are members
+  const effectiveMemberIds = channel.type === 'official'
+    ? allUsers.map(u => u.userId)
+    : channel.memberIds || [];
 
   // Shared attachments from this channel
   const sharedMessages = useLiveQuery(async () => {
@@ -216,7 +224,7 @@ function ChannelSettingsInner({
             </div>
             <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
               <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>MEMBERS</span>
-              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{channel.memberIds?.length || 0}</span>
+              <span className="text-[11px]" style={{ color: 'var(--text-main)' }}>{effectiveMemberIds.length}</span>
             </div>
             <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
               <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>SLOW MODE</span>
@@ -334,6 +342,9 @@ function ChannelSettingsInner({
                       <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-main)' }}>
                         {member.fullName || member.username}
                       </span>
+                      {member.userId === currentUser?.userId && (
+                        <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
+                      )}
                       {member.userId === channel.createdBy && (
                         <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
                       )}
@@ -355,10 +366,10 @@ function ChannelSettingsInner({
             <div className="mb-4">
               <h4 className="text-[10px] font-bold tracking-wider flex items-center gap-2 mb-2" style={{ color: 'var(--text-muted)' }}>
                 <Users className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
-                <span>MEMBERS ({channel.memberIds?.length || 0})</span>
+                <span>MEMBERS ({effectiveMemberIds.length})</span>
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {(channel.memberIds || []).map(id => {
+                {effectiveMemberIds.map(id => {
                   const user = allUsers.find(u => u.userId === id);
                   if (!user) return null;
                   return (
@@ -369,6 +380,9 @@ function ChannelSettingsInner({
                         {user.username.substring(0, 2).toUpperCase()}
                       </div>
                       <span className="font-semibold">{user.fullName || user.username}</span>
+                      {id === currentUser?.userId && (
+                        <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
+                      )}
                       {id === channel.createdBy && (
                         <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
                       )}
