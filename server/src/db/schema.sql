@@ -127,3 +127,13 @@ CREATE TABLE IF NOT EXISTS starred_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_starred_user ON starred_messages (user_id);
+
+CREATE TABLE IF NOT EXISTS blocked_users (
+  blocker_id  TEXT NOT NULL,
+  blocked_id  TEXT NOT NULL,
+  created_at  BIGINT NOT NULL,
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocked_blocker ON blocked_users (blocker_id);
+CREATE INDEX IF NOT EXISTS idx_blocked_blocked ON blocked_users (blocked_id);

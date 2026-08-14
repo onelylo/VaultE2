@@ -722,6 +722,39 @@ export async function getStarredStatus(userId: string, messageIds: string[]): Pr
   return map;
 }
 
+// ── Blocked Users ────────────────────────────────────────────────────────────
+
+export async function blockUserOnServer(blockerId: string, blockedId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO blocked_users (blocker_id, blocked_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [blockerId, blockedId, Date.now()]
+  );
+}
+
+export async function unblockUserOnServer(blockerId: string, blockedId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2', [blockerId, blockedId]);
+}
+
+export async function isUserBlockedBy(blockerId: string, blockedId: string): Promise<boolean> {
+  const db = getPool();
+  const res = await db.query('SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2', [blockerId, blockedId]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function getBlockedUsersOf(userId: string): Promise<string[]> {
+  const db = getPool();
+  const res = await db.query('SELECT blocked_id FROM blocked_users WHERE blocker_id = $1', [userId]);
+  return res.rows.map(r => r.blocked_id);
+}
+
+export async function getBlockedByUsers(userId: string): Promise<string[]> {
+  const db = getPool();
+  const res = await db.query('SELECT blocker_id FROM blocked_users WHERE blocked_id = $1', [userId]);
+  return res.rows.map(r => r.blocker_id);
+}
+
 export async function getDatabaseStats(): Promise<{ users: number; channels: number; messages: number; attachments: number }> {
   const db = getPool();
   const [users, channels, messages, attachments] = await Promise.all([

@@ -64,6 +64,11 @@ import {
   unstarMessage,
   getStarredMessages,
   getStarredStatus,
+  isUserBlockedBy,
+  blockUserOnServer,
+  unblockUserOnServer,
+  getBlockedUsersOf,
+  getBlockedByUsers,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -326,11 +331,17 @@ function publicUser(u: DbUser) {
 
 async function buildUserDirectory(requestingUserId?: string) {
   const users = await getAllUsers();
+  const blockedIds = requestingUserId ? await getBlockedUsersOf(requestingUserId) : [];
+  const blockedByIds = requestingUserId ? await getBlockedByUsers(requestingUserId) : [];
+  const blockedSet = new Set(blockedIds);
+  const blockedBySet = new Set(blockedByIds);
   return users
     .map(u => ({
       ...publicUser(u),
       isOnline: activeUsers.has(u.userId),
       socketId: activeUsers.get(u.userId)?.socketId,
+      blockedByMe: blockedSet.has(u.userId),
+      blockedByThem: blockedBySet.has(u.userId),
     }))
     .filter(u => u.userId !== requestingUserId); // exclude self from directory
 }
@@ -956,6 +967,49 @@ app.post('/api/starred/batch', async (req, res) => {
   }
 });
 
+// ── Block/Unblock Endpoints ────────────────────────────────────────────────────
+
+app.post('/api/block/:userId', async (req, res) => {
+  const blockerId = requireAuth(req, res);
+  if (!blockerId) return;
+  const { userId: blockedId } = req.params;
+  if (blockerId === blockedId) return res.status(400).json({ error: 'Cannot block yourself' });
+  try {
+    await blockUserOnServer(blockerId, blockedId);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[Block] Error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/block/:userId', async (req, res) => {
+  const blockerId = requireAuth(req, res);
+  if (!blockerId) return;
+  const { userId: blockedId } = req.params;
+  try {
+    await unblockUserOnServer(blockerId, blockedId);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[Unblock] Error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/block/status/:userId', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { userId: targetId } = req.params;
+  try {
+    const blockedByThem = await isUserBlockedBy(userId, targetId);
+    const blockedByTarget = await isUserBlockedBy(targetId, userId);
+    return res.json({ blockedByThem, blockedByTarget });
+  } catch (e) {
+    console.error('[Block] Status error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Channel Keys Endpoints (Key Distribution) ─────────────────────────────────
 
 app.post('/api/channels/:channelId/keys', async (req, res) => {
@@ -1376,6 +1430,20 @@ io.on('connection', (socket) => {
     }
     // Verify senderId matches authenticated user (prevent spoofing)
     const senderId = authenticatedUserId;
+
+    // Check if recipient has blocked the sender
+    if (recipientId && await isUserBlockedBy(recipientId, senderId)) {
+      console.log(`[DM] Blocked: ${senderId} → ${recipientId} (recipient blocked sender)`);
+      // Still ACK to sender so they know it was sent (E2EE: server can't modify content)
+      socket.emit('message:ack', {
+        tempId: tempId || id,
+        serverId: id || `srv_${Date.now()}`,
+        timestamp: Date.now(),
+        status: 'sent',
+      });
+      return;
+    }
+
     const messageId = id || `srv_${Date.now()}`;
     console.log(`[DM] ${senderId} → ${recipientId} | ${ciphertext.length} chars`);
 

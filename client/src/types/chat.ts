@@ -18,6 +18,8 @@ export interface User {
   oldPublicKey?: string;
   oldSigningPublicKey?: string;
   createdAt?: number;
+  blockedByMe?: boolean;
+  blockedByThem?: boolean;
 }
 
 export interface Channel {

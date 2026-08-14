@@ -392,9 +392,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [showEmojiPicker]);
 
   const doSend = () => {
-    const disabled = !selectedUser && !selectedChannel;
-    if (disabled) return;
-    if (selectedUser && blockedUsers.has(selectedUser.userId)) return;
+    if (!selectedUser && !selectedChannel) return;
+    if (isBlockedDM) return;
 
     if (selectedFile) {
       onSendFiles([selectedFile], text.trim() || undefined);
@@ -457,6 +456,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleFilesChosen = (files: FileList | null) => {
+    if (isBlockedDM) return;
     const file = files?.[0];
     if (file) handlePickFile(file);
   };
@@ -464,16 +464,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (isBlockedDM) return;
     handleFilesChosen(e.dataTransfer.files);
   };
 
   const handleEmojiSelect = (emoji: string) => {
+    if (isBlockedDM) return;
     setText(prev => prev + emoji);
     setShowEmojiPicker(false);
     textareaRef.current?.focus();
   };
 
   const startRecording = async () => {
+    if (isBlockedDM) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -567,10 +570,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const isAnnouncementChannel = selectedChannel?.isAnnouncement || false;
   const userRole = currentUserKeys?.role || 'MEMBER';
+  const isBlockedDM = !!(selectedUser && (blockedUsers.has(selectedUser.userId) || selectedUser.blockedByThem));
   const disabled = !selectedUser && !selectedChannel;
   const isReadOnly = isAnnouncementChannel && userRole === 'MEMBER';
-  const canSend = !disabled && !isPreparing && !isReadOnly && (text.trim() || selectedFile);
-  const placeholderText = disabled ? 'Select a conversation to start messaging...' : 'Type a message...';
+  const canSend = !disabled && !isPreparing && !isReadOnly && !isBlockedDM && (text.trim() || selectedFile);
+  const placeholderText = disabled ? 'Select a conversation to start messaging...' : isBlockedDM ? (selectedUser?.blockedByThem ? 'This user blocked you...' : 'You blocked this user...') : 'Type a message...';
 
   if (!selectedUser && !selectedChannel) {
     return (
@@ -868,6 +872,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             )}
           </div>
 
+          {!isBlockedDM && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -876,8 +881,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           >
             <Paperclip className="h-5 w-5" />
           </button>
+          )}
 
-          {!isReadOnly && !isRecording && (
+          {!isReadOnly && !isRecording && !isBlockedDM && (
             <button
               type="button"
               onClick={startRecording}
@@ -916,9 +922,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 Only Admins and Supervisors can post in this announcement channel.
               </div>
             ) : selectedUser && blockedUsers.has(selectedUser.userId) ? (
-              <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] text-center"
+              <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border text-center"
                 style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
                 You blocked this user. Unblock to send messages.
+              </div>
+            ) : selectedUser && selectedUser.blockedByThem ? (
+              <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border text-center"
+                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
+                This user has blocked you. You cannot send messages.
               </div>
             ) : (
               <textarea
@@ -980,10 +991,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isBlocked={blockedUsers.has(inspectedUser.userId)}
           onBlock={async () => {
             await blockUser(inspectedUser.userId);
+            await fetch(`/api/block/${inspectedUser.userId}`, { method: 'POST' }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(inspectedUser.userId));
           }}
           onUnblock={async () => {
             await unblockUser(inspectedUser.userId);
+            await fetch(`/api/block/${inspectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(inspectedUser.userId); return next; });
           }}
         />
@@ -998,10 +1011,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isBlocked={blockedUsers.has(selectedUser.userId)}
           onBlock={async () => {
             await blockUser(selectedUser.userId);
+            await fetch(`/api/block/${selectedUser.userId}`, { method: 'POST' }).catch(() => {});
             setBlockedUsers(prev => new Set(prev).add(selectedUser.userId));
           }}
           onUnblock={async () => {
             await unblockUser(selectedUser.userId);
+            await fetch(`/api/block/${selectedUser.userId}`, { method: 'DELETE' }).catch(() => {});
             setBlockedUsers(prev => { const next = new Set(prev); next.delete(selectedUser.userId); return next; });
           }}
           onJumpToMessage={(messageId) => {
