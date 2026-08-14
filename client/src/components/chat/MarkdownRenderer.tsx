@@ -4,8 +4,8 @@ type Token = { type: string; content: string };
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
-  // Match: ```code blocks```, `inline code`, **bold**, *italic*, ~~strikethrough~~, and plain text
-  const regex = /(```[\s\S]*?```|`[^`]+`|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~)/g;
+  // Match: ```code blocks```, `inline code`, **bold**, *italic*, ~~strikethrough~~, @mentions, and plain text
+  const regex = /(```[\s\S]*?```|`[^`]+`|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|@(\w+))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -23,6 +23,8 @@ function tokenize(text: string): Token[] {
       tokens.push({ type: 'italic', content: match[3]! });
     } else if (match[1].startsWith('~~')) {
       tokens.push({ type: 'strikethrough', content: match[4]! });
+    } else if (match[1].startsWith('@')) {
+      tokens.push({ type: 'mention', content: match[5]! });
     }
     lastIndex = match.index + match[0].length;
   }
@@ -52,6 +54,12 @@ function renderTokens(tokens: Token[]): React.ReactNode[] {
           <pre key={i} className="my-1 p-3 rounded-lg text-xs font-mono overflow-x-auto" style={{ backgroundColor: 'color-mix(in srgb, var(--text-main) 8%, transparent)' }}>
             <code>{token.content}</code>
           </pre>
+        );
+      case 'mention':
+        return (
+          <span key={i} className="px-1 py-0.5 rounded font-semibold text-[var(--accent-primary)]" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)' }}>
+            @{token.content}
+          </span>
         );
       default:
         return <span key={i}>{token.content}</span>;
