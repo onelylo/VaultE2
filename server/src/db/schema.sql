@@ -138,3 +138,17 @@ CREATE TABLE IF NOT EXISTS blocked_users (
 
 CREATE INDEX IF NOT EXISTS idx_blocked_blocker ON blocked_users (blocker_id);
 CREATE INDEX IF NOT EXISTS idx_blocked_blocked ON blocked_users (blocked_id);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          SERIAL PRIMARY KEY,
+  actor_id    TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  target_type TEXT,
+  target_id   TEXT,
+  details     TEXT,
+  created_at  BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log (actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at);

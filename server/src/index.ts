@@ -25,6 +25,8 @@ import {
   updateUserProfile,
   updateUserAvatar,
   updateUserPassword,
+  updateUserStatus,
+  revokeUserKeys,
   deleteUser,
   addChannelMember,
   getChannelMembers,
@@ -73,6 +75,8 @@ import {
   deleteChannelKeysForChannel,
   getChannelKeysForChannel,
   transferChannelOwnership,
+  logAudit,
+  getAuditLog,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -560,6 +564,10 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     if (!await verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
+    // Check if account is suspended
+    if (user.status === 'SUSPENDED') {
+      return res.status(403).json({ error: 'Your account has been suspended. Contact an administrator.' });
+    }
     // Security: Migrate legacy SHA-256 passwords to bcrypt
     if (user.passwordHash.length === 64 && !user.passwordHash.startsWith('$')) {
       const newBcryptHash = await hashPassword(password);
@@ -728,6 +736,7 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
       return res.status(400).json({ error: 'Cannot change your own role' });
     }
     await updateUserRole(target.userId, role);
+    await logAudit(adminId, 'role_change', 'user', target.userId, `${target.role} -> ${role}`);
     io.emit('user:role_change', { userId: target.userId, role });
     return res.json({ success: true, user: { ...publicUser(target), role } });
   } catch (e) {
@@ -753,6 +762,80 @@ app.patch('/api/admin/users/:id/profile', async (req, res) => {
   }
 });
 
+// Admin force password reset
+app.patch('/api/admin/users/:id/password', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const { newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    await updateUserPassword(target.userId, await hashPassword(newPassword));
+    await logAudit(adminId, 'force_password_reset', 'user', target.userId);
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Password reset failed' });
+  }
+});
+
+// Admin revoke E2EE keys
+app.patch('/api/admin/users/:id/revoke-keys', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    await revokeUserKeys(target.userId);
+    await logAudit(adminId, 'key_revocation', 'user', target.userId);
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Key revocation failed' });
+  }
+});
+
+// Admin suspend/activate user
+app.patch('/api/admin/users/:id/status', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const { status } = req.body;
+    if (!['ACTIVE', 'SUSPENDED'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be ACTIVE or SUSPENDED' });
+    }
+    await updateUserStatus(target.userId, status);
+    await logAudit(adminId, 'status_change', 'user', target.userId, status);
+    // Force disconnect if suspending
+    if (status === 'SUSPENDED') {
+      const userSocket = activeUsers.get(target.userId);
+      if (userSocket) {
+        io.to(userSocket.socketId).emit('user:suspended', { reason: 'Your account has been suspended' });
+      }
+    }
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Status update failed' });
+  }
+});
+
+// Admin audit log
+app.get('/api/admin/audit-log', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const offset = Number(req.query.offset) || 0;
+    const entries = await getAuditLog(limit, offset);
+    return res.json({ entries });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
 app.delete('/api/admin/users/:id', async (req, res) => {
   const adminId = await requireAdmin(req, res);
   if (!adminId) return;
@@ -763,6 +846,7 @@ app.delete('/api/admin/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
     await deleteUser(target.userId);
+    await logAudit(adminId, 'user_deleted', 'user', target.userId, target.username);
     console.log(`[Admin] ${adminId} deleted user ${target.username} (${target.userId})`);
     io.emit('user:removed', { userId: target.userId });
     return res.json({ success: true });

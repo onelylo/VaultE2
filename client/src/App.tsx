@@ -1232,6 +1232,15 @@ export const App: React.FC = () => {
       }
     };
 
+    const onUserSuspended = () => {
+      // Force logout on suspension
+      if (socket.connected) socket.disconnect();
+      localStorage.removeItem('vaultchat_jwt');
+      sessionStorage.removeItem('vaultchat_jwt');
+      setCurrentUserKeys(null);
+      window.location.reload();
+    };
+
     const onChannelMemberAdded = (data: { channelId: string; userId: string }) => {
       // If the added member is the current user, refresh channels to show the new channel
       if (data.userId === currentUserKeys?.userId) {
@@ -1322,6 +1331,7 @@ export const App: React.FC = () => {
     socket.on('user:removed', onUserRemoved);
     socket.on('user:role_change', onUserRoleChange);
     socket.on('user:profile-update', onUserProfileUpdate);
+    socket.on('user:suspended', onUserSuspended);
     socket.on('channel:member_added', onChannelMemberAdded);
     socket.on('channel:member_removed', onChannelMemberRemoved);
     socket.on('channel:key_rotated', onChannelKeyRotated);
@@ -1395,6 +1405,7 @@ export const App: React.FC = () => {
       socket.off('user:removed', onUserRemoved);
       socket.off('user:role_change', onUserRoleChange);
       socket.off('user:profile-update', onUserProfileUpdate);
+      socket.off('user:suspended', onUserSuspended);
       socket.off('channel:member_added', onChannelMemberAdded);
       socket.off('channel:member_removed', onChannelMemberRemoved);
       socket.off('channel:key_rotated', onChannelKeyRotated);

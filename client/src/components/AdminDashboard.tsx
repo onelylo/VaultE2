@@ -127,19 +127,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSaveUser = async (data: { userId: string; role: string; fullName: string; status: string; phone?: string; newPassword?: string; revokeKeys?: boolean }) => {
+    const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
+    if (!token) return;
+
+    // Role change
     if (data.role !== users.find(u => u.userId === data.userId)?.role) {
       const ok = await onSetRole(data.userId, data.role as UserRole);
       if (!ok) return;
     }
-    // Save profile fields (fullName, phone) via admin endpoint
+
+    // Profile fields (fullName, phone)
     try {
-      const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
       await fetch(`${API_BASE}/api/admin/users/${data.userId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ fullName: data.fullName, phone: data.phone }),
       });
     } catch {}
+
+    // Status change (ACTIVE/SUSPENDED)
+    const currentUser = users.find(u => u.userId === data.userId);
+    if (data.status !== (currentUser?.status || 'ACTIVE')) {
+      try {
+        await fetch(`${API_BASE}/api/admin/users/${data.userId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: data.status }),
+        });
+      } catch {}
+    }
+
+    // Force password reset
+    if (data.newPassword) {
+      try {
+        await fetch(`${API_BASE}/api/admin/users/${data.userId}/password`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ newPassword: data.newPassword }),
+        });
+      } catch {}
+    }
+
+    // Revoke E2EE keys
+    if (data.revokeKeys) {
+      try {
+        await fetch(`${API_BASE}/api/admin/users/${data.userId}/revoke-keys`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        });
+      } catch {}
+    }
+
     await load();
     setEditingUser(null);
   };

@@ -275,6 +275,18 @@ export async function updateUserPassword(userId: string, passwordHash: string): 
   await getPool().query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [userId, passwordHash]);
 }
 
+export async function updateUserStatus(userId: string, status: string): Promise<void> {
+  await getPool().query(`UPDATE users SET status = $2 WHERE id = $1`, [userId, status]);
+}
+
+export async function revokeUserKeys(userId: string): Promise<void> {
+  await getPool().query(
+    `UPDATE users SET public_key = '', encrypted_private_key = NULL, key_salt = NULL,
+     signing_public_key = NULL, key_version = key_version + 1 WHERE id = $1`,
+    [userId]
+  );
+}
+
 export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string; username?: string; phone?: string }): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [userId];
@@ -795,6 +807,30 @@ export async function getBlockedByUsers(userId: string): Promise<string[]> {
   const db = getPool();
   const res = await db.query('SELECT blocker_id FROM blocked_users WHERE blocked_id = $1', [userId]);
   return res.rows.map(r => r.blocker_id);
+}
+
+// ── Audit Log ───────────────────────────────────────────────────────────────
+
+export async function logAudit(actorId: string, action: string, targetType?: string, targetId?: string, details?: string): Promise<void> {
+  await getPool().query(
+    'INSERT INTO audit_log (actor_id, action, target_type, target_id, details, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [actorId, action, targetType || null, targetId || null, details || null, Date.now()]
+  );
+}
+
+export async function getAuditLog(limit = 100, offset = 0): Promise<{ actorId: string; action: string; targetType?: string; targetId?: string; details?: string; createdAt: number }[]> {
+  const res = await getPool().query(
+    'SELECT actor_id, action, target_type, target_id, details, created_at FROM audit_log ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+    [limit, offset]
+  );
+  return res.rows.map(r => ({
+    actorId: r.actor_id,
+    action: r.action,
+    targetType: r.target_type,
+    targetId: r.target_id,
+    details: r.details,
+    createdAt: Number(r.created_at),
+  }));
 }
 
 export async function getDatabaseStats(): Promise<{ users: number; channels: number; messages: number; attachments: number }> {

@@ -12,6 +12,7 @@ export interface User {
   signingPublicKey?: string;
   isOnline?: boolean;
   isAway?: boolean;
+  status?: string;
   statusMessage?: string;
   keyVersion?: number;
   keyRotationSignature?: string;
