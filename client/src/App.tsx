@@ -1612,7 +1612,7 @@ export const App: React.FC = () => {
     socket.emit('channel:create', { ...channelData, createdBy: currentUserKeys.userId });
   };
 
-  const handleUpdateChannel = async (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles'>>) => {
+  const handleUpdateChannel = async (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => {
     const token = getJwtToken();
     if (!token) return;
     try {

@@ -30,6 +30,7 @@ export interface Channel {
   memberIds: string[];
   isAnnouncement?: boolean;
   allowedRoles?: string[];
+  slowModeSeconds?: number;
 }
 
 export interface ChannelKey {

@@ -57,6 +57,7 @@ export interface DbChannel {
   isAnnouncement?: boolean;
   allowedRoles?: string[];
   memberIds?: string[];
+  slowModeSeconds?: number;
 }
 
 export interface DbChannelKey {
@@ -361,6 +362,7 @@ function mapChannelRow(row: any): DbChannel {
     createdAt: Number(row.created_at),
     isAnnouncement: row.is_announcement || false,
     allowedRoles: row.allowed_roles || ['ADMIN', 'SUPERVISOR', 'MEMBER'],
+    slowModeSeconds: row.slow_mode_seconds || 0,
   };
 }
 
@@ -398,7 +400,7 @@ export async function getChannelById(channelId: string): Promise<DbChannel | und
   return channel;
 }
 
-export async function updateChannel(channelId: string, data: Partial<Pick<DbChannel, 'name' | 'description' | 'isAnnouncement' | 'allowedRoles'>> & { memberIds?: string[] }): Promise<void> {
+export async function updateChannel(channelId: string, data: Partial<Pick<DbChannel, 'name' | 'description' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>> & { memberIds?: string[] }): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [channelId];
   let idx = 2;
@@ -406,6 +408,7 @@ export async function updateChannel(channelId: string, data: Partial<Pick<DbChan
   if (data.description !== undefined) { sets.push(`description = $${idx++}`); vals.push(data.description); }
   if (data.isAnnouncement !== undefined) { sets.push(`is_announcement = $${idx++}`); vals.push(data.isAnnouncement); }
   if (data.allowedRoles !== undefined) { sets.push(`allowed_roles = $${idx++}`); vals.push(data.allowedRoles); }
+  if (data.slowModeSeconds !== undefined) { sets.push(`slow_mode_seconds = $${idx++}`); vals.push(data.slowModeSeconds); }
   if (sets.length === 0 && !data.memberIds) return;
   if (sets.length > 0) {
     await getPool().query(`UPDATE channels SET ${sets.join(', ')} WHERE id = $1`, vals);

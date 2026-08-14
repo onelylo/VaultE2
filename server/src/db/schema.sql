@@ -87,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (message_id);
 
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_announcement BOOLEAN DEFAULT FALSE;
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS allowed_roles TEXT[] DEFAULT ARRAY['ADMIN', 'SUPERVISOR', 'MEMBER'];
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS slow_mode_seconds INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS channel_members (
   channel_id  TEXT NOT NULL,

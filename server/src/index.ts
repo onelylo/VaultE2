@@ -89,6 +89,8 @@ const tokenBlocklist = new Map<string, number>();
 const rotationsByUser = new Map<string, number[]>();
 // Rate limiting for uploads: Map<userId, timestamps[]>
 const uploadsByUser = new Map<string, number[]>();
+// Slow mode tracker: Map<"slowmode:channelId:userId", lastMsgTimestamp>
+const slowModeTracker = new Map<string, number>();
 
 const app = express();
 app.use(helmet());
@@ -979,8 +981,8 @@ app.patch('/api/channels/:channelId', async (req, res) => {
       return res.status(403).json({ error: 'Insufficient permissions to modify this channel' });
     }
     
-    const { name, description, isAnnouncement, allowedRoles, memberIds } = req.body;
-    await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds });
+    const { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds } = req.body;
+    await updateChannel(req.params.channelId, { name, description, isAnnouncement, allowedRoles, memberIds, slowModeSeconds });
     
     const updated = await getChannelById(req.params.channelId);
     await broadcastChannels();
@@ -1410,6 +1412,28 @@ io.on('connection', (socket) => {
         error: 'You are not a member of this channel.'
       });
       return;
+    }
+
+    // Slow mode enforcement
+    if (channel && (channel.slowModeSeconds || 0) > 0) {
+      const lastMsgKey = `slowmode:${channelId}:${senderId}`;
+      const lastMsgTime = slowModeTracker.get(lastMsgKey);
+      if (lastMsgTime) {
+        const elapsed = (Date.now() - lastMsgTime) / 1000;
+        const slowSec = channel.slowModeSeconds || 0;
+        if (elapsed < slowSec) {
+          const waitSec = Math.ceil(slowSec - elapsed);
+          socket.emit('message:ack', {
+            tempId: tempId || messageId,
+            serverId: messageId,
+            timestamp: Date.now(),
+            status: 'failed',
+            error: `Slow mode: wait ${waitSec}s before sending again.`
+          });
+          return;
+        }
+      }
+      slowModeTracker.set(lastMsgKey, Date.now());
     }
 
     try {

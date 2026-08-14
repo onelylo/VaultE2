@@ -16,7 +16,7 @@ export function ChannelSettingsModal({
   channel?: Channel;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles'>>) => Promise<void>;
+  onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allUsers: User[];
   currentUser?: User | UserKeyPair;
@@ -47,7 +47,7 @@ function ChannelSettingsModalInner({
 }: {
   channel: Channel;
   onClose: () => void;
-  onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles'>>) => Promise<void>;
+  onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allUsers: User[];
   currentUser?: User | UserKeyPair;
@@ -58,6 +58,7 @@ function ChannelSettingsModalInner({
   const [memberIds, setMemberIds] = useState<string[]>(channel.memberIds || []);
   const [memberSearch, setMemberSearch] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+  const [slowMode, setSlowMode] = useState(channel.slowModeSeconds || 0);
 
   const canEditSettings = currentUser?.role === 'ADMIN' || channel.createdBy === currentUser?.userId;
   const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private');
@@ -89,7 +90,7 @@ function ChannelSettingsModalInner({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onUpdate(channel.id, { name, description, memberIds });
+    await onUpdate(channel.id, { name, description, memberIds, slowModeSeconds: slowMode });
     setHasChanges(false);
     onClose();
   };
@@ -180,6 +181,26 @@ function ChannelSettingsModalInner({
                 onFocus={e => !canEditSettings || (e.currentTarget.style.borderColor = 'var(--accent-primary)')}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
               />
+            </div>
+
+            {/* Slow Mode */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Slow Mode (seconds between messages)</label>
+              <select
+                value={slowMode}
+                onChange={e => { setSlowMode(Number(e.target.value)); markChanged(); }}
+                disabled={!canEditSettings}
+                className="w-full rounded-xl py-2.5 px-3 text-sm focus:outline-none transition-smooth disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
+              >
+                <option value={0}>Off</option>
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={30}>30 seconds</option>
+                <option value={60}>1 minute</option>
+                <option value={120}>2 minutes</option>
+                <option value={300}>5 minutes</option>
+              </select>
             </div>
           </div>
 
