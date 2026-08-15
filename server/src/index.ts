@@ -1604,8 +1604,8 @@ socket.emit('channels:update', channels);
         attachment: attachment ? {
           attachmentId: attachment.id,
           encryptedMetadata: attachment.encryptedMetadata,
-          iv: attachment.iv,
-          binaryIv: attachment.metadataIv,
+          iv: attachment.metadataIv,
+          binaryIv: attachment.iv,
         } : undefined,
       });
     }
@@ -1755,9 +1755,17 @@ socket.emit('channels:update', channels);
 
     try {
       await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
-      if (attachment?.attachmentId) await linkAttachmentToMessage(attachment.attachmentId, messageId);
     } catch (e) {
       console.error('[DM] Persist error:', e);
+    }
+
+    // Link attachment separately so a failure doesn't block the message
+    if (attachment?.attachmentId) {
+      try {
+        await linkAttachmentToMessage(attachment.attachmentId, messageId);
+      } catch (e) {
+        console.error('[DM] linkAttachmentToMessage failed:', e);
+      }
     }
 
     // ACK to sender
@@ -1772,19 +1780,18 @@ socket.emit('channels:update', channels);
     if (recipientId) {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
-        // Explicitly include attachment to ensure it's relayed for DMs
         const relayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
         if (payload.attachment) {
           relayPayload.attachment = payload.attachment;
         } else {
           // Fallback: fetch attachment from database if not in payload
-          const attachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
-          if (attachment) {
+          const dbAttachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
+          if (dbAttachment) {
             relayPayload.attachment = {
-              attachmentId: attachment.id,
-              encryptedMetadata: attachment.encryptedMetadata,
-              iv: attachment.iv,
-              binaryIv: attachment.metadataIv,
+              attachmentId: dbAttachment.id,
+              encryptedMetadata: dbAttachment.encryptedMetadata,
+              iv: dbAttachment.metadataIv,
+              binaryIv: dbAttachment.iv,
             };
           }
         }
@@ -1877,9 +1884,17 @@ socket.emit('channels:update', channels);
 
     try {
       await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
-      if (attachment?.attachmentId) await linkAttachmentToMessage(attachment.attachmentId, messageId);
     } catch (e) {
       console.error('[Channel] Persist error:', e);
+    }
+
+    // Link attachment separately so a failure doesn't block the message
+    if (attachment?.attachmentId) {
+      try {
+        await linkAttachmentToMessage(attachment.attachmentId, messageId);
+      } catch (e) {
+        console.error('[Channel] linkAttachmentToMessage failed:', e);
+      }
     }
 
     // ACK
@@ -1893,13 +1908,13 @@ socket.emit('channels:update', channels);
     // Broadcast to channel members only (room-based delivery)
     let channelRelayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
     if (!payload.attachment) {
-      const attachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
-      if (attachment) {
+      const dbAttachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
+      if (dbAttachment) {
         channelRelayPayload.attachment = {
-          attachmentId: attachment.id,
-          encryptedMetadata: attachment.encryptedMetadata,
-          iv: attachment.iv,
-          binaryIv: attachment.metadataIv,
+          attachmentId: dbAttachment.id,
+          encryptedMetadata: dbAttachment.encryptedMetadata,
+          iv: dbAttachment.metadataIv,
+          binaryIv: dbAttachment.iv,
         };
       }
     }
