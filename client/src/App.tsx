@@ -311,7 +311,8 @@ export const App: React.FC = () => {
           const channel = channels.find(c => c.id === channelId);
           const candidateIds = channel
             ? [channel.createdBy, ...(channel.memberIds || [])].filter((v, i, a) => a.indexOf(v) === i)
-            : [currentUserKeys.userId];
+            : // Channel info not loaded yet — try all known users as candidates
+              allUsers.map(u => u.userId).filter((v, i, a) => a.indexOf(v) === i);
           for (const candidateId of candidateIds) {
             const candidateUser = allUsers.find(u => u.userId === candidateId);
             if (!candidateUser?.publicKey) continue;

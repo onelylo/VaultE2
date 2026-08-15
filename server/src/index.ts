@@ -1420,9 +1420,9 @@ app.get('/api/attachments/:id', async (req, res) => {
       const msg = await getMessageById(attachment.messageId);
       if (msg) {
         if (msg.channelId) {
-          // Channel attachment: only members holding a channel key may download
-          const envelope = await getChannelKey(msg.channelId, userId);
-          if (!envelope) return res.status(403).json({ error: 'Not a channel member' });
+          // Channel attachment: verify user is a channel member
+          const members = await getChannelMembers(msg.channelId);
+          if (!members.includes(userId)) return res.status(403).json({ error: 'Not a channel member' });
         } else if (msg.senderId !== userId && msg.recipientId !== userId) {
           return res.status(403).json({ error: 'Not a participant of this message' });
         }

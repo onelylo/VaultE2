@@ -206,9 +206,9 @@ export async function processOfflineQueue(opts: QueueProcessorOptions): Promise<
         socket.emit('message:send', payload);
       }
 
-      // Update DB and notify UI
-      await updateMessageStatus(msg.id, 'sent');
-      onMessageFlushed({ ...msg, ciphertext, iv, status: 'sent', attachment, pendingUpload: undefined });
+      // Don't update status here — let the server ACK (onMessageAck / onChannelMessageAck)
+      // handle the status transition to 'sent' so the clock icon persists until confirmed.
+      onMessageFlushed({ ...msg, ciphertext, iv, attachment, pendingUpload: undefined });
 
       console.log(`[Queue] Flushed message ${msg.id} → ${msg.recipientId || msg.channelId}`);
     } catch (err) {
