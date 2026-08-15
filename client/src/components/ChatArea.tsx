@@ -901,7 +901,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             ref={fileInputRef}
             type="file"
             className="hidden"
-            onChange={e => { handleFilesChosen(e.target.files); e.target.value = ''; }}
+            onChange={e => { handleFilesChosen(e.target.files); e.target.value = ''; textareaRef.current?.focus(); }}
           />
 
           <div className="flex-1 min-w-0">

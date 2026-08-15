@@ -179,7 +179,13 @@ export const App: React.FC = () => {
   }, [allUsers]);
 
   // ── Navigation & Workspace State ──────────────────────────────────────────────
-  const [activeView, setActiveView] = useState<'channels' | 'dms'>('dms');
+  const [activeView, setActiveView] = useState<'channels' | 'dms'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('vaultchat_activeView');
+      if (saved === 'channels' || saved === 'dms') return saved;
+    }
+    return 'dms';
+  });
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<User | null>(null);
   const selectedPeerRef = useRef<User | null>(null);
@@ -203,6 +209,10 @@ export const App: React.FC = () => {
   const [lastViewedChannels, setLastViewedChannels] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('vaultchat_lastViewedChannels') || '{}'); } catch { return {}; }
   });
+  // Persist activeView (dms/channels) to localStorage
+  useEffect(() => {
+    localStorage.setItem('vaultchat_activeView', activeView);
+  }, [activeView]);
   const [latestDMMessages, setLatestDMMessages] = useState<Record<string, string>>({});
   const [pinnedMessages, setPinnedMessages] = useState<Record<string, { messageId: string; pinnedBy: string; pinnedAt: number }[]>>({});
 
@@ -1467,6 +1477,33 @@ export const App: React.FC = () => {
       ));
     };
 
+    // Respond to key requests from other members who can't decrypt
+    const onChannelKeyRequest = async (data: { channelId: string; requesterId: string }) => {
+      if (!currentUserKeysRef.current) return;
+      if (data.requesterId === currentUserKeysRef.current.userId) return; // Don't respond to self
+      const channelKey = await getOrGenerateChannelKeyRef.current(data.channelId);
+      if (!channelKey) return; // We don't have the key either
+      const requester = allUsersRef.current.find(u => u.userId === data.requesterId);
+      if (!requester?.publicKey) return;
+      try {
+        const sharedKey = await getOrDeriveSharedKeyRef.current(data.requesterId, requester.publicKey);
+        if (!sharedKey) return;
+        const exportedKey = await crypto.subtle.exportKey('jwk', channelKey);
+        const encryptedData = await encryptChannelKeyForUser(exportedKey, sharedKey);
+        const token = getJwtToken();
+        if (token) {
+          await fetch(`${API_BASE}/api/channels/${data.channelId}/keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ keys: [{ userId: data.requesterId, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv }] }),
+          });
+          console.log(`[ChannelKey] Delivered key to requesting user ${data.requesterId} for channel ${data.channelId}`);
+        }
+      } catch (e) {
+        console.error(`[ChannelKey] Failed to respond to key request:`, e);
+      }
+    };
+
     socket.on('users:directory', onUsersDirectory);
     socket.on('users:presence',  onUsersPresence);
     socket.on('channels:update', onChannelsUpdate);
@@ -1490,6 +1527,7 @@ export const App: React.FC = () => {
     socket.on('channel:member_removed', onChannelMemberRemoved);
     socket.on('channel:key_rotated', onChannelKeyRotated);
     socket.on('channel:ownership_transferred', onChannelOwnershipTransferred);
+    socket.on('channel:key_request', onChannelKeyRequest);
 
     // Typing indicators
     const onUserTyping = (data: { userId: string; username: string; channelId?: string; recipientId?: string }) => {
@@ -1565,6 +1603,7 @@ export const App: React.FC = () => {
       socket.off('channel:member_removed', onChannelMemberRemoved);
       socket.off('channel:key_rotated', onChannelKeyRotated);
       socket.off('channel:ownership_transferred', onChannelOwnershipTransferred);
+      socket.off('channel:key_request', onChannelKeyRequest);
       socket.off('user:typing', onUserTyping);
       socket.off('user:stop_typing', onUserStopTyping);
       socket.off('channel:pinned', onChannelPinned);
@@ -2152,7 +2191,21 @@ export const App: React.FC = () => {
     if (selectedChannel) {
       const channelKey = await getOrGenerateChannelKey(selectedChannel.id);
       if (!channelKey) {
-        showToast('Cannot send: channel encryption key not available. Try reopening the channel.', 'error');
+        // Request key from online members, then retry once
+        socket.emit('channel:key:request', { channelId: selectedChannel.id });
+        // Wait for key distribution, then retry
+        await new Promise(r => setTimeout(r, 1500));
+        const retryKey = await getOrGenerateChannelKey(selectedChannel.id);
+        if (!retryKey) {
+          showToast('Cannot send: channel key unavailable (no online member has it).', 'error');
+          return;
+        }
+        const { ciphertext, iv } = await encryptMessage(text, retryKey);
+        const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
+        await saveMessage(localMsg);
+        if (canSend) {
+          socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, ciphertext, iv, timestamp, replyTo });
+        }
         return;
       }
       const { ciphertext, iv } = await encryptMessage(text, channelKey);
@@ -2187,7 +2240,23 @@ export const App: React.FC = () => {
     if (target.type === 'channel') {
       const channelKey = await getOrGenerateChannelKey(target.channelId);
       if (!channelKey) {
-        showToast('Cannot forward: channel encryption key not available.', 'error');
+        socket.emit('channel:key:request', { channelId: target.channelId });
+        await new Promise(r => setTimeout(r, 1500));
+        const retryKey = await getOrGenerateChannelKey(target.channelId);
+        if (!retryKey) {
+          showToast('Cannot forward: channel key unavailable (no online member has it).', 'error');
+          return;
+        }
+        const { ciphertext, iv } = await encryptMessage(originalText, retryKey);
+        const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
+        await saveMessage(localMsg);
+        await markForwarded(tempId);
+        if (canSend) {
+          socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp, isForwarded: true });
+        }
+        // Navigate to target channel
+        const channel = channels.find(c => c.id === target.channelId);
+        if (channel) handleSelectChannel(channel);
         return;
       }
       const { ciphertext, iv } = await encryptMessage(originalText, channelKey);

@@ -1812,6 +1812,18 @@ socket.emit('channels:update', channels);
     }
   });
 
+  // Channel Key Request — user can't decrypt, asks online members to distribute key
+  socket.on('channel:key:request', async (data: { channelId: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId || !data.channelId) return;
+    // Verify requester is a member
+    const members: string[] = await getChannelMembers(data.channelId).catch(() => []);
+    if (!members.includes(userId)) return;
+    console.log(`[ChannelKey] User ${userId} requested key for channel ${data.channelId}`);
+    // Notify all other members in the channel room so they can distribute
+    socket.to(`channel:${data.channelId}`).emit('channel:key_request', { channelId: data.channelId, requesterId: userId });
+  });
+
   // Direct Message Send — persisted to PostgreSQL
   socket.on('message:send', async (payload: StoredMessage) => {
     if (isRateLimited()) return;
