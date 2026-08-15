@@ -1,5 +1,5 @@
 # PROJECT STATUS — VaultChat
-> **Last updated**: 2026-08-15 (latest fixes: official channel send failures, server ACK error paths, key upload for open channels)  
+> **Last updated**: 2026-08-15 (latest fixes: channel key request fallback, creator key regen, persist activeView, attachment multi-file, multiple commits)  
 > **Maintainer**: Auto-generated, update on every fix/change  
 > **Repo**: https://github.com/onelylo/petroshield-chat
 
@@ -171,6 +171,12 @@
 | 2026-08-15 | `latest` | HIGH: Server silently drops invalid channel messages without any ACK (3 early-return paths) — client messages stuck as `pending_sync` forever | `server/src/index.ts` |
 | 2026-08-15 | `latest` | HIGH: Server silently drops invalid DM messages without any ACK (2 early-return paths) — same stuck message issue | `server/src/index.ts` |
 | 2026-08-15 | `latest` | CRITICAL: Key upload endpoint filters envelopes to channel_members only — official/public channels where all users auto-join never get stored envelopes, preventing decryption | `server/src/index.ts` |
+| 2026-08-15 | `bdf2093` | Channel key fallback protocol: `channel:key:request` + 1.5s retry when key missing | `client/App.tsx`, `server/index.ts` |
+| 2026-08-15 | `bdf2093` | activeView (DMs/Channels tab) persists to localStorage across refreshes | `client/App.tsx` |
+| 2026-08-15 | `bdf2093` | Attachment button: focus returns to textarea after file pick (Enter sends) | `client/ChatArea.tsx` |
+| 2026-08-15 | `8415056` | Creator auto-regenerates channel key when lost (shows warning: old messages may not decrypt) | `client/App.tsx` |
+| 2026-08-15 | `1d67d2b` | Multiple file attachments (Ctrl/Shift+click in file picker) — input `multiple` attr | `client/ChatArea.tsx` |
+| 2026-08-15 | `539ed28` | Multiple file attachments full support — array state, individual remove, preview, send all | `client/ChatArea.tsx` |
 
 ### Feature Additions
 | Date | Commit | Feature | File(s) |
@@ -210,6 +216,11 @@
 | HIGH | New members added while creator offline never receive key envelopes | `client/App.tsx` | FIXED: any online member can distribute keys |
 | HIGH | Official channel messages silently fail (channelKey null → no feedback; server ACK errors ignored) | `client/App.tsx`, `server/index.ts` | FIXED: toast on key failure, onMessageAck handles 'failed' status, server sends ACK for all validation paths |
 | HIGH | Key upload filters envelopes to channel_members — official channels never get envelopes for auto-joined users | `server/index.ts` | FIXED: open channels (public/official) store all envelopes |
+| HIGH | Channel key unavailable for existing channels — creator key regen fallback | `client/App.tsx` | FIXED: creator auto-regenerates key, uploads envelopes for all members |
+| HIGH | No key request protocol for members missing envelopes | `client/App.tsx`, `server/index.ts` | FIXED: `channel:key:request` / `channel:key_request` events |
+| MEDIUM | Active view (DMs/Channels tab) resets to DMs on refresh | `client/App.tsx` | FIXED: persist to localStorage |
+| MEDIUM | Attachment button retains focus after file pick (Enter re-opens picker) | `client/ChatArea.tsx` | FIXED: `textareaRef.current?.focus()` after pick |
+| LOW | Single file attachment only (no multi-select) | `client/ChatArea.tsx` | FIXED: `multiple` attr + array state + individual remove |
 | MEDIUM | `dangerouslySetInnerHTML` in ConfirmDialog (XSS vector) | `client/ConfirmDialog.tsx` | FIXED: replaced with plain text |
 | MEDIUM | No rate limiting on socket reactions, channel creates, typing | `server/index.ts` | FIXED: added per-socket rate limiters |
 | MEDIUM | Last admin can be demoted (locks out all admins) | `server/index.ts` | FIXED: added last-admin guard |
