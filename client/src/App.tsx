@@ -1800,10 +1800,6 @@ export const App: React.FC = () => {
   };
 
   const handleCloseChat = () => {
-    // Leave channel room when closing chat
-    if (selectedChannel) {
-      socket.emit('channel:leave', { channelId: selectedChannel.id });
-    }
     setSelectedPeer(null);
     setSelectedChannel(null);
   };

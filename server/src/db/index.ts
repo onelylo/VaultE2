@@ -646,7 +646,7 @@ export async function getUndeliveredMessages(recipientId: string): Promise<DbMes
   const res = await getPool().query(
     `SELECT ${MSG_COLS} FROM messages 
      WHERE recipient_id = $1 AND status = 'sent'
-     ORDER BY timestamp ASC`,
+     ORDER BY created_at ASC`,
     [recipientId]
   );
   return res.rows.map(mapMessageRow);
@@ -659,7 +659,13 @@ export async function updateMessageEdit(id: string, ciphertext: string, iv: stri
   );
 }
 
+const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+
 export async function updateMessageStatus(id: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
+  // Prevent status downgrade (e.g. 'read' → 'delivered' from stale receipt)
+  const res = await getPool().query(`SELECT status FROM messages WHERE id = $1`, [id]);
+  const current = res.rows[0]?.status;
+  if (current && (STATUS_RANK[current] ?? 0) > (STATUS_RANK[status] ?? 0)) return;
   await getPool().query(
     `UPDATE messages SET status = $2 WHERE id = $1`,
     [id, status]

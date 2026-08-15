@@ -1574,7 +1574,6 @@ io.on('connection', (socket) => {
       userId: activeUser.userId,
       username: activeUser.username,
       fullName: activeUser.fullName,
-      email: activeUser.email,
       role: activeUser.role,
       avatarUrl: activeUser.avatarUrl,
       publicKey: activeUser.publicKey,
@@ -1674,7 +1673,7 @@ socket.emit('channels:update', channels);
       socket.join(`channel:${channelId}`);
       // Send current channel members to the joining user
       const memberUsers = await Promise.all(members.map(mid => getUserById(mid).catch(() => undefined)));
-      socket.emit('channel:members', { channelId, members: memberUsers.filter(Boolean) });
+      socket.emit('channel:members', { channelId, members: memberUsers.filter((u): u is DbUser => !!u).map(u => publicUser(u)) });
     } catch (e) {
       console.error('[Channel] Join error:', e);
     }
