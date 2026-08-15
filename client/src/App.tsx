@@ -1199,7 +1199,14 @@ export const App: React.FC = () => {
       }
     };
 
-    const onMessageAck = async ({ tempId, serverId, status }: { tempId: string; serverId: string; status: LocalMessage['status'] }) => {
+    const onMessageAck = async ({ tempId, serverId, status, error }: { tempId: string; serverId: string; status: LocalMessage['status'] | 'failed'; error?: string }) => {
+      if (status === 'failed') {
+        // Server rejected the message — show the reason and remove the local copy
+        if (error) showToast(error, 'error');
+        const existing = await db.messages.get(tempId) || await db.messages.where('tempId').equals(tempId).first();
+        if (existing) await db.messages.delete(existing.id);
+        return;
+      }
       await updateMessageStatus(tempId, status, serverId);
     };
 
@@ -2144,7 +2151,10 @@ export const App: React.FC = () => {
 
     if (selectedChannel) {
       const channelKey = await getOrGenerateChannelKey(selectedChannel.id);
-      if (!channelKey) return;
+      if (!channelKey) {
+        showToast('Cannot send: channel encryption key not available. Try reopening the channel.', 'error');
+        return;
+      }
       const { ciphertext, iv } = await encryptMessage(text, channelKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
       await saveMessage(localMsg);
@@ -2176,7 +2186,10 @@ export const App: React.FC = () => {
 
     if (target.type === 'channel') {
       const channelKey = await getOrGenerateChannelKey(target.channelId);
-      if (!channelKey) return;
+      if (!channelKey) {
+        showToast('Cannot forward: channel encryption key not available.', 'error');
+        return;
+      }
       const { ciphertext, iv } = await encryptMessage(originalText, channelKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
       await saveMessage(localMsg);

@@ -1,5 +1,5 @@
 # PROJECT STATUS — VaultChat
-> **Last updated**: 2026-08-15  
+> **Last updated**: 2026-08-15 (latest fixes: official channel send failures, server ACK error paths, key upload for open channels)  
 > **Maintainer**: Auto-generated, update on every fix/change  
 > **Repo**: https://github.com/onelylo/petroshield-chat
 
@@ -166,6 +166,11 @@
 | 2026-08-15 | `latest` | CRITICAL: Public/official channel auto-join now emits `channel:member_added` for key distribution | `server/index.ts` |
 | 2026-08-15 | `latest` | MEDIUM: Channel settings modal unsaved-changes bug — `hasChanges` compares against saved snapshot, not original prop | `client/ChannelSettingsModal.tsx` |
 | 2026-08-15 | `latest` | MEDIUM: All 18 `alert()` calls replaced with toast notification system (`showToast` + `ToastContainer`) | `client/App.tsx`, `client/ChatArea.tsx`, `client/ProfileDrawer.tsx`, `client/lib/toast.tsx` |
+| 2026-08-15 | `latest` | CRITICAL: Official channel messages silently fail — `handleSendMessage` returns when channelKey is null with no user feedback | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: Server sends `status: 'failed'` ACK but client ignores error — `onMessageAck` doesn't handle failed status or show server error message | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: Server silently drops invalid channel messages without any ACK (3 early-return paths) — client messages stuck as `pending_sync` forever | `server/src/index.ts` |
+| 2026-08-15 | `latest` | HIGH: Server silently drops invalid DM messages without any ACK (2 early-return paths) — same stuck message issue | `server/src/index.ts` |
+| 2026-08-15 | `latest` | CRITICAL: Key upload endpoint filters envelopes to channel_members only — official/public channels where all users auto-join never get stored envelopes, preventing decryption | `server/src/index.ts` |
 
 ### Feature Additions
 | Date | Commit | Feature | File(s) |
@@ -203,6 +208,8 @@
 | HIGH | Channel key fallback encrypts for ALL users on 404 | `client/App.tsx` | FIXED: removed dangerous 404 fallback, now returns null |
 | HIGH | `getOrGenerateChannelKey` can't find self as candidate (allUsers excludes self) | `client/App.tsx` | FIXED: self added as fallback candidate |
 | HIGH | New members added while creator offline never receive key envelopes | `client/App.tsx` | FIXED: any online member can distribute keys |
+| HIGH | Official channel messages silently fail (channelKey null → no feedback; server ACK errors ignored) | `client/App.tsx`, `server/index.ts` | FIXED: toast on key failure, onMessageAck handles 'failed' status, server sends ACK for all validation paths |
+| HIGH | Key upload filters envelopes to channel_members — official channels never get envelopes for auto-joined users | `server/index.ts` | FIXED: open channels (public/official) store all envelopes |
 | MEDIUM | `dangerouslySetInnerHTML` in ConfirmDialog (XSS vector) | `client/ConfirmDialog.tsx` | FIXED: replaced with plain text |
 | MEDIUM | No rate limiting on socket reactions, channel creates, typing | `server/index.ts` | FIXED: added per-socket rate limiters |
 | MEDIUM | Last admin can be demoted (locks out all admins) | `server/index.ts` | FIXED: added last-admin guard |

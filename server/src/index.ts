@@ -1246,10 +1246,15 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
     if (!isMember) {
       return res.status(403).json({ error: 'Not a channel member' });
     }
-    // Only store envelopes for actual channel members (prevents key leakage to non-members)
+    // For official/public channels, store envelopes for ALL users (they auto-join).
+    // For private/team channels, only store for actual members (prevents key leakage).
+    const channel = await getChannelById(channelId);
+    const isOpen = channel && (channel.type === 'public' || channel.type === 'official');
     const memberSet = new Set(members);
-    const filteredKeys = keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv && memberSet.has(item.userId));
-    const droppedKeys = keys.filter((item: any) => !item.userId || !item.encryptedChannelKey || !item.iv || !memberSet.has(item.userId));
+    const filteredKeys = isOpen
+      ? keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv)
+      : keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv && memberSet.has(item.userId));
+    const droppedKeys = keys.filter((item: any) => !item.userId || !item.encryptedChannelKey || !item.iv || (!isOpen && !memberSet.has(item.userId)));
     if (droppedKeys.length > 0) {
       console.warn(`[ChannelKeys] Dropped ${droppedKeys.length} envelope(s) for non-members:`, droppedKeys.map((k: any) => k.userId));
     }
@@ -1813,10 +1818,12 @@ socket.emit('channels:update', channels);
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { recipientId, ciphertext, tempId, id, attachment } = payload;
     if (typeof ciphertext !== 'string') {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed', error: 'Invalid message format.' });
       return;
     }
     // Allow empty ciphertext only if there is an attachment (attachment-only message)
     if (!ciphertext && !attachment?.attachmentId) {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed', error: 'Message has no content.' });
       return;
     }
     // Security: Message length limit (10KB ciphertext max)
@@ -1899,12 +1906,17 @@ socket.emit('channels:update', channels);
     if (isRateLimited()) return;
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { channelId, ciphertext, tempId, id, attachment } = payload;
-    if (!channelId) return;
+    if (!channelId) {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed', error: 'Missing channel ID.' });
+      return;
+    }
     if (typeof ciphertext !== 'string') {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed', error: 'Invalid message format.' });
       return;
     }
     // Allow empty ciphertext only if there is an attachment (attachment-only message)
     if (!ciphertext && !attachment?.attachmentId) {
+      socket.emit('message:ack', { tempId: tempId || id, serverId: id || `srv_${Date.now()}`, timestamp: Date.now(), status: 'failed', error: 'Message has no content.' });
       return;
     }
     // Security: Message length limit (10KB ciphertext max)
