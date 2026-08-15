@@ -372,16 +372,57 @@ export const App: React.FC = () => {
   }, [channelKeysCache, channels, allUsers, currentUserKeys, getOrDeriveSharedKey]);
 
   // ── Helper: Decrypt an EncryptedPayload into a LocalMessage ─────────────────
-  const decryptPayload = useCallback(async (payload: EncryptedPayload, usersSource?: User[]): Promise<LocalMessage | null> => {
-    if (!currentUserKeys) return null;
+  const decryptPayload = useCallback(async (payload: EncryptedPayload, usersSource?: User[]): Promise<LocalMessage> => {
+    if (!currentUserKeys) {
+      return {
+        id: payload.id,
+        tempId: payload.tempId,
+        senderId: payload.senderId,
+        recipientId: payload.recipientId,
+        channelId: payload.channelId,
+        text: '🔒 Unable to decrypt: missing own keys',
+        ciphertext: payload.ciphertext,
+        iv: payload.iv,
+        timestamp: payload.timestamp ?? Date.now(),
+        status: (payload.status as LocalMessage['status']) || 'received',
+        isDecrypted: false,
+        isEdited: payload.isEdited,
+        isDeleted: payload.isDeleted,
+        replyTo: payload.replyTo,
+        attachment: payload.attachment,
+        attachmentMeta: undefined,
+        decryptionError: 'Missing own keys',
+      };
+    }
     const directory = usersSource || allUsersRef.current;
     let key: CryptoKey | null = null;
+    let decryptionError: string | undefined = undefined;
 
     if (payload.channelId) {
       key = await getOrGenerateChannelKey(payload.channelId);
     } else {
       const peerId = payload.senderId === currentUserKeys.userId ? payload.recipientId : payload.senderId;
-      if (!peerId) return null;
+      if (!peerId) {
+        return {
+          id: payload.id,
+          tempId: payload.tempId,
+          senderId: payload.senderId,
+          recipientId: payload.recipientId,
+          channelId: payload.channelId,
+          text: '🔒 Unable to decrypt: missing peer ID',
+          ciphertext: payload.ciphertext,
+          iv: payload.iv,
+          timestamp: payload.timestamp ?? Date.now(),
+          status: (payload.status as LocalMessage['status']) || 'received',
+          isDecrypted: false,
+          isEdited: payload.isEdited,
+          isDeleted: payload.isDeleted,
+          replyTo: payload.replyTo,
+          attachment: payload.attachment,
+          attachmentMeta: undefined,
+          decryptionError: 'Missing peer ID',
+        };
+      }
       let peerPublicKey = peerId === currentUserKeys.userId
         ? currentUserKeys.publicKeyBase64
         : directory.find(u => u.userId === peerId)?.publicKey;
@@ -395,9 +436,31 @@ export const App: React.FC = () => {
       if (peerPublicKey) key = await getOrDeriveSharedKey(peerId, peerPublicKey);
       else if (peerId !== currentUserKeys.userId) {
         console.error(`[E2EE] Cannot decrypt: missing public key for ${peerId}`);
+        decryptionError = `Missing public key for peer ${peerId}`;
       }
     }
-    if (!key) return null;
+
+    if (!key) {
+      return {
+        id: payload.id,
+        tempId: payload.tempId,
+        senderId: payload.senderId,
+        recipientId: payload.recipientId,
+        channelId: payload.channelId,
+        text: '🔒 Unable to decrypt message',
+        ciphertext: payload.ciphertext,
+        iv: payload.iv,
+        timestamp: payload.timestamp ?? Date.now(),
+        status: (payload.status as LocalMessage['status']) || 'received',
+        isDecrypted: false,
+        isEdited: payload.isEdited,
+        isDeleted: payload.isDeleted,
+        replyTo: payload.replyTo,
+        attachment: payload.attachment,
+        attachmentMeta: undefined,
+        decryptionError: decryptionError ?? 'Unable to derive decryption key',
+      };
+    }
 
     let text = '🔒 Unable to decrypt message';
     let isDecrypted = false;
@@ -407,6 +470,7 @@ export const App: React.FC = () => {
         isDecrypted = true;
       } catch (e) {
         console.error('[E2EE] Decrypt error:', e);
+        decryptionError = 'Decryption failed';
       }
     } else {
       text = '';
@@ -420,6 +484,7 @@ export const App: React.FC = () => {
         attachmentMeta = JSON.parse(metaJson);
       } catch (e) {
         console.error('[E2EE] Attachment metadata decrypt error:', e);
+        attachmentMeta = undefined;
       }
     }
 
@@ -440,6 +505,7 @@ export const App: React.FC = () => {
       replyTo: payload.replyTo,
       attachment: payload.attachment,
       attachmentMeta,
+      decryptionError,
     };
   }, [currentUserKeys, getOrDeriveSharedKey, getOrGenerateChannelKey, fetchUserPublicKey]);
 
@@ -1078,7 +1144,7 @@ export const App: React.FC = () => {
     const onMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!currentUserKeysRef.current || !privateKeyObjectRef.current) return;
       const localMsg = await decryptPayloadRef.current(payload);
-      if (!localMsg) return;
+      // Always save the message, even if decryption failed (show error to user)
       await saveMessage(localMsg);
 
       // Mark forwarded if sender flagged it
@@ -1118,7 +1184,7 @@ export const App: React.FC = () => {
     const onChannelMessageReceive = async (payload: EncryptedPayload & { isForwarded?: boolean }) => {
       if (!payload.channelId) return;
       const localMsg = await decryptPayloadRef.current(payload);
-      if (!localMsg) return;
+      // Always save the message, even if decryption failed (show error to user)
       await saveMessage(localMsg);
 
       // Mark forwarded if sender flagged it

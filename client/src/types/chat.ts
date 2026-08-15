@@ -104,6 +104,7 @@ export interface LocalMessage {
   attachment?: AttachmentPayload;
   attachmentMeta?: AttachmentMeta; // Decrypted locally — not persisted in cleartext
   pendingUpload?: PendingUpload;   // Attachment queued while offline (cleared after upload)
+  decryptionError?: string;        // Error message if decryption failed
 }
 
 export interface UserKeyPair {
