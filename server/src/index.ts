@@ -1725,7 +1725,11 @@ socket.emit('channels:update', channels);
     if (isRateLimited()) return;
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { recipientId, ciphertext, tempId, id, attachment } = payload;
-    if (!ciphertext || typeof ciphertext !== 'string') {
+    if (typeof ciphertext !== 'string') {
+      return;
+    }
+    // Allow empty ciphertext only if there is an attachment (attachment-only message)
+    if (!ciphertext && !attachment?.attachmentId) {
       return;
     }
     // Security: Message length limit (10KB ciphertext max)
@@ -1809,7 +1813,11 @@ socket.emit('channels:update', channels);
     const authenticatedUserId = (socket as any).authenticatedUserId;
     const { channelId, ciphertext, tempId, id, attachment } = payload;
     if (!channelId) return;
-    if (!ciphertext || typeof ciphertext !== 'string') {
+    if (typeof ciphertext !== 'string') {
+      return;
+    }
+    // Allow empty ciphertext only if there is an attachment (attachment-only message)
+    if (!ciphertext && !attachment?.attachmentId) {
       return;
     }
     // Security: Message length limit (10KB ciphertext max)

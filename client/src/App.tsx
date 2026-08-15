@@ -2083,7 +2083,8 @@ export const App: React.FC = () => {
     if (!currentUserKeys || (!selectedPeer && !selectedChannel) || !privateKeyObject) return;
     const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     const timestamp = Date.now();
-    const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
+    const canSend = socket.connected && navigator.onLine;
+    const status: LocalMessage['status'] = canSend ? 'sent' : 'pending_sync';
 
     if (selectedChannel) {
       const channelKey = await getOrGenerateChannelKey(selectedChannel.id);
@@ -2091,7 +2092,7 @@ export const App: React.FC = () => {
       const { ciphertext, iv } = await encryptMessage(text, channelKey);
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
       await saveMessage(localMsg);
-      if (!isOffline) {
+      if (canSend) {
         socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, ciphertext, iv, timestamp, replyTo });
       }
     } else if (selectedPeer) {
@@ -2103,7 +2104,7 @@ export const App: React.FC = () => {
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
       await saveMessage(localMsg);
       upsertDMConversation(selectedPeer, text);
-      if (!isOffline) {
+      if (canSend) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: selectedPeer.userId, ciphertext, iv, timestamp, replyTo });
       }
     }
@@ -2114,7 +2115,8 @@ export const App: React.FC = () => {
     if (!currentUserKeys || !privateKeyObject) return;
     const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     const timestamp = Date.now();
-    const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
+    const canSend = socket.connected && navigator.onLine;
+    const status: LocalMessage['status'] = canSend ? 'sent' : 'pending_sync';
 
     if (target.type === 'channel') {
       const channelKey = await getOrGenerateChannelKey(target.channelId);
@@ -2123,7 +2125,7 @@ export const App: React.FC = () => {
       const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, text: originalText, ciphertext, iv, timestamp, status, isDecrypted: true };
       await saveMessage(localMsg);
       await markForwarded(tempId);
-      if (!isOffline) {
+      if (canSend) {
         socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: target.channelId, ciphertext, iv, timestamp, isForwarded: true });
       }
       // Navigate to target channel
@@ -2141,7 +2143,7 @@ export const App: React.FC = () => {
       await saveMessage(localMsg);
       await markForwarded(tempId);
       upsertDMConversation(peer, originalText);
-      if (!isOffline) {
+      if (canSend) {
         socket.emit('message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, recipientId: peer.userId, ciphertext, iv, timestamp, isForwarded: true });
       }
       // Navigate to target DM
@@ -2198,7 +2200,8 @@ export const App: React.FC = () => {
 
       const tempId = `temp_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
       const timestamp = Date.now();
-      const status: LocalMessage['status'] = isOffline ? 'pending_sync' : 'sent';
+      const canSend = socket.connected && navigator.onLine;
+      const status: LocalMessage['status'] = canSend ? 'sent' : 'pending_sync';
       const pendingUpload: PendingUpload = { encryptedBinary, binaryIv, encryptedMetadata, metadataIv };
       const attachment: AttachmentPayload = { attachmentId: '', encryptedMetadata, iv: metadataIv, binaryIv };
 
@@ -2214,7 +2217,7 @@ export const App: React.FC = () => {
       };
       await saveMessage(localMsg);
 
-      if (isOffline) {
+      if (!canSend) {
         console.log('[Attachment] Queued for upload when reconnected.');
         continue;
       }
