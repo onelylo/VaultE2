@@ -97,7 +97,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [editText, setEditText] = useState('');
 
   const [text, setText] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -426,9 +426,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (!selectedUser && !selectedChannel) return;
     if (isBlockedDM) return;
 
-    if (selectedFile) {
-      onSendFiles([selectedFile], text.trim() || undefined);
-      setSelectedFile(null);
+    if (selectedFiles.length > 0) {
+      onSendFiles(selectedFiles, text.trim() || undefined);
+      setSelectedFiles([]);
       setPreviewDataUrl(null);
       setText('');
       const convId = selectedChannel?.id || selectedUser?.userId;
@@ -472,7 +472,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       return;
     }
     setIsPreparing(true);
-    setSelectedFile(file);
+    setSelectedFiles(prev => {
+      if (prev.some(f => f.name === file.name && f.size === file.size)) return prev;
+      return [...prev, file];
+    });
     setPreviewDataUrl(null);
     try {
       if (file.type.startsWith('image/')) {
@@ -596,7 +599,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const isBlockedDM = !!(selectedUser && (blockedUsers.has(selectedUser.userId) || selectedUser.blockedByThem));
   const disabled = !selectedUser && !selectedChannel;
   const isReadOnly = isAnnouncementChannel && userRole === 'MEMBER';
-  const canSend = !disabled && !isPreparing && !isReadOnly && !isBlockedDM && (text.trim() || selectedFile);
+  const canSend = !disabled && !isPreparing && !isReadOnly && !isBlockedDM && (text.trim() || selectedFiles.length > 0);
   const placeholderText = disabled ? 'Select a conversation to start messaging...' : isBlockedDM ? (selectedUser?.blockedByThem ? 'This user blocked you...' : 'You blocked this user...') : 'Type a message...';
 
   if (!selectedUser && !selectedChannel) {
@@ -826,45 +829,49 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         )}
 
-        {selectedFile && (
-          <div className="mb-2 flex items-center space-x-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 animate-[fadeIn_0.15s_ease-out]">
-            {previewDataUrl ? (
-              <img
-                src={previewDataUrl}
-                alt="thumbnail"
-                className="w-14 h-14 object-cover rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
-                <FileText className="w-6 h-6 text-[var(--accent-primary)]" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-[var(--text-main)] truncate">{selectedFile.name}</p>
-              <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
-                {formatFileSize(selectedFile.size)} &middot; AES-256-GCM ENCRYPTED
-              </p>
-              {uploadProgress !== null && (
-                <div className="mt-1 w-full bg-[var(--bg-card)] rounded-full h-1">
-                  <div
-                    className="bg-[var(--accent-primary)] h-1 rounded-full transition-all"
-                    style={{ width: `${uploadProgress}%` }}
+        {selectedFiles.length > 0 && (
+          <div className="mb-2 space-y-2">
+            {selectedFiles.map((file, index) => (
+              <div key={`${file.name}-${file.size}-${index}`} className="flex items-center space-x-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 animate-[fadeIn_0.15s_ease-out]">
+                {file.type.startsWith('image/') && previewDataUrl ? (
+                  <img
+                    src={previewDataUrl}
+                    alt="thumbnail"
+                    className="w-14 h-14 object-cover rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]"
                   />
+                ) : file.type.startsWith('image/') ? (
+                  <div className="w-14 h-14 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-[var(--accent-primary)]" />
+                  </div>
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-[var(--accent-primary)]" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-[var(--text-main)] truncate">{file.name}</p>
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
+                    {formatFileSize(file.size)} &middot; AES-256-GCM ENCRYPTED
+                  </p>
+                  {uploadProgress !== null && index === 0 && (
+                    <div className="mt-1 w-full bg-[var(--bg-card)] rounded-full h-1">
+                      <div
+                        className="bg-[var(--accent-primary)] h-1 rounded-full transition-all"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {isPreparing ? (
-              <Loader2 className="w-4 h-4 text-[var(--accent-primary)] animate-spin flex-shrink-0" />
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setSelectedFile(null); setPreviewDataUrl(null); }}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-all flex-shrink-0"
-                title="Remove file"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}
+                  className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-all flex-shrink-0"
+                  title="Remove file"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -964,7 +971,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 type="submit"
                 disabled={!canSend}
                 className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-[var(--accent-primary)] hover:opacity-90 text-[var(--accent-text)] font-bold active:scale-95 disabled:opacity-30 transition-all"
-                title={canSend ? (selectedFile ? 'Send file' : 'Send message') : 'Type a message to send'}
+                title={canSend ? (selectedFiles.length > 0 ? 'Send file(s)' : 'Send message') : 'Type a message to send'}
               >
                 <Send className="h-5 w-5" />
               </button>
