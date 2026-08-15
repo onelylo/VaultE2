@@ -2193,10 +2193,53 @@ export const App: React.FC = () => {
       if (!channelKey) {
         // Request key from online members, then retry once
         socket.emit('channel:key:request', { channelId: selectedChannel.id });
-        // Wait for key distribution, then retry
         await new Promise(r => setTimeout(r, 1500));
         const retryKey = await getOrGenerateChannelKey(selectedChannel.id);
         if (!retryKey) {
+          // Fallback: if we are the channel creator, regenerate key and distribute to all members
+          const isCreator = selectedChannel.createdBy === currentUserKeys.userId;
+          if (isCreator) {
+            showToast('Regenerating channel key (old messages may not decrypt)...', 'warning');
+            const { generateChannelSymmetricKey, exportKeyToJwk } = await import('./lib/crypto');
+            const newKeyObj = await generateChannelSymmetricKey();
+            const newKeyJwk = await exportKeyToJwk(newKeyObj);
+            await saveChannelKey({ channelId: selectedChannel.id, keyJwk: newKeyJwk });
+            setChannelKeysCache(prev => new Map(prev).set(selectedChannel.id, newKeyObj));
+            // Encrypt for all current members + self
+            const token = getJwtToken();
+            const keyEnvelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
+            const memberIds = [...new Set([selectedChannel.createdBy, ...(selectedChannel.memberIds || [])])];
+            for (const memberId of memberIds) {
+              const member = allUsersRef.current.find(u => u.userId === memberId);
+              if (member?.publicKey) {
+                const sharedKey = await getOrDeriveSharedKeyRef.current(memberId, member.publicKey);
+                if (sharedKey) {
+                  const env = await encryptChannelKeyForUser(newKeyJwk, sharedKey);
+                  keyEnvelopes.push({ userId: memberId, encryptedChannelKey: env.encryptedKey, iv: env.iv });
+                }
+              }
+            }
+            // Self envelope
+            const selfSharedKey = await getOrDeriveSharedKeyRef.current(currentUserKeys.userId, currentUserKeys.publicKeyBase64);
+            if (selfSharedKey) {
+              const env = await encryptChannelKeyForUser(newKeyJwk, selfSharedKey);
+              keyEnvelopes.push({ userId: currentUserKeys.userId, encryptedChannelKey: env.encryptedKey, iv: env.iv });
+            }
+            if (token && keyEnvelopes.length > 0) {
+              await fetch(`${API_BASE}/api/channels/${selectedChannel.id}/keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ keys: keyEnvelopes }),
+              });
+            }
+            const { ciphertext, iv } = await encryptMessage(text, newKeyObj);
+            const localMsg: LocalMessage = { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, text, ciphertext, iv, timestamp, status, isDecrypted: true, replyTo };
+            await saveMessage(localMsg);
+            if (canSend) {
+              socket.emit('channel:message:send', { id: tempId, tempId, senderId: currentUserKeys.userId, channelId: selectedChannel.id, ciphertext, iv, timestamp, replyTo });
+            }
+            return;
+          }
           showToast('Cannot send: channel key unavailable (no online member has it).', 'error');
           return;
         }
