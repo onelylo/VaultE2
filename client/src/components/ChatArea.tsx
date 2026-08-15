@@ -3,12 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
 import { socket } from '../lib/socket';
 import {
-  Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Smile, Reply,
+  Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Reply,
   Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText,
 } from 'lucide-react';
 import type { User, Channel, LocalMessage, UserKeyPair } from '../types/chat';
 import { AttachmentMessage } from './AttachmentMessage';
-import { EmojiPicker } from './EmojiPicker';
 import { ImageLightboxModal } from './modals/ImageLightboxModal';
 import { ConfirmModal } from './modals/ConfirmModal';
 import { ProfileModal } from './ProfileModal';
@@ -122,7 +121,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [text, selectedChannel?.id, selectedUser?.userId]);
 
   const [activeReply, setActiveReply] = useState<{ msgId: string; senderName: string; text: string } | null>(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string } | null>(null);
   const [forwardMsg, setForwardMsg] = useState<LocalMessage | null>(null);
   const [inspectedUser, setInspectedUser] = useState<User | null>(null);
@@ -463,18 +461,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     autoResize();
   }, [text, autoResize]);
 
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('[data-emoji-btn]') || target.closest('[data-emoji-picker]')) return;
-      setShowEmojiPicker(false);
-    };
-    if (showEmojiPicker) {
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
-    }
-  }, [showEmojiPicker]);
-
   const doSend = () => {
     if (!selectedUser && !selectedChannel) return;
     if (isBlockedDM) return;
@@ -550,13 +536,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setIsDragging(false);
     if (isBlockedDM) return;
     handleFilesChosen(e.dataTransfer.files);
-  };
-
-  const handleEmojiSelect = (emoji: string) => {
-    if (isBlockedDM) return;
-    setText(prev => prev + emoji);
-    setShowEmojiPicker(false);
-    textareaRef.current?.focus();
   };
 
   const startRecording = async () => {
@@ -935,27 +914,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           onDrop={handleDrop}
           className={`rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] shadow-lg p-2 flex items-center gap-2 transition-colors ${isDragging ? 'border-[var(--accent-primary)]/70' : ''}`}
         >
-          <div className="relative" data-emoji-picker>
+          {!isBlockedDM && (
             <button
               type="button"
-              data-emoji-btn
-              onClick={() => setShowEmojiPicker(prev => !prev)}
+              onClick={() => fileInputRef.current?.click()}
               className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card)] active:scale-95 transition-all"
-              title="Emoji"
+              title="Attach file"
             >
-              <Smile className="h-5 w-5" />
+              <Paperclip className="h-5 w-5" />
             </button>
-            {showEmojiPicker && (
-              <div className="absolute bottom-12 left-0 z-50">
-                <EmojiPicker
-                  onSelect={handleEmojiSelect}
-                  isOpen={showEmojiPicker}
-                />
-              </div>
-            )}
-          </div>
+          )}
 
-          {!isBlockedDM && (
+          {!isReadOnly && !isRecording && !isBlockedDM && (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
