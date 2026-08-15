@@ -914,7 +914,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           onDrop={handleDrop}
           className={`rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] shadow-lg p-2 flex items-center gap-2 transition-colors ${isDragging ? 'border-[var(--accent-primary)]/70' : ''}`}
         >
-          {!isBlockedDM && (
+{!isBlockedDM && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -923,17 +923,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             >
               <Paperclip className="h-5 w-5" />
             </button>
-          )}
-
-          {!isReadOnly && !isRecording && !isBlockedDM && (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card)] active:scale-95 transition-all"
-            title="Attach file"
-          >
-            <Paperclip className="h-5 w-5" />
-          </button>
           )}
 
           {!isReadOnly && !isRecording && !isBlockedDM && (
