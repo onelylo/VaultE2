@@ -52,7 +52,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, fileName }) => {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play();
+      audioRef.current.play().catch(() => {});
     }
   };
 

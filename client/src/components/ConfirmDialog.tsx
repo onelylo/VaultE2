@@ -49,7 +49,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </div>
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-main)' }}>{title}</h3>
         </div>
-        <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }} dangerouslySetInnerHTML={{ __html: message }} />
+        <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{message}</p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}

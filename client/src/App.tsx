@@ -3,6 +3,7 @@ import { liveQuery } from 'dexie';
 import { socket, connectSocket } from './lib/socket';
 import { Loader2 } from 'lucide-react';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { showToast, ToastContainer } from './lib/toast';
 import {
   generateKeyPair,
   exportPublicKey,
@@ -187,6 +188,8 @@ export const App: React.FC = () => {
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const selectedChannelRef = useRef<Channel | null>(null);
   useEffect(() => { selectedChannelRef.current = selectedChannel; }, [selectedChannel]);
+  const channelsRef = useRef<Channel[]>([]);
+  useEffect(() => { channelsRef.current = channels; }, [channels]);
   const [peerFingerprint, setPeerFingerprint] = useState<string>('');
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
@@ -313,55 +316,41 @@ export const App: React.FC = () => {
             ? [channel.createdBy, ...(channel.memberIds || [])].filter((v, i, a) => a.indexOf(v) === i)
             : // Channel info not loaded yet — try all known users as candidates
               allUsers.map(u => u.userId).filter((v, i, a) => a.indexOf(v) === i);
+          // Also include self — allUsers excludes the requesting user (buildUserDirectory)
+          if (!candidateIds.includes(currentUserKeys.userId)) {
+            candidateIds.push(currentUserKeys.userId);
+          }
+          console.log(`[ChannelKey] Trying ${candidateIds.length} candidates for channel ${channelId}:`, candidateIds);
           for (const candidateId of candidateIds) {
-            const candidateUser = allUsers.find(u => u.userId === candidateId);
-            if (!candidateUser?.publicKey) continue;
+            // Check allUsers first, then fall back to self (currentUserKeys)
+            const candidateUser = candidateId === currentUserKeys.userId
+              ? { userId: currentUserKeys.userId, publicKey: currentUserKeys.publicKeyBase64 }
+              : allUsers.find(u => u.userId === candidateId);
+            if (!candidateUser?.publicKey) {
+              console.log(`[ChannelKey] Candidate ${candidateId}: no publicKey available`);
+              continue;
+            }
             try {
               const sharedKey = await getOrDeriveSharedKey(candidateId, candidateUser.publicKey);
-              if (!sharedKey) continue;
+              if (!sharedKey) {
+                console.log(`[ChannelKey] Candidate ${candidateId}: sharedKey derivation returned null`);
+                continue;
+              }
               const keyJwk = await decryptChannelKeyForUser(encryptedChannelKey, iv, sharedKey);
               const imported = await importSymmetricKeyFromJwk(keyJwk);
               await saveChannelKey({ channelId, keyJwk });
               setChannelKeysCache(prev => new Map(prev).set(channelId, imported));
+              console.log(`[ChannelKey] Successfully decrypted channel key for ${channelId} using candidate ${candidateId}`);
               return imported;
             } catch {
               // This candidate didn't encrypt this envelope, try next
             }
           }
+          console.warn(`[ChannelKey] All ${candidateIds.length} candidates failed for channel ${channelId}`);
         } else if (res.status === 404) {
-          // No key exists for this channel (e.g., default seeded channel)
-          // Generate a new key and distribute it to all members
-          try {
-            const newKeyObj = await generateChannelSymmetricKey();
-            const newKeyJwk = await exportKeyToJwk(newKeyObj);
-            await saveChannelKey({ channelId, keyJwk: newKeyJwk });
-            setChannelKeysCache(prev => new Map(prev).set(channelId, newKeyObj));
-
-            // Encrypt for all members
-            const channel = channels.find(c => c.id === channelId);
-            const memberIds = channel?.memberIds || allUsers.map(u => u.userId);
-            const envelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
-            for (const mid of memberIds) {
-              const memberUser = allUsers.find(u => u.userId === mid);
-              if (!memberUser?.publicKey) continue;
-              try {
-                const sharedKey = await getOrDeriveSharedKey(mid, memberUser.publicKey);
-                if (!sharedKey) continue;
-                const encryptedData = await encryptChannelKeyForUser(newKeyJwk, sharedKey);
-                envelopes.push({ userId: mid, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv });
-              } catch {}
-            }
-            if (envelopes.length > 0) {
-              await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ keys: envelopes }),
-              }).catch(() => {});
-            }
-            return newKeyObj;
-          } catch (e) {
-            console.error('[ChannelKey] Failed to generate key for default channel:', e);
-          }
+          // No key envelope exists for this user yet — the channel creator needs to distribute one.
+          // Do NOT generate a new key here as it would create an incompatible key.
+          console.warn(`[ChannelKey] No key envelope for channel ${channelId} — waiting for creator to distribute.`);
         }
       }
 
@@ -556,7 +545,10 @@ export const App: React.FC = () => {
         }
       }
       // Notify senders that their offline messages reached our device
+      // Skip messages already delivered (prevents receipt spam on every refresh)
       for (const payload of incoming) {
+        const localMsg = await db.messages.get(payload.id);
+        if (localMsg?.status === 'delivered' || localMsg?.status === 'read') continue;
         socket.emit('message:delivered', { messageId: payload.id, senderId: payload.senderId });
       }
       // Load reactions for all fetched messages
@@ -700,10 +692,10 @@ export const App: React.FC = () => {
         });
       }
       console.log(`[KeyRotation] Rotated identity key → ${fp} (server v${data.keyVersion})`);
-      alert(`🔑 Identity key rotated successfully. New fingerprint: ${fp}`);
+      showToast(`Identity key rotated. New fingerprint: ${fp}`, 'success');
     } catch (e: any) {
       console.error('[KeyRotation] Failed:', e?.message || 'unknown');
-      alert(`Key rotation failed: ${e?.message || 'unknown error'}`);
+      showToast(`Key rotation failed: ${e?.message || 'unknown error'}`, 'error');
     }
   }, [currentUserKeys, privateKeyObject]);
 
@@ -1061,7 +1053,7 @@ export const App: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        if (res.status === 403) alert('Admin access required.');
+        if (res.status === 403) { showToast('Admin access required.', 'error'); return []; }
         return [];
       }
       const data = await res.json();
@@ -1083,7 +1075,7 @@ export const App: React.FC = () => {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || 'Role change failed');
+        showToast(data.error || 'Role change failed', 'error');
         return false;
       }
       return true;
@@ -1103,7 +1095,7 @@ export const App: React.FC = () => {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || 'User deletion failed');
+        showToast(data.error || 'User deletion failed', 'error');
         return false;
       }
       return true;
@@ -1351,7 +1343,7 @@ export const App: React.FC = () => {
       sessionStorage.removeItem('vaultchat_jwt');
       setCurrentUserKeys(null);
       // Show suspension message before reloading
-      alert(data?.reason || 'Your account has been suspended by an administrator.');
+      showToast(data?.reason || 'Your account has been suspended by an administrator.', 'error');
       window.location.reload();
     };
 
@@ -1361,19 +1353,42 @@ export const App: React.FC = () => {
       localStorage.removeItem('vaultchat_jwt');
       sessionStorage.removeItem('vaultchat_jwt');
       setCurrentUserKeys(null);
-      alert('Your password was changed. Please log in again.');
+      showToast('Your password was changed. Please log in again.', 'warning');
       window.location.reload();
     };
 
-    const onChannelMemberAdded = (data: { channelId: string; userId: string }) => {
+    const onChannelMemberAdded = async (data: { channelId: string; userId: string }) => {
       // If the added member is the current user, refresh channels to show the new channel
-      if (data.userId === currentUserKeys?.userId) {
+      if (data.userId === currentUserKeysRef.current?.userId) {
         socket.emit('channels:get');
       }
-      // Also update the channel in the local state
+      // Update the channel in the local state
       setChannels(prev => prev.map(c => 
         c.id === data.channelId ? { ...c, memberIds: [...new Set([...(c.memberIds || []), data.userId])] } : c
       ));
+      // Distribute channel key to the new member (if we have the key — any member can do this)
+      if (data.userId !== currentUserKeysRef.current?.userId && currentUserKeysRef.current) {
+        const channelKey = await getOrGenerateChannelKeyRef.current(data.channelId);
+        if (!channelKey) return;
+        const newMember = allUsersRef.current.find(u => u.userId === data.userId);
+        if (!newMember?.publicKey) return;
+        try {
+          const sharedKey = await getOrDeriveSharedKeyRef.current(data.userId, newMember.publicKey);
+          if (!sharedKey) return;
+          const exportedKey = await crypto.subtle.exportKey('jwk', channelKey);
+          const encryptedData = await encryptChannelKeyForUser(exportedKey, sharedKey);
+          const token = getJwtToken();
+          if (token) {
+            await fetch(`${API_BASE}/api/channels/${data.channelId}/keys`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ keys: [{ userId: data.userId, encryptedChannelKey: encryptedData.encryptedKey, iv: encryptedData.iv }] }),
+            });
+          }
+        } catch (e) {
+          console.error(`[ChannelKey] Failed to distribute key to new member ${data.userId}:`, e);
+        }
+      }
     };
 
     const onChannelMemberRemoved = (data: { channelId: string; userId: string }) => {
@@ -1393,15 +1408,22 @@ export const App: React.FC = () => {
 
     // Security: Channel key rotation when members are removed (forward secrecy)
     const onChannelKeyRotated = async (data: { channelId: string; removedMemberIds: string[] }) => {
+      const currentKeys = currentUserKeysRef.current;
+      if (!currentKeys) return;
       // If I was removed, clear my local channel key
-      if (data.removedMemberIds.includes(currentUserKeys?.userId || '')) {
+      if (data.removedMemberIds.includes(currentKeys.userId)) {
         setChannelKeysCache(prev => { const next = new Map(prev); next.delete(data.channelId); return next; });
         try { await db.channelKeys.delete(data.channelId); } catch {}
         return;
       }
-      // If I'm a remaining member, rotate the channel key (forward secrecy)
-      const channel = channels.find(c => c.id === data.channelId);
-      if (!channel || !currentUserKeys) return;
+      // Clear local key — only the creator will generate and distribute the new one
+      setChannelKeysCache(prev => { const next = new Map(prev); next.delete(data.channelId); return next; });
+      try { await db.channelKeys.delete(data.channelId); } catch {}
+
+      // Only the channel creator should generate + distribute the new rotated key
+      const channel = channelsRef.current.find(c => c.id === data.channelId);
+      if (!channel || channel.createdBy !== currentKeys.userId) return;
+
       try {
         const newKeyObj = await generateChannelSymmetricKey();
         const newKeyJwk = await exportKeyToJwk(newKeyObj);
@@ -1411,7 +1433,7 @@ export const App: React.FC = () => {
         const currentMembers = (channel.memberIds || []).filter(id => !data.removedMemberIds.includes(id));
         const envelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
         for (const memberId of currentMembers) {
-          const memberUser = allUsers.find(u => u.userId === memberId);
+          const memberUser = allUsersRef.current.find(u => u.userId === memberId);
           if (!memberUser?.publicKey) continue;
           const sharedKey = await getOrDeriveSharedKeyRef.current(memberId, memberUser.publicKey);
           if (!sharedKey) continue;
@@ -1643,6 +1665,7 @@ export const App: React.FC = () => {
   const flushOfflineQueue = useCallback(() => {
     if (!currentUserKeys || isFlushing.current || !getJwtToken()) return;
     if (!socket.connected) return; // Don't try to flush if socket is down
+    if (!navigator.onLine) return; // Don't flush while browser reports offline
     isFlushing.current = true;
     // Safety reset after 15s in case onQueueEmpty never fires
     const safetyTimer = setTimeout(() => { isFlushing.current = false; }, 15000);
@@ -1664,8 +1687,14 @@ export const App: React.FC = () => {
 
   // Flush when socket connects (with delay to ensure socket is fully ready)
   useEffect(() => {
-    if (networkStatus.isSocketConnected) {
-      setTimeout(flushOfflineQueue, 1000);
+    if (networkStatus.isSocketConnected && navigator.onLine) {
+      const timer = setTimeout(() => {
+        // Re-check after delay — socket may have disconnected during the wait
+        if (socket.connected && navigator.onLine) {
+          flushOfflineQueue();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [networkStatus.isSocketConnected, flushOfflineQueue]);
 
@@ -1683,8 +1712,12 @@ export const App: React.FC = () => {
           signingPublicKey: currentUserKeys.signingPublicKeyBase64,
         });
       }
-      // Then flush offline queue after a short delay
-      setTimeout(flushOfflineQueue, 1000);
+      // Then flush offline queue after a short delay (only if still online)
+      const flushTimer = setTimeout(() => {
+        if (socket.connected && navigator.onLine) {
+          flushOfflineQueue();
+        }
+      }, 1000);
     };
     socket.on('connect', handleConnect);
     return () => { socket.off('connect', handleConnect); };
@@ -1755,7 +1788,10 @@ export const App: React.FC = () => {
     computeUnreadRef.current?.();
 
     // Emit read receipt for this DM thread
-    socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: user.userId });
+    // Find the last message to include as lastReadMessageId
+    const lastMsg = await db.messages.where('[senderId+recipientId]').equals([user.userId, currentUserKeys.userId]).last().catch(() => undefined)
+      || await db.messages.where('[senderId+recipientId]').equals([currentUserKeys.userId, user.userId]).last().catch(() => undefined);
+    socket.emit('message:read', { conversationId: currentUserKeys.userId, senderId: user.userId, lastReadMessageId: lastMsg?.id });
 
     await validatePeerKeyTofu(user);
     const fp = await getFingerprint(user.publicKey);
@@ -1792,7 +1828,8 @@ export const App: React.FC = () => {
 
     // Emit read receipt for this channel
     if (currentUserKeys) {
-      socket.emit('message:read', { conversationId: channel.id, senderId: currentUserKeys.userId });
+      const lastMsg = await db.messages.where('channelId').equals(channel.id).last().catch(() => undefined);
+      socket.emit('message:read', { conversationId: channel.id, senderId: currentUserKeys.userId, lastReadMessageId: lastMsg?.id });
     }
 
     // Join channel room to receive messages
@@ -1893,23 +1930,45 @@ export const App: React.FC = () => {
       });
     }
 
-    // 3. Emit channel creation event FIRST (server must create channel before we can post keys)
+    // 3. Emit channel creation event and await ACK that channel is ready
+    const channelReady = new Promise<void>((resolve) => {
+      const onAck = (data: { channelId: string }) => {
+        if (data.channelId === channelId) {
+          socket.off('channel:create:ack', onAck);
+          resolve();
+        }
+      };
+      socket.on('channel:create:ack', onAck);
+      // Timeout: resolve anyway after 3s to prevent hanging
+      setTimeout(() => { socket.off('channel:create:ack', onAck); resolve(); }, 3000);
+    });
     socket.emit('channel:create', { ...channelData, createdBy: currentUserKeys.userId });
+    await channelReady;
 
-    // 4. Post channel key envelopes AFTER a short delay (wait for server to create channel + members)
-    setTimeout(async () => {
-      if (token && keyEnvelopes.length > 0) {
+    // 4. Post channel key envelopes with retry (server may still be adding members)
+    if (token && keyEnvelopes.length > 0) {
+      for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
+          const res = await fetch(`${API_BASE}/api/channels/${channelId}/keys`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ keys: keyEnvelopes })
           });
+          const result = await res.json().catch(() => ({}));
+          console.log(`[ChannelKeys] Upload attempt ${attempt + 1}: status=${res.status}, stored=${result.count}/${keyEnvelopes.length}`);
+          if (res.ok) break;
+          // If 403 (member not added yet), retry after delay
+          if (res.status === 403 && attempt < 2) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          break;
         } catch (e) {
-          console.error('[ChannelKeys] Failed to distribute keys:', e);
+          console.error(`[ChannelKeys] Upload attempt ${attempt + 1} failed:`, e);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         }
       }
-    }, 1000);
+    }
 
     // Fallback: re-fetch channels after a short delay in case broadcast is slow
     setTimeout(() => socket.emit('channels:get'), 500);
@@ -1926,7 +1985,7 @@ export const App: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to update channel');
+        showToast(err.error || 'Failed to update channel', 'error');
         return;
       }
       const result = await res.json().catch(() => ({}));
@@ -1975,7 +2034,7 @@ export const App: React.FC = () => {
       }
     } catch (e) {
       console.error('[Channel] Update error:', e);
-      alert('Failed to update channel');
+      showToast('Failed to update channel', 'error');
     }
   };
 
@@ -1989,14 +2048,14 @@ export const App: React.FC = () => {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to delete channel');
+        showToast(err.error || 'Failed to delete channel', 'error');
         return;
       }
       socket.emit('channels:get');
       setChannelSettings(null);
     } catch (e) {
       console.error('[Channel] Delete error:', e);
-      alert('Failed to delete channel');
+      showToast('Failed to delete channel', 'error');
     }
   };
 
@@ -2094,7 +2153,7 @@ export const App: React.FC = () => {
       }
     } else if (selectedPeer) {
       const isValidKey = await validatePeerKeyTofu(selectedPeer);
-      if (!isValidKey) { alert('⚠️ Security Alert: Peer identity key mismatch. Contact admin.'); return; }
+      if (!isValidKey) { showToast('Security Alert: Peer identity key mismatch. Contact admin.', 'error'); return; }
       const sharedKey = await getOrDeriveSharedKey(selectedPeer.userId, selectedPeer.publicKey);
       if (!sharedKey) return;
       const { ciphertext, iv } = await encryptMessage(text, sharedKey);
@@ -2132,7 +2191,7 @@ export const App: React.FC = () => {
       const peer = allUsers.find(u => u.userId === target.userId);
       if (!peer) return;
       const isValidKey = await validatePeerKeyTofu(peer);
-      if (!isValidKey) { alert('⚠️ Security Alert: Peer identity key mismatch.'); return; }
+      if (!isValidKey) { showToast('Security Alert: Peer identity key mismatch.', 'error'); return; }
       const sharedKey = await getOrDeriveSharedKey(peer.userId, peer.publicKey);
       if (!sharedKey) return;
       const { ciphertext, iv } = await encryptMessage(originalText, sharedKey);
@@ -2157,7 +2216,7 @@ export const App: React.FC = () => {
       keyObj = await getOrGenerateChannelKey(selectedChannel.id);
     } else if (selectedPeer) {
       const isValidKey = await validatePeerKeyTofu(selectedPeer);
-      if (!isValidKey) { alert('⚠️ Security Alert: Peer identity key mismatch. Contact admin.'); return; }
+      if (!isValidKey) { showToast('Security Alert: Peer identity key mismatch. Contact admin.', 'error'); return; }
       keyObj = await getOrDeriveSharedKey(selectedPeer.userId, selectedPeer.publicKey);
     }
     if (!keyObj) return;
@@ -2167,7 +2226,7 @@ export const App: React.FC = () => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.size > MAX_ATTACHMENT_BYTES) {
-        alert(`File "${file.name}" exceeds the 25 MB limit.`);
+        showToast(`File "${file.name}" exceeds the 25 MB limit.`, 'error');
         continue;
       }
 
@@ -2243,7 +2302,7 @@ export const App: React.FC = () => {
         setUploadProgress(null);
         const msg = e instanceof Error ? e.message : String(e);
         console.error('[Attachment] Upload failed:', msg);
-        alert(`Failed to upload attachment: ${msg}`);
+        showToast(`Failed to upload attachment: ${msg}`, 'error');
       }
     }
   };
@@ -2251,13 +2310,22 @@ export const App: React.FC = () => {
   // ── Edit & Delete ─────────────────────────────────────────────────────────────
   const handleEditMessage = async (messageId: string, newText: string) => {
     if (!currentUserKeys) return;
+    // Look up the message in DB to find the correct conversation key
+    const msg = await db.messages.get(messageId);
     let keyObj: CryptoKey | null = null;
-    if (selectedChannel) keyObj = await getOrGenerateChannelKey(selectedChannel.id);
-    else if (selectedPeer)  keyObj = await getOrDeriveSharedKey(selectedPeer.userId, selectedPeer.publicKey);
+    if (msg?.channelId) {
+      keyObj = await getOrGenerateChannelKey(msg.channelId);
+    } else if (msg) {
+      const peerId = msg.senderId === currentUserKeys.userId ? msg.recipientId : msg.senderId;
+      if (peerId) {
+        const peer = allUsersRef.current.find(u => u.userId === peerId);
+        if (peer?.publicKey) keyObj = await getOrDeriveSharedKey(peerId, peer.publicKey);
+      }
+    }
     if (!keyObj) return;
     const { ciphertext, iv } = await encryptMessage(newText, keyObj);
     await editMessageLocally(messageId, newText, ciphertext, iv);
-    socket.emit('message:edit', { id: messageId, newCiphertext: ciphertext, newIv: iv, recipientId: selectedPeer?.userId, channelId: selectedChannel?.id });
+    socket.emit('message:edit', { id: messageId, newCiphertext: ciphertext, newIv: iv, recipientId: msg?.recipientId, channelId: msg?.channelId });
   };
 
   const handleDeleteForMe = async (messageId: string) => {
@@ -2484,6 +2552,7 @@ export const App: React.FC = () => {
           currentUserId={currentUserKeys?.userId}
         />
 </React.Suspense>
+      <ToastContainer />
     </div>
   );
 };

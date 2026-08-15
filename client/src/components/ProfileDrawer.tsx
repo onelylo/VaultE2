@@ -8,6 +8,7 @@ import {
 import type { UserKeyPair } from '../types/chat';
 import { ConfirmModal } from './modals/ConfirmModal';
 import { API_BASE } from '../lib/attachments';
+import { showToast } from '../lib/toast';
 
 interface ProfileDrawerProps {
   currentUser: UserKeyPair;
@@ -159,7 +160,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       setNewPassword('');
       setTimeout(() => setPasswordSaved(false), 2000);
     } catch (e: any) {
-      alert(e?.message || 'Password change failed');
+      showToast(e?.message || 'Password change failed', 'error');
     } finally {
       setPasswordSaving(false);
     }

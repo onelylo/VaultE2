@@ -441,7 +441,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 {msg.text && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.text); setShowActions(false); }}
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.text).catch(() => {}); setShowActions(false); }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover-color)] transition-colors text-left"
                     style={{ color: 'var(--text-main)' }}
                   >

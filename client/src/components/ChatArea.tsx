@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
 import { socket } from '../lib/socket';
+import { showToast } from '../lib/toast';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Reply,
   Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText,
@@ -114,6 +115,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     const convId = selectedChannel?.id || selectedUser?.userId;
     if (!convId) return;
+    if (!text.trim()) return; // Don't save empty drafts
     const timer = setTimeout(() => {
       saveDraft(convId, text);
     }, 500);
@@ -194,51 +196,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setAllMessages([]);
   }, [selectedUser?.userId, selectedChannel?.id]);
 
-  // Update allMessages when messages change
+  // Update allMessages when messages change (liveQuery handles reactivity)
   useEffect(() => {
     if (messages) setAllMessages(messages);
   }, [messages]);
-
-  // Poll for message status updates (ensures checkmarks update)
-  useEffect(() => {
-    if (!selectedChannel && !selectedUser) return;
-    const interval = setInterval(async () => {
-      let msgs: LocalMessage[] = [];
-      if (selectedChannel) {
-        msgs = await db.messages.where('channelId').equals(selectedChannel.id).toArray();
-      } else if (selectedUser && currentUserId) {
-        const [sent, received] = await Promise.all([
-          db.messages.where('[senderId+recipientId]').equals([currentUserId, selectedUser.userId]).toArray(),
-          db.messages.where('[senderId+recipientId]').equals([selectedUser.userId, currentUserId]).toArray(),
-        ]);
-        msgs = [...sent, ...received];
-      }
-      setAllMessages(prev => {
-        const dbMap = new Map(msgs.map(m => [m.id, m]));
-        let changed = false;
-        const next: LocalMessage[] = [];
-        for (const msg of prev) {
-          const dbMsg = dbMap.get(msg.id);
-          if (!dbMsg) continue; // removed from DB
-          if (dbMsg.status !== msg.status || dbMsg.isDeleted !== msg.isDeleted || dbMsg.removed !== msg.removed) {
-            next.push(dbMsg);
-            changed = true;
-          } else {
-            next.push(msg);
-          }
-        }
-        // Add new messages not in prev
-        for (const msg of msgs) {
-          if (!prev.some(m => m.id === msg.id)) {
-            next.push(msg);
-            changed = true;
-          }
-        }
-        return changed ? next.sort((a, b) => a.timestamp - b.timestamp) : prev;
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [selectedChannel?.id, selectedUser?.userId, currentUserId]);
 
   // Visible messages (lazy loaded, filter out removed)
   const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
@@ -507,7 +468,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handlePickFile = async (file: File) => {
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      alert(`File exceeds the 25 MB limit (${formatFileSize(file.size)}).`);
+      showToast(`File exceeds the 25 MB limit (${formatFileSize(file.size)}).`, 'error');
       return;
     }
     setIsPreparing(true);
@@ -803,7 +764,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               currentUserId={currentUserId}
               selectedUser={selectedUser}
               selectedChannel={selectedChannel}
-              messages={visibleMessages}
+              messages={allMessages}
               userLookup={userLookup}
               chatType={selectedChannel ? 'channel' : 'dm'}
               editingMsgId={editingMsgId}

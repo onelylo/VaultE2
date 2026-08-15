@@ -193,7 +193,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setMuteMenuUser(null);
   };
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const handleSelectUserWrapper = (user: User) => {
     onSelectUser(user);

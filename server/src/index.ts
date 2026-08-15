@@ -14,6 +14,7 @@ import {
   initDatabase,
   getUploadsDir,
   shutdownDatabase,
+  cleanupOrphanedAttachments,
   insertUser,
   getUserById,
   getUserByIdIncludingDeleted,
@@ -776,6 +777,14 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
     if (target.userId === adminId) {
       return res.status(400).json({ error: 'Cannot change your own role' });
     }
+    // Prevent demoting the last admin
+    if (target.role === 'ADMIN' && role !== 'ADMIN') {
+      const allUsers = await getAllUsers();
+      const adminCount = allUsers.filter(u => u.role === 'ADMIN').length;
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Cannot demote the last admin' });
+      }
+    }
     await updateUserRole(target.userId, role);
     await logAudit(adminId, 'role_change', 'user', target.userId, `${target.role} -> ${role}`);
     io.emit('user:role_change', { userId: target.userId, role });
@@ -1058,13 +1067,28 @@ app.get('/api/url-preview', async (req, res) => {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Only HTTP(S) URLs allowed' });
 
-    // SSRF protection: block private/internal IP ranges
+    // SSRF protection: resolve DNS FIRST, then check resolved IPs
     const hostname = parsed.hostname;
-    // Check for IPv6 mapped IPv4 (::ffff:192.168.x.x) and IPv6 private ranges
-    const isPrivateIP = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.|localhost$)/i.test(hostname)
+    const isPrivateIP = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.)/i.test(hostname)
       || /^(::1|fc00:|fd00:|fe80:|ff00:|::ffff:(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.))/i.test(hostname)
       || hostname === 'localhost';
     if (isPrivateIP) return res.status(400).json({ error: 'Private/internal URLs not allowed' });
+
+    // Resolve DNS and check for private IPs (prevents DNS rebinding TOCTOU)
+    const dns = await import('dns').catch(() => null);
+    if (dns) {
+      const resolved = await new Promise<string[]>((resolve) => {
+        dns.resolve4(hostname, (err, addresses) => {
+          if (err || !addresses) resolve([]);
+          else resolve(addresses);
+        });
+      });
+      for (const ip of resolved) {
+        if (/^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.)/i.test(ip)) {
+          return res.status(400).json({ error: 'Resolved to private IP' });
+        }
+      }
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -1222,15 +1246,21 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
     if (!isMember) {
       return res.status(403).json({ error: 'Not a channel member' });
     }
-    const validKeys = keys
-      .filter((item: any) => item.userId && item.encryptedChannelKey && item.iv)
-      .map((item: any) => ({
+    // Only store envelopes for actual channel members (prevents key leakage to non-members)
+    const memberSet = new Set(members);
+    const filteredKeys = keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv && memberSet.has(item.userId));
+    const droppedKeys = keys.filter((item: any) => !item.userId || !item.encryptedChannelKey || !item.iv || !memberSet.has(item.userId));
+    if (droppedKeys.length > 0) {
+      console.warn(`[ChannelKeys] Dropped ${droppedKeys.length} envelope(s) for non-members:`, droppedKeys.map((k: any) => k.userId));
+    }
+    const validKeys = filteredKeys.map((item: any) => ({
         channelId,
         userId: item.userId,
         encryptedChannelKey: item.encryptedChannelKey,
         iv: item.iv,
       }));
     await upsertChannelKeys(channelId, validKeys);
+    console.log(`[ChannelKeys] Stored ${validKeys.length} envelope(s) for channel ${channelId} (requested ${keys.length})`);
 
     return res.json({ success: true, count: validKeys.length });
   } catch (e) {
@@ -1427,6 +1457,11 @@ app.get('/api/attachments/:id', async (req, res) => {
           return res.status(403).json({ error: 'Not a participant of this message' });
         }
       }
+    } else {
+      // Unlinked attachment (messageId=null): only allow the original uploader
+      // We check by looking at who uploaded it — stored as metadata in the encrypted blob.
+      // For safety, deny unlinked attachment access to prevent auth bypass.
+      return res.status(403).json({ error: 'Unlinked attachment not downloadable' });
     }
 
     const uploadsDir = path.resolve(getUploadsDir());
@@ -1471,6 +1506,22 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'error', error: IS_PRODUCTION ? 'Internal error' : (e as Error).message });
   }
 });
+
+// ── Orphaned Attachment Cleanup (every 30 minutes) ──────────────────────────
+setInterval(async () => {
+  try {
+    const { count, filePaths } = await cleanupOrphanedAttachments();
+    for (const filePath of filePaths) {
+      const absPath = path.join(getUploadsDir(), filePath);
+      await fs.promises.unlink(absPath).catch(() => {});
+    }
+    if (count > 0) {
+      console.log(`[Cleanup] Removed ${count} orphaned attachment(s)`);
+    }
+  } catch (e) {
+    console.error('[Cleanup] Orphaned attachment cleanup error:', e);
+  }
+}, 30 * 60 * 1000);
 
 // ── Error Handler (multer limits, etc.) ───────────────────────────────────────
 
@@ -1533,6 +1584,36 @@ io.on('connection', (socket) => {
     return false;
   };
 
+  // Rate limiter for reactions (10 per 10 seconds)
+  const reactionTimestamps: number[] = [];
+  const isReactionRateLimited = (): boolean => {
+    const now = Date.now();
+    while (reactionTimestamps.length > 0 && reactionTimestamps[0] < now - 10000) reactionTimestamps.shift();
+    if (reactionTimestamps.length >= 10) return true;
+    reactionTimestamps.push(now);
+    return false;
+  };
+
+  // Rate limiter for channel creates (1 per 30 seconds)
+  const channelCreateTimestamps: number[] = [];
+  const isChannelCreateRateLimited = (): boolean => {
+    const now = Date.now();
+    while (channelCreateTimestamps.length > 0 && channelCreateTimestamps[0] < now - 30000) channelCreateTimestamps.shift();
+    if (channelCreateTimestamps.length >= 1) return true;
+    channelCreateTimestamps.push(now);
+    return false;
+  };
+
+  // Rate limiter for typing indicators (2 per second)
+  const typingTimestamps: number[] = [];
+  const isTypingRateLimited = (): boolean => {
+    const now = Date.now();
+    while (typingTimestamps.length > 0 && typingTimestamps[0] < now - 1000) typingTimestamps.shift();
+    if (typingTimestamps.length >= 2) return true;
+    typingTimestamps.push(now);
+    return false;
+  };
+
   socket.on('user:join', async (data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; signingPublicKey?: string }) => {
     // Verify the claimed userId matches the authenticated socket user
     const authenticatedUserId = (socket as any).authenticatedUserId;
@@ -1560,6 +1641,8 @@ io.on('connection', (socket) => {
         // Auto-add as member for public/official channels
         if (!memberIds.has(ch.id) && (ch.type === 'public' || ch.type === 'official')) {
           await addChannelMember(ch.id, data.userId, 'system').catch(() => {});
+          // Notify existing members so they distribute the channel key to this user
+          io.emit('channel:member_added', { channelId: ch.id, userId: data.userId });
         }
       }
     } catch {}
@@ -1615,6 +1698,7 @@ socket.emit('channels:update', channels);
   socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[]; memberIds?: string[] }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
+    if (isChannelCreateRateLimited()) return;
     // Permission check: only ADMIN can create official/announcement channels
     const creator = activeUsers.get(authenticatedUserId);
     const creatorRole = creator?.role || 'MEMBER';
@@ -1651,7 +1735,11 @@ socket.emit('channels:update', channels);
     // Auto-join creator to channel room
     socket.join(`channel:${channelId}`);
 
+    console.log(`[Channel] Created ${channelId} by ${authenticatedUserId} with ${invitedIds.length} invited member(s)`);
     await broadcastChannels();
+
+    // ACK to creator so client knows channel is ready for key distribution
+    socket.emit('channel:create:ack', { channelId });
   });
 
   socket.on('channels:get', async () => {
@@ -1988,6 +2076,7 @@ socket.emit('channels:update', channels);
   socket.on('reaction:add', async (data: { messageId: string; emoji: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
+    if (isReactionRateLimited()) return;
     const msg = await getMessageById(data.messageId).catch(() => undefined);
     if (!msg) return;
     if (msg.channelId) {
@@ -2009,6 +2098,7 @@ socket.emit('channels:update', channels);
   socket.on('reaction:remove', async (data: { messageId: string; emoji: string }) => {
     const userId = (socket as any).authenticatedUserId;
     if (!userId) return;
+    if (isReactionRateLimited()) return;
     const msg = await getMessageById(data.messageId).catch(() => undefined);
     if (!msg) return;
     if (msg.channelId) {
@@ -2052,6 +2142,7 @@ socket.emit('channels:update', channels);
   socket.on('user:typing', (data: { channelId?: string; recipientId?: string }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
+    if (isTypingRateLimited()) return;
     const userData = { userId: authenticatedUserId, username: (socket as any).username || authenticatedUserId, channelId: data.channelId, recipientId: data.recipientId };
     if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('user:typing', userData);

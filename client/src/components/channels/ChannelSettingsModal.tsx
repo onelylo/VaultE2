@@ -55,14 +55,16 @@ function ChannelSettingsInner({
   const [editingField, setEditingField] = useState<'name' | 'description' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  // Track the last-saved snapshot so hasChanges resets after save
+  const savedRef = useRef({ name: channel.name, description: channel.description || '', memberIds: channel.memberIds || [], slowMode: channel.slowModeSeconds || 0, isAnnouncement: channel.isAnnouncement || false });
 
   const isOwner = channel.createdBy === currentUser?.userId;
   const canEditSettings = channel.type === 'official' ? currentUser?.role === 'ADMIN' : isOwner;
   const canManageMembers = canEditSettings && (channel.type === 'team' || channel.type === 'private');
 
-  const hasChanges = name !== channel.name || description !== (channel.description || '') ||
-    slowMode !== (channel.slowModeSeconds || 0) || isAnnouncement !== (channel.isAnnouncement || false) ||
-    JSON.stringify(memberIds) !== JSON.stringify(channel.memberIds || []);
+  const hasChanges = name !== savedRef.current.name || description !== savedRef.current.description ||
+    slowMode !== savedRef.current.slowMode || isAnnouncement !== savedRef.current.isAnnouncement ||
+    JSON.stringify(memberIds) !== JSON.stringify(savedRef.current.memberIds);
 
   // All channels show all users as members (including self)
   const baseMemberIds = (channel.type === 'official' || channel.type === 'team')
@@ -131,6 +133,9 @@ function ChannelSettingsInner({
 
   const handleSave = async () => {
     await onUpdate(channel.id, { name, description, memberIds, slowModeSeconds: slowMode, isAnnouncement });
+    // Update saved snapshot so hasChanges resets immediately
+    savedRef.current = { name, description, memberIds, slowMode, isAnnouncement };
+    onClose();
   };
 
   const SLOW_OPTIONS = [

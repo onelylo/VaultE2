@@ -972,3 +972,12 @@ export async function shutdownDatabase(): Promise<void> {
     try { await embedded.stop(); } catch { /* ignore */ }
   }
 }
+
+export async function cleanupOrphanedAttachments(): Promise<{ count: number; filePaths: string[] }> {
+  const p = getPool();
+  const result = await p.query(
+    `DELETE FROM attachments WHERE message_id IS NULL AND created_at < $1 RETURNING id, file_path`,
+    [Date.now() - 3600000]
+  );
+  return { count: result.rows.length, filePaths: result.rows.map((r: any) => r.file_path) };
+}

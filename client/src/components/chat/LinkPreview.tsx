@@ -9,7 +9,24 @@ interface LinkPreviewData {
   image: string | null;
 }
 
+const PREVIEW_CACHE_KEY = 'vaultchat_linkPreviews';
+const PREVIEW_CACHE_MAX = 200;
 const previewCache = new Map<string, LinkPreviewData>();
+
+// Load persisted cache on module init
+try {
+  const stored = JSON.parse(localStorage.getItem(PREVIEW_CACHE_KEY) || '[]');
+  for (const entry of stored) {
+    if (entry?.url) previewCache.set(entry.url, entry);
+  }
+} catch {}
+
+function persistCache() {
+  try {
+    const entries = [...previewCache.entries()].slice(-PREVIEW_CACHE_MAX).map(([, v]) => v);
+    localStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify(entries));
+  } catch {}
+}
 
 export const LinkPreview: React.FC<{ url: string }> = ({ url }) => {
   const [data, setData] = useState<LinkPreviewData | null>(() => previewCache.get(url) || null);
@@ -31,6 +48,7 @@ export const LinkPreview: React.FC<{ url: string }> = ({ url }) => {
       .then((result: LinkPreviewData) => {
         if (cancelled) return;
         previewCache.set(url, result);
+        persistCache();
         setData(result);
         setLoading(false);
       })

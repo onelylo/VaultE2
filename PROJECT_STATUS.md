@@ -1,5 +1,5 @@
 # PROJECT STATUS — VaultChat
-> **Last updated**: 2026-08-13  
+> **Last updated**: 2026-08-15  
 > **Maintainer**: Auto-generated, update on every fix/change  
 > **Repo**: https://github.com/onelylo/petroshield-chat
 
@@ -126,6 +126,46 @@
 | 2026-08-13 | `e8b752b` | Key rotation rate limiting (3/hr/user) | `server/index.ts` |
 | 2026-08-13 | `e8b752b` | PBKDF2 iterations 100K → 600K (OWASP compliant) | `client/lib/crypto.ts` |
 | 2026-08-13 | `e8b752b` | Attachment upload rate limiting (10/min/user) | `server/index.ts` |
+| 2026-08-15 | `90ae781` | Server-side attachment DB fallback for DM relay, channel broadcast, undelivered messages | `server/index.ts`, `server/db/index.ts` |
+| 2026-08-15 | `4ea5786` | Fixed swapped IV mapping in all 3 attachment relay fallback paths (iv↔binaryIv) | `server/index.ts` |
+| 2026-08-15 | `4ea5786` | Isolated linkAttachmentToMessage errors from insertMessage try-catch | `server/index.ts` |
+| 2026-08-15 | `bf6565b` | Allow attachment-only messages (empty ciphertext) — server was silently dropping them | `server/index.ts` |
+| 2026-08-15 | `bf6565b` | Real-time `socket.connected && navigator.onLine` check before emit (replaces stale `isOffline` state) | `client/App.tsx` |
+| 2026-08-15 | `41f325c` | Channel attachment auth: use `channel_members` instead of `channel_keys` (key dist may fail) | `server/index.ts` |
+| 2026-08-15 | `41f325c` | `getOrGenerateChannelKey`: try all users as candidates when `channels` state not loaded | `client/App.tsx` |
+| 2026-08-15 | `41f325c` | Queue processor: remove premature `updateMessageStatus('sent')` — clock icon persists until server ACK | `client/lib/queue.ts` |
+| 2026-08-15 | `8f250f6` | CRITICAL: `getUndeliveredMessages` SQL `ORDER BY timestamp` → `created_at` (column didn't exist) | `server/db/index.ts` |
+| 2026-08-15 | `8f250f6` | CRITICAL: `handleCloseChat` no longer emits `channel:leave` (was destroying team/private membership) | `client/App.tsx` |
+| 2026-08-15 | `8f250f6` | CRITICAL: `channel:members` now filters through `publicUser()` (was leaking password hashes) | `server/index.ts` |
+| 2026-08-15 | `8f250f6` | HIGH: `user:online` broadcast no longer includes email field | `server/index.ts` |
+| 2026-08-15 | `8f250f6` | HIGH: Server `updateMessageStatus` now checks status rank before update (prevents read→delivered downgrade) | `server/db/index.ts` |
+| 2026-08-15 | `latest` | CRITICAL: Channel key distribution race — await server ACK + 3-attempt retry | `client/App.tsx` |
+| 2026-08-15 | `latest` | CRITICAL: `onChannelKeyRotated` stale closures → use refs (`currentUserKeysRef`, `channelsRef`, `allUsersRef`) | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: Removed dangerous 404 fallback in `getOrGenerateChannelKey` (was generating incompatible keys) | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: Key distribution on member add via `onChannelMemberAdded` (creator distributes key to new members) | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: Unlinked attachment access denied (messageId=null → 403) | `server/index.ts` |
+| 2026-08-15 | `latest` | HIGH: SSRF DNS rebinding fix (resolve DNS before IP check) | `server/index.ts` |
+| 2026-08-15 | `latest` | HIGH: Server key upload filters envelopes to actual channel members only | `server/index.ts` |
+| 2026-08-15 | `latest` | MEDIUM: `dangerouslySetInnerHTML` in ConfirmDialog → plain text | `client/ConfirmDialog.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: Rate limiters for reactions, channel creates, typing | `server/index.ts` |
+| 2026-08-15 | `latest` | MEDIUM: Last admin demotion guard | `server/index.ts` |
+| 2026-08-15 | `latest` | MEDIUM: `fetchAllHistory` skips delivery receipts for already-delivered messages | `client/App.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: `handleEditMessage` looks up message in DB for correct key | `client/App.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: Read receipts include `lastReadMessageId` on openDM/openChannel | `client/App.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: Removed redundant 2s polling (liveQuery handles reactivity) | `client/ChatArea.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: `isMobile` is now reactive to window resize | `client/Sidebar.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: Orphaned attachment cleanup (30-min interval + DB function) | `server/index.ts`, `server/db/index.ts` |
+| 2026-08-15 | `latest` | LOW: `audio.play()` `.catch()` added | `client/AudioPlayer.tsx` |
+| 2026-08-15 | `latest` | LOW: `navigator.clipboard.writeText` `.catch()` added | `client/MessageItem.tsx` |
+| 2026-08-15 | `latest` | LOW: Empty draft auto-save guard | `client/ChatArea.tsx` |
+| 2026-08-15 | `latest` | LOW: Reply lookup uses `allMessages` instead of `visibleMessages` | `client/ChatArea.tsx` |
+| 2026-08-15 | `latest` | CRITICAL: `onChannelKeyRotated` — only creator generates+distributes rotated key (was every client generating different keys) | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: `getOrGenerateChannelKey` — self added as fallback candidate (allUsers excludes self) | `client/App.tsx` |
+| 2026-08-15 | `latest` | HIGH: `onChannelMemberAdded` — any online member can distribute keys (was creator-only) | `client/App.tsx` |
+| 2026-08-15 | `latest` | LOW: Link preview cache persisted to localStorage (200 entries max) | `client/LinkPreview.tsx` |
+| 2026-08-15 | `latest` | CRITICAL: Public/official channel auto-join now emits `channel:member_added` for key distribution | `server/index.ts` |
+| 2026-08-15 | `latest` | MEDIUM: Channel settings modal unsaved-changes bug — `hasChanges` compares against saved snapshot, not original prop | `client/ChannelSettingsModal.tsx` |
+| 2026-08-15 | `latest` | MEDIUM: All 18 `alert()` calls replaced with toast notification system (`showToast` + `ToastContainer`) | `client/App.tsx`, `client/ChatArea.tsx`, `client/ProfileDrawer.tsx`, `client/lib/toast.tsx` |
 
 ### Feature Additions
 | Date | Commit | Feature | File(s) |
@@ -152,19 +192,47 @@
 
 ## 3. KNOWN ISSUES & LIMITATIONS
 
-### Unfixed Issues
+### Fixed Issues (from Full Security/UI/Feature Scan — 2026-08-15)
+| Severity | Issue | File(s) | Status |
+|----------|-------|---------|--------|
+| CRITICAL | `onChannelKeyRotated` every client generates different key → cascading decrypt failures | `client/App.tsx` | FIXED: only creator generates+distributes; others clear+wait |
+| CRITICAL | `onChannelKeyRotated` handler uses stale closures — forward secrecy non-functional | `client/App.tsx` | FIXED: use `currentUserKeysRef`, `channelsRef`, `allUsersRef` |
+| HIGH | Unlinked attachments (messageId=null) downloadable by any authenticated user | `server/index.ts` | FIXED: deny unlinked attachment access |
+| HIGH | SSRF via DNS rebinding in URL preview (TOCTOU on hostname check) | `server/index.ts` | FIXED: resolve DNS before IP check |
+| HIGH | Channel key distribution races with server channel creation (1s setTimeout) | `client/App.tsx` | FIXED: await `channel:create:ack` + 3-attempt retry |
+| HIGH | Channel key fallback encrypts for ALL users on 404 | `client/App.tsx` | FIXED: removed dangerous 404 fallback, now returns null |
+| HIGH | `getOrGenerateChannelKey` can't find self as candidate (allUsers excludes self) | `client/App.tsx` | FIXED: self added as fallback candidate |
+| HIGH | New members added while creator offline never receive key envelopes | `client/App.tsx` | FIXED: any online member can distribute keys |
+| MEDIUM | `dangerouslySetInnerHTML` in ConfirmDialog (XSS vector) | `client/ConfirmDialog.tsx` | FIXED: replaced with plain text |
+| MEDIUM | No rate limiting on socket reactions, channel creates, typing | `server/index.ts` | FIXED: added per-socket rate limiters |
+| MEDIUM | Last admin can be demoted (locks out all admins) | `server/index.ts` | FIXED: added last-admin guard |
+| MEDIUM | `fetchAllHistory` sends delivery receipts for ALL messages on every refresh | `client/App.tsx` | FIXED: skip already-delivered/read messages |
+| MEDIUM | `handleEditMessage` uses selected peer/channel key, not message's actual conversation | `client/App.tsx` | FIXED: look up msg in DB for correct key |
+| MEDIUM | Read receipt marks entire thread read, not up to last-read message | `client/App.tsx` | FIXED: include `lastReadMessageId` on openDM/openChannel |
+| MEDIUM | 2s polling for status updates instead of Dexie liveQuery | `client/ChatArea.tsx` | FIXED: removed redundant polling, liveQuery handles reactivity |
+| MEDIUM | `isMobile` is static, not reactive to resize | `client/Sidebar.tsx` | FIXED: added resize event listener |
+| MEDIUM | Orphaned attachment files never cleaned from disk | `server/index.ts` | FIXED: 30-min cleanup job + DB function |
+| MEDIUM | `alert()` used 18 times for feedback | `client/App.tsx` multiple | FIXED: replaced with toast notification system |
+| LOW | `audio.play()` without .catch() in AudioPlayer | `client/AudioPlayer.tsx` | FIXED: added catch handler |
+| LOW | `navigator.clipboard.writeText` without try/catch | `client/MessageItem.tsx` | FIXED: added .catch() |
+| LOW | Draft auto-save saves empty drafts | `client/ChatArea.tsx` | FIXED: guard non-empty |
+| LOW | `visibleMessages` truncates reply lookup | `client/ChatArea.tsx` | FIXED: pass allMessages |
+| LOW | Link preview cache lost on refresh | `client/LinkPreview.tsx` | FIXED: persist to localStorage (200 entries max) |
+
+### Remaining Issues
+| Severity | Issue | File(s) | Status |
+|----------|-------|---------|--------|
+| MEDIUM | PBKDF2 at 100K iterations (OWASP recommends 600K) — breaking change to upgrade | `client/crypto.ts:451` | Needs vault re-wrap migration |
+
+### Previously Known Issues
 | Severity | Issue | Status |
 |----------|-------|--------|
 | MEDIUM | `EditUserModal` save handler ignores fullName/status/newPassword/revokeKeys | No backend endpoints exist |
-| MEDIUM | Browser `alert()` used for feedback (15 instances) | Should use inline UI |
 | MEDIUM | `/api/messages` returns unbounded history, no pagination | Needs pagination |
 | MEDIUM | Reaction/pin handlers don't verify participant membership | Needs membership check |
 | MEDIUM | JWT role changes take up to 1h to apply | By design (JWT expiry) |
 | MEDIUM | `DB_PASS` regenerates every boot without env var | Needs persistent secret |
-| LOW | `isMobile` computed once per render (no resize listener) | Low priority |
-| LOW | Fingerprint loading for all users runs expensive async crypto on every directory update | Performance |
-| LOW | `formatBytes` duplicated in server files | Code smell |
-| LOW | Hardcoded dev credentials in test scripts | Dev only, git-ignored |
+| LOW | Fingerprint loading runs expensive async crypto on every directory update | Performance |
 | LOW | ~40 console.log debug statements in production | Cleanup |
 
 ### Security Notes
@@ -174,10 +242,18 @@
 - ECDH key cache keyed by peerId + publicKey prefix (invalidates on rotation)
 - Legacy SHA-256 passwords use timing-safe comparison
 - Socket message rate limiting: 10 messages/second per connection
+- Reaction rate limiting: 10 reactions/10 seconds per connection
+- Channel create rate limiting: 1 channel/30 seconds per connection
+- Typing indicator rate limiting: 2/second per connection
 - Key rotation rate limiting: 3 rotations/hour per user
 - Attachment upload rate limiting: 10 uploads/minute per user
-- PBKDF2 iterations: 600,000 (OWASP 2023 compliant)
-- Channel keys re-distributed when new members are added
+- Unlinked attachments (messageId=null) denied download to prevent auth bypass
+- SSRF: DNS resolved before IP check (prevents DNS rebinding TOCTOU)
+- Last admin demotion prevented (requires at least 1 admin)
+- Orphaned attachments cleaned up every 30 minutes
+- PBKDF2 iterations: 100,000 (600K requires vault migration)
+- Channel keys re-distributed when new members are added (via `onChannelMemberAdded`)
+- Channel key distribution uses server ACK + retry (no more setTimeout race)
 
 ---
 
