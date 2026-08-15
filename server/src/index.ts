@@ -1595,10 +1595,18 @@ socket.emit('channels:update', channels);
     // Send undelivered DM messages that were sent while user was offline
     const undelivered = await getUndeliveredMessages(data.userId).catch(() => []);
     for (const msg of undelivered) {
+      // Fetch attachment for undelivered messages
+      const attachment = await getAttachmentByMessageId(msg.id).catch(() => undefined);
       socket.emit('message:receive', {
         ...msg,
         status: 'sent',
         timestamp: msg.createdAt,
+        attachment: attachment ? {
+          attachmentId: attachment.id,
+          encryptedMetadata: attachment.encryptedMetadata,
+          iv: attachment.iv,
+          binaryIv: attachment.metadataIv,
+        } : undefined,
       });
     }
 
@@ -1768,6 +1776,17 @@ socket.emit('channels:update', channels);
         const relayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
         if (payload.attachment) {
           relayPayload.attachment = payload.attachment;
+        } else {
+          // Fallback: fetch attachment from database if not in payload
+          const attachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
+          if (attachment) {
+            relayPayload.attachment = {
+              attachmentId: attachment.id,
+              encryptedMetadata: attachment.encryptedMetadata,
+              iv: attachment.iv,
+              binaryIv: attachment.metadataIv,
+            };
+          }
         }
         io.to(recipient.socketId).emit('message:receive', relayPayload);
 
@@ -1872,7 +1891,19 @@ socket.emit('channels:update', channels);
     });
 
     // Broadcast to channel members only (room-based delivery)
-    socket.to(`channel:${channelId}`).emit('channel:message:receive', { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
+    let channelRelayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
+    if (!payload.attachment) {
+      const attachment = await getAttachmentByMessageId(messageId).catch(() => undefined);
+      if (attachment) {
+        channelRelayPayload.attachment = {
+          attachmentId: attachment.id,
+          encryptedMetadata: attachment.encryptedMetadata,
+          iv: attachment.iv,
+          binaryIv: attachment.metadataIv,
+        };
+      }
+    }
+    socket.to(`channel:${channelId}`).emit('channel:message:receive', channelRelayPayload);
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
