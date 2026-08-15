@@ -1752,7 +1752,12 @@ io.on('connection', (socket) => {
     if (recipientId) {
       const recipient = activeUsers.get(recipientId);
       if (recipient) {
-        io.to(recipient.socketId).emit('message:receive', { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() });
+        // Explicitly include attachment to ensure it's relayed for DMs
+        const relayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
+        if (payload.attachment) {
+          relayPayload.attachment = payload.attachment;
+        }
+        io.to(recipient.socketId).emit('message:receive', relayPayload);
 
       } else {
 
