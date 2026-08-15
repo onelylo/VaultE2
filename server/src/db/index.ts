@@ -648,6 +648,13 @@ export async function updateMessageEdit(id: string, ciphertext: string, iv: stri
   );
 }
 
+export async function updateMessageStatus(id: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
+  await getPool().query(
+    `UPDATE messages SET status = $2 WHERE id = $1`,
+    [id, status]
+  );
+}
+
 export async function markMessageDeleted(id: string): Promise<void> {
   await getPool().query(`UPDATE messages SET is_deleted = TRUE WHERE id = $1`, [id]);
 }

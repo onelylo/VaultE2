@@ -80,6 +80,7 @@ import {
   blockToken,
   isTokenBlocked,
   cleanupExpiredTokens,
+  updateMessageStatus,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -1839,18 +1840,24 @@ io.on('connection', (socket) => {
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
-  socket.on('message:delivered', (data: { messageId: string; tempId?: string; senderId: string }) => {
+  socket.on('message:delivered', async (data: { messageId: string; tempId?: string; senderId: string }) => {
     const sender = activeUsers.get(data.senderId);
     if (sender) {
       io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
     }
+    // Update message status in database
+    await updateMessageStatus(data.messageId, 'delivered').catch(() => {});
   });
 
   // Read receipt: Recipient opened active conversation thread ➔ Notify sender of read status
-  socket.on('message:read', (data: { conversationId: string; senderId: string; lastReadMessageId?: string }) => {
+  socket.on('message:read', async (data: { conversationId: string; senderId: string; lastReadMessageId?: string }) => {
     const sender = activeUsers.get(data.senderId);
     if (sender) {
       io.to(sender.socketId).emit('message:read_ack', { conversationId: data.conversationId, lastReadMessageId: data.lastReadMessageId });
+    }
+    // Update message status in database
+    if (data.lastReadMessageId) {
+      await updateMessageStatus(data.lastReadMessageId, 'read').catch(() => {});
     }
   });
 
