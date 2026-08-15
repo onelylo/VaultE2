@@ -641,6 +641,17 @@ export async function markIncomingDelivered(recipientId: string): Promise<void> 
   );
 }
 
+/** Get undelivered DM messages for a user (status = 'sent' and recipient_id = userId) */
+export async function getUndeliveredMessages(recipientId: string): Promise<DbMessage[]> {
+  const res = await getPool().query(
+    `SELECT ${MSG_COLS} FROM messages 
+     WHERE recipient_id = $1 AND status = 'sent'
+     ORDER BY timestamp ASC`,
+    [recipientId]
+  );
+  return res.rows.map(mapMessageRow);
+}
+
 export async function updateMessageEdit(id: string, ciphertext: string, iv: string): Promise<void> {
   await getPool().query(
     `UPDATE messages SET ciphertext = $2, iv = $3, is_edited = TRUE WHERE id = $1`,

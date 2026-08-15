@@ -81,6 +81,7 @@ import {
   isTokenBlocked,
   cleanupExpiredTokens,
   updateMessageStatus,
+  getUndeliveredMessages,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -1589,7 +1590,18 @@ io.on('connection', (socket) => {
 
     // Send channel list (persisted in PostgreSQL) — filtered per-user
     const channels = await getAllChannels(data.userId).catch(() => []);
-    socket.emit('channels:update', channels);
+socket.emit('channels:update', channels);
+
+    // Send undelivered DM messages that were sent while user was offline
+    const undelivered = await getUndeliveredMessages(data.userId).catch(() => []);
+    for (const msg of undelivered) {
+      socket.emit('message:receive', {
+        ...msg,
+        status: 'sent',
+        timestamp: msg.createdAt,
+      });
+    }
+
   });
 
   // Channel CRUD
