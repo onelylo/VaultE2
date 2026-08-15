@@ -1641,6 +1641,25 @@ io.on('connection', (socket) => {
     socket.emit('channels:update', channels);
   });
 
+  // Channel Join — user enters a channel room to receive messages
+  socket.on('channel:join', async (data: { channelId: string }) => {
+    const userId = (socket as any).authenticatedUserId;
+    if (!userId) return;
+    const { channelId } = data;
+    try {
+      const channel = await getChannelById(channelId);
+      if (!channel) return;
+      const members = await getChannelMembers(channelId);
+      if (!members.includes(userId)) return;
+      socket.join(`channel:${channelId}`);
+      // Send current channel members to the joining user
+      const memberUsers = await Promise.all(members.map(mid => getUserById(mid).catch(() => undefined)));
+      socket.emit('channel:members', { channelId, members: memberUsers.filter(Boolean) });
+    } catch (e) {
+      console.error('[Channel] Join error:', e);
+    }
+  });
+
   // Channel Leave — user quits a team/private channel
   socket.on('channel:leave', async (data: { channelId: string }) => {
     const userId = (socket as any).authenticatedUserId;
