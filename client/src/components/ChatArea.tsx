@@ -487,9 +487,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleFilesChosen = (files: FileList | null) => {
-    if (isBlockedDM) return;
-    const file = files?.[0];
-    if (file) handlePickFile(file);
+    if (isBlockedDM || !files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    fileArray.forEach(handlePickFile);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -900,6 +900,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             className="hidden"
             onChange={e => { handleFilesChosen(e.target.files); e.target.value = ''; textareaRef.current?.focus(); }}
           />
