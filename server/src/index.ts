@@ -1597,6 +1597,15 @@ async function broadcastChannels(): Promise<void> {
   for (const [userId, user] of activeUsers) {
     try {
       const filtered = await getAllChannels(userId);
+      // Auto-join sockets to official channel rooms they aren't in yet
+      const sock = io.sockets.sockets.get(user.socketId);
+      if (sock) {
+        for (const ch of filtered) {
+          if (ch.type === 'official') {
+            sock.join(`channel:${ch.id}`);
+          }
+        }
+      }
       io.to(user.socketId).emit('channels:update', filtered);
     } catch (e) {
       console.error('[Channel] Broadcast error for user:', e);
@@ -1790,7 +1799,13 @@ socket.emit('channels:update', channels);
     try {
       const channel = await getChannelById(channelId);
       if (!channel) return;
-      const members = await getChannelMembers(channelId);
+      let members = await getChannelMembers(channelId);
+      // For official channels, auto-add the user as a member if not already
+      if (channel.type === 'official' && !members.includes(userId)) {
+        await addChannelMember(channelId, userId, 'system').catch(() => {});
+        members = [...members, userId];
+        io.emit('channel:member_added', { channelId, userId });
+      }
       if (!members.includes(userId)) return;
       socket.join(`channel:${channelId}`);
       // Send current channel members to the joining user

@@ -155,21 +155,6 @@ export function getUploadsDir(): string {
 async function seedDefaultChannels(): Promise<void> {
   // Migrate any existing 'public' channels to 'official'
   await getPool().query(`UPDATE channels SET type = 'official' WHERE type = 'public'`).catch(() => {});
-
-  const defaults: DbChannel[] = [
-      { id: 'general', name: 'general', description: 'Company-wide communications', type: 'official', createdBy: 'system', createdAt: Date.now() },
-      { id: 'announcements', name: 'announcements', description: 'Official corporate announcements', type: 'official', createdBy: 'system', createdAt: Date.now() },
-      { id: 'logistics-supply', name: 'logistics-supply', description: 'Supply chain & equipment transport logs', type: 'official', createdBy: 'system', createdAt: Date.now() },
-      { id: 'depot-operations', name: 'depot-operations', description: 'Field depot operations & crew coordination', type: 'official', createdBy: 'system', createdAt: Date.now() },
-  ];
-  for (const channel of defaults) {
-    await getPool().query(
-      `INSERT INTO channels (id, name, description, type, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
-      [channel.id, channel.name, channel.description, channel.type, channel.createdBy, channel.createdAt]
-    );
-  }
 }
 
 async function seedAdminAccount(): Promise<void> {
