@@ -1,7 +1,36 @@
 # PROJECT STATUS — VaultChat
-> **Last updated**: 2026-08-15 (latest fixes: channel key request fallback, creator key regen, persist activeView, attachment multi-file, multiple commits)  
+> **Last updated**: 2026-08-16 (Version 1.0.0 Stable Released)  
 > **Maintainer**: Auto-generated, update on every fix/change  
 > **Repo**: https://github.com/onelylo/petroshield-chat
+
+---
+
+## 🎉 VERSION 1.0.0 — STABLE RELEASE (2026-08-16)
+
+**VaultChat v1.0.0** is the first stable release. All critical E2EE flows, presence, and message delivery are verified working.
+
+### Release Highlights
+- ✅ **E2EE Verified**: Server never sees plaintext — only ciphertext + IV stored
+- ✅ **Multi-connection Presence**: Multiple tabs/devices supported; user stays online until last connection closes
+- ✅ **Stale User Cleanup**: Auto-removes dead connections after 3 minutes (60s interval)
+- ✅ **Channel Key Distribution**: ACK + retry protocol eliminates race conditions
+- ✅ **Official Channel Delivery**: Fixed silent failures, proper error feedback
+- ✅ **Key Rotation**: Only creator generates rotated key; others clear cache and wait
+- ✅ **Security Hardened**: Helmet CSP, rate limits, SSRF fix, unlinked attachment deny, last-admin guard
+- ✅ **UI Polish**: Toast system, shared media gallery, scroll-to-bottom button, activeView persistence
+- ✅ **Multi-file Attachments**: Ctrl/Shift+click, individual remove, previews
+
+### Known Limitations (Post-v1.0)
+| Item | Priority | Notes |
+|------|----------|-------|
+| PBKDF2 100K → 600K + vault migration | HIGH | Requires vault re-wrap on login |
+| JWT in localStorage → httpOnly cookies | HIGH | Needs cookie auth for socket |
+| Pagination for message APIs | HIGH | O(n) memory on large histories |
+| Split App.tsx into composable hooks | MEDIUM | 2,500+ lines, untestable |
+| Virtualize message list (react-window) | MEDIUM | Lag on 500+ messages |
+| Add tests (Vitest/Jest + CI) | MEDIUM | No regression safety |
+| Clean up ~40 console.log | LOW | Info leakage in browser console |
+| Structured logging + error tracking | LOW | No observability in production |
 
 ---
 
