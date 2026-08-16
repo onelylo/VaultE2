@@ -28,7 +28,7 @@ export interface Channel {
   id: string;
   name: string;
   description: string;
-  type: 'official' | 'team' | 'public' | 'private';
+  type: 'official' | 'team' | 'private';
   createdBy: string;
   createdAt: number;
   memberIds: string[];

@@ -146,7 +146,6 @@ function ChannelSettingsInner({
   const typeConfig: Record<string, { label: string; color: string; icon: typeof Hash }> = {
     official: { label: 'OFFICIAL', color: '#f87171', icon: Megaphone },
     team: { label: 'TEAM', color: '#34d399', icon: Users },
-    public: { label: 'PUBLIC', color: '#60a5fa', icon: Hash },
     private: { label: 'PRIVATE', color: 'var(--accent-primary)', icon: Lock },
   };
   const typeInfo = typeConfig[channel.type] || typeConfig.private;

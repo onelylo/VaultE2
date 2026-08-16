@@ -83,6 +83,8 @@ import {
   cleanupExpiredTokens,
   updateMessageStatus,
   getUndeliveredMessages,
+  deleteUndecryptableMessages,
+  getMembersWithoutKeyEnvelope,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -1228,6 +1230,33 @@ app.get('/api/block/status/:userId', async (req, res) => {
   }
 });
 
+// ── Cleanup undecryptable messages ──────────────────────────────────────────
+app.post('/api/messages/cleanup', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const deleted = await deleteUndecryptableMessages();
+    return res.json({ deleted });
+  } catch (e) {
+    console.error('[Cleanup] Error:', e);
+    return res.status(500).json({ error: 'Cleanup failed' });
+  }
+});
+
+// ── Get members missing key envelopes for a channel ─────────────────────────
+app.get('/api/channels/:channelId/missing-keys', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { channelId } = req.params;
+  try {
+    const members = await getMembersWithoutKeyEnvelope(channelId);
+    return res.json({ members });
+  } catch (e) {
+    console.error('[ChannelKeys] Missing keys error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Channel Keys Endpoints (Key Distribution) ─────────────────────────────────
 
 app.post('/api/channels/:channelId/keys', async (req, res) => {
@@ -1246,10 +1275,10 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
     if (!isMember) {
       return res.status(403).json({ error: 'Not a channel member' });
     }
-    // For official/public channels, store envelopes for ALL users (they auto-join).
+    // For official channels, store envelopes for ALL users (they auto-join).
     // For private/team channels, only store for actual members (prevents key leakage).
     const channel = await getChannelById(channelId);
-    const isOpen = channel && (channel.type === 'public' || channel.type === 'official');
+    const isOpen = channel && channel.type === 'official';
     const memberSet = new Set(members);
     const filteredKeys = isOpen
       ? keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv)
@@ -1636,28 +1665,8 @@ io.on('connection', (socket) => {
     // Store username on socket for typing indicators
     (socket as any).username = data.username;
 
-    // Auto-join user to ALL channels they should see (public/official + member-of)
-    try {
-      const allCh = await getAllChannels(data.userId).catch(() => []);
-      const memberOf = await getChannelsForUser(data.userId).catch(() => []);
-      const memberIds = new Set(memberOf.map(c => c.id));
-      for (const ch of allCh) {
-        socket.join(`channel:${ch.id}`);
-        // Auto-add as member for public/official channels
-        if (!memberIds.has(ch.id) && (ch.type === 'public' || ch.type === 'official')) {
-          await addChannelMember(ch.id, data.userId, 'system').catch(() => {});
-          // Notify existing members so they distribute the channel key to this user
-          io.emit('channel:member_added', { channelId: ch.id, userId: data.userId });
-        }
-      }
-    } catch {}
-
-    // Send full user directory (excluding self) to joining user
-    const directory = await buildUserDirectory(data.userId).catch(() => []);
-    socket.emit('users:directory', directory);
-
-    // Broadcast the new user's full data to ALL other connected clients
-    // so they have the public key for E2EE decryption
+    // Broadcast the new user's full data to ALL other connected clients FIRST
+    // so they have the public key for E2EE decryption before channel:member_added fires
     const fullUser = {
       userId: activeUser.userId,
       username: activeUser.username,
@@ -1668,6 +1677,26 @@ io.on('connection', (socket) => {
       isOnline: true,
     };
     socket.broadcast.emit('user:online', fullUser);
+
+    // Send full user directory (excluding self) to joining user
+    const directory = await buildUserDirectory(data.userId).catch(() => []);
+    socket.emit('users:directory', directory);
+
+    // Auto-join user to ALL channels they should see (official + member-of)
+    try {
+      const allCh = await getAllChannels(data.userId).catch(() => []);
+      const memberOf = await getChannelsForUser(data.userId).catch(() => []);
+      const memberIds = new Set(memberOf.map(c => c.id));
+      for (const ch of allCh) {
+        socket.join(`channel:${ch.id}`);
+        // Auto-add as member for official channels
+        if (!memberIds.has(ch.id) && ch.type === 'official') {
+          await addChannelMember(ch.id, data.userId, 'system').catch(() => {});
+          // Notify existing members so they distribute the channel key to this user
+          io.emit('channel:member_added', { channelId: ch.id, userId: data.userId });
+        }
+      }
+    } catch {}
 
     // Broadcast updated presence list to everyone (includes isAway for inactive users)
     const now = Date.now();
@@ -1700,7 +1729,7 @@ socket.emit('channels:update', channels);
   });
 
   // Channel CRUD
-  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[]; memberIds?: string[] }) => {
+  socket.on('channel:create', async (data: { name: string; description: string; type: 'official' | 'team' | 'private'; isAnnouncement?: boolean; allowedRoles?: string[]; memberIds?: string[] }) => {
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (!authenticatedUserId) return;
     if (isChannelCreateRateLimited()) return;
@@ -2041,22 +2070,44 @@ socket.emit('channels:update', channels);
   });
 
   // Delivery receipt: Recipient device saved message ➔ Notify sender of delivery
-  socket.on('message:delivered', async (data: { messageId: string; tempId?: string; senderId: string }) => {
-    const sender = activeUsers.get(data.senderId);
-    if (sender) {
-      io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+  socket.on('message:delivered', async (data: { messageId: string; tempId?: string; senderId?: string; channelId?: string }) => {
+    if (data.channelId) {
+      // Channel message: look up the original sender from DB and notify them
+      const msg = await getMessageById(data.messageId).catch(() => undefined);
+      if (msg?.senderId) {
+        const sender = activeUsers.get(msg.senderId);
+        if (sender) {
+          io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+        }
+      }
+    } else if (data.senderId) {
+      // DM: notify the original sender directly
+      const sender = activeUsers.get(data.senderId);
+      if (sender) {
+        io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+      }
     }
     // Update message status in database
     await updateMessageStatus(data.messageId, 'delivered').catch(() => {});
   });
 
-  // Read receipt: Recipient opened active conversation thread ➔ Notify sender of read status
-  socket.on('message:read', async (data: { conversationId: string; senderId: string; lastReadMessageId?: string }) => {
-    const sender = activeUsers.get(data.senderId);
-    if (sender) {
-      io.to(sender.socketId).emit('message:read_ack', { conversationId: data.conversationId, lastReadMessageId: data.lastReadMessageId });
+  // Read receipt: Recipient opened active conversation thread ➔ Notify sender(s) of read status
+  socket.on('message:read', async (data: { conversationId: string; senderId?: string; lastReadMessageId?: string }) => {
+    if (data.senderId) {
+      // DM: notify the specific sender
+      const sender = activeUsers.get(data.senderId);
+      if (sender) {
+        io.to(sender.socketId).emit('message:read_ack', { conversationId: data.conversationId, lastReadMessageId: data.lastReadMessageId });
+      }
+    } else {
+      // Channel: broadcast read receipt to ALL online members of that channel
+      socket.to(`channel:${data.conversationId}`).emit('message:read_ack', {
+        conversationId: data.conversationId,
+        lastReadMessageId: data.lastReadMessageId,
+        readBy: (socket as any).authenticatedUserId,
+      });
     }
-    // Update message status in database
+    // Update message status in database — mark all messages up to lastReadMessageId as read
     if (data.lastReadMessageId) {
       await updateMessageStatus(data.lastReadMessageId, 'read').catch(() => {});
     }

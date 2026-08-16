@@ -53,7 +53,7 @@ export interface DbChannel {
   id: string;
   name: string;
   description: string;
-  type: 'official' | 'team' | 'public' | 'private';
+  type: 'official' | 'team' | 'private';
   createdBy: string;
   createdAt: number;
   isAnnouncement?: boolean;
@@ -153,11 +153,14 @@ export function getUploadsDir(): string {
 }
 
 async function seedDefaultChannels(): Promise<void> {
+  // Migrate any existing 'public' channels to 'official'
+  await getPool().query(`UPDATE channels SET type = 'official' WHERE type = 'public'`).catch(() => {});
+
   const defaults: DbChannel[] = [
-    { id: 'general', name: 'general', description: 'Company-wide communications', type: 'public', createdBy: 'system', createdAt: Date.now() },
-    { id: 'announcements', name: 'announcements', description: 'Official corporate announcements', type: 'public', createdBy: 'system', createdAt: Date.now() },
-    { id: 'logistics-supply', name: 'logistics-supply', description: 'Supply chain & equipment transport logs', type: 'public', createdBy: 'system', createdAt: Date.now() },
-    { id: 'depot-operations', name: 'depot-operations', description: 'Field depot operations & crew coordination', type: 'public', createdBy: 'system', createdAt: Date.now() },
+      { id: 'general', name: 'general', description: 'Company-wide communications', type: 'official', createdBy: 'system', createdAt: Date.now() },
+      { id: 'announcements', name: 'announcements', description: 'Official corporate announcements', type: 'official', createdBy: 'system', createdAt: Date.now() },
+      { id: 'logistics-supply', name: 'logistics-supply', description: 'Supply chain & equipment transport logs', type: 'official', createdBy: 'system', createdAt: Date.now() },
+      { id: 'depot-operations', name: 'depot-operations', description: 'Field depot operations & crew coordination', type: 'official', createdBy: 'system', createdAt: Date.now() },
   ];
   for (const channel of defaults) {
     await getPool().query(
@@ -431,9 +434,9 @@ export async function getAllChannels(userId?: string): Promise<DbChannel[]> {
   }
   
   if (!userId) return channels;
-  // Users see: all public/official channels + private/team channels they're members of
+  // Users see: all official channels + private/team channels they're members of
   return channels.filter(c => 
-    c.type === 'public' || c.type === 'official' || c.isAnnouncement || (c.memberIds || []).includes(userId)
+    c.type === 'official' || c.isAnnouncement || (c.memberIds || []).includes(userId)
   );
 }
 
@@ -526,6 +529,16 @@ export async function upsertChannelKeys(channelId: string, keys: DbChannelKey[])
 
 export async function deleteChannelKeysForUser(channelId: string, userId: string): Promise<void> {
   await getPool().query(`DELETE FROM channel_keys WHERE channel_id = $1 AND user_id = $2`, [channelId, userId]);
+}
+
+export async function getMembersWithoutKeyEnvelope(channelId: string): Promise<string[]> {
+  const res = await getPool().query(
+    `SELECT cm.user_id FROM channel_members cm
+     LEFT JOIN channel_keys ck ON ck.channel_id = cm.channel_id AND ck.user_id = cm.user_id
+     WHERE cm.channel_id = $1 AND ck.user_id IS NULL`,
+    [channelId]
+  );
+  return res.rows.map(r => r.user_id);
 }
 
 export async function transferChannelOwnership(channelId: string, newOwnerId: string): Promise<void> {
@@ -674,6 +687,13 @@ export async function updateMessageStatus(id: string, status: 'sent' | 'delivere
 
 export async function markMessageDeleted(id: string): Promise<void> {
   await getPool().query(`UPDATE messages SET is_deleted = TRUE WHERE id = $1`, [id]);
+}
+
+export async function deleteUndecryptableMessages(): Promise<number> {
+  const res = await getPool().query(
+    `DELETE FROM messages WHERE ciphertext IS NOT NULL AND (status = 'sent' OR status = 'delivered') AND id LIKE 'temp_%' RETURNING id`
+  );
+  return res.rowCount ?? 0;
 }
 
 // ── Attachments ─────────────────────────────────────────────────────────────

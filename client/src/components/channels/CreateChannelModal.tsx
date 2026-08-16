@@ -6,7 +6,7 @@ import type { User, UserKeyPair } from '../../types/chat';
 interface CreateChannelModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateChannel: (channel: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => void;
+  onCreateChannel: (channel: { name: string; description: string; type: 'official' | 'team' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => void;
   users: User[];
   currentUser?: User | UserKeyPair;
 }

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS channels (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
-  type        TEXT NOT NULL DEFAULT 'public',
+  type        TEXT NOT NULL DEFAULT 'official',
   created_by  TEXT,
   created_at  BIGINT NOT NULL,
   is_announcement BOOLEAN DEFAULT FALSE,

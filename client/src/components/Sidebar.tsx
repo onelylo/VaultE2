@@ -41,7 +41,7 @@ interface SidebarProps {
   onSelectView: (view: 'channels' | 'dms') => void;
   onSelectUser: (user: User) => void;
   onSelectChannel: (channel: Channel) => void;
-  onCreateChannel: (channel: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => void;
+  onCreateChannel: (channel: { name: string; description: string; type: 'official' | 'team' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => void;
   onShowFingerprintModal: () => void;
   onOpenProfileDrawer: () => void;
   onToggleAdmin: () => void;
@@ -604,6 +604,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                   {channel.type === 'team' && (
                                     <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, #34d399 12%, transparent)', color: '#34d399', border: '1px solid color-mix(in srgb, #34d399 25%, transparent)' }}>
                                       TEAM
+                                    </span>
+                                  )}
+                                  {channel.type === 'official' && (
+                                    <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, #f87171 12%, transparent)', color: '#f87171', border: '1px solid color-mix(in srgb, #f87171 25%, transparent)' }}>
+                                      OFFICIAL
+                                    </span>
+                                  )}
+                                  {channel.type === 'private' && (
+                                    <span className="text-[8px] px-1 py-0.5 rounded font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)', color: 'var(--accent-primary)', border: '1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent)' }}>
+                                      PRIVATE
                                     </span>
                                   )}
                                 </div>

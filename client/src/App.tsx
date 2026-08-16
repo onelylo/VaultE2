@@ -427,8 +427,8 @@ export const App: React.FC = () => {
         ? currentUserKeys.publicKeyBase64
         : directory.find(u => u.userId === peerId)?.publicKey;
 
-      // FALLBACK: If user or public key is missing from state, fetch directly from API
-      if (!peerPublicKey && peerId !== currentUserKeys.userId) {
+      // Always fetch fresh public key from server for DMs to avoid stale keys
+      if (peerId !== currentUserKeys.userId) {
         const fetched = await fetchUserPublicKey(peerId);
         if (fetched) peerPublicKey = fetched;
       }
@@ -469,8 +469,32 @@ export const App: React.FC = () => {
         text = await decryptMessage(payload.ciphertext, payload.iv, key);
         isDecrypted = true;
       } catch (e) {
-        console.error('[E2EE] Decrypt error:', e);
-        decryptionError = 'Decryption failed';
+        // Retry: clear cache, re-fetch fresh pubkey, re-derive shared key
+        if (!payload.channelId && payload.senderId !== currentUserKeys.userId) {
+          try {
+            setSharedKeysCache(prev => {
+              const next = new Map(prev);
+              for (const k of next.keys()) {
+                if (k.startsWith(`${payload.senderId}:`) || k.startsWith(`${payload.recipientId}:`)) next.delete(k);
+              }
+              return next;
+            });
+            const freshPubKey = await fetchUserPublicKey(payload.senderId);
+            if (freshPubKey && privateKeyObject) {
+              const peerPubKey = await importPublicKey(freshPubKey);
+              const freshKey = await deriveSharedKey(privateKeyObject, peerPubKey);
+              text = await decryptMessage(payload.ciphertext, payload.iv, freshKey);
+              isDecrypted = true;
+              console.log('[E2EE] Decryption succeeded on retry with fresh key');
+            }
+          } catch (retryErr) {
+            console.error('[E2EE] Decrypt retry also failed:', retryErr);
+            decryptionError = 'Decryption failed (key mismatch)';
+          }
+        } else {
+          console.error('[E2EE] Decrypt error:', e);
+          decryptionError = 'Decryption failed';
+        }
       }
     } else {
       text = '';
@@ -563,11 +587,76 @@ export const App: React.FC = () => {
       }
       // Load reactions for all fetched messages
       console.log(`[History] Restored ${payloads.length} message(s) from PostgreSQL`);
+
+      // Clean up undecryptable messages from Dexie and request server cleanup
+      try {
+        const undecryptable = await db.messages
+          .where('isDecrypted').equals(0)
+          .and(m => !!m.decryptionError || (m.text?.startsWith('🔒') ?? false))
+          .toArray();
+        if (undecryptable.length > 0) {
+          const ids = undecryptable.map(m => m.id);
+          await db.messages.bulkDelete(ids);
+          console.log(`[Cleanup] Removed ${ids.length} undecryptable message(s) from local store`);
+          // Request server cleanup (best-effort)
+          fetch(`${API_BASE}/api/messages/cleanup`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.error('[Cleanup] Failed to clean up undecryptable messages:', e);
+      }
     } catch (e) {
       console.error('[History] Global history fetch error:', e);
     }
     setHistoryLoaded(true);
   }, [currentUserKeys, decryptPayload]);
+
+  // ── Proactive Channel Key Distribution ──────────────────────────────────────
+  // When we come online with a channel key, distribute it to members who don't have an envelope
+  useEffect(() => {
+    if (!historyLoaded || !currentUserKeys || !privateKeyObject) return;
+    const distributeMissingKeys = async () => {
+      const token = getJwtToken();
+      if (!token) return;
+      for (const ch of channels) {
+        if (ch.type !== 'official') continue;
+        const myKey = channelKeysCache.get(ch.id);
+        if (!myKey) continue;
+        try {
+          const res = await fetch(`${API_BASE}/api/channels/${ch.id}/missing-keys`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!res.ok) continue;
+          const { members: missingIds } = await res.json();
+          if (!missingIds || missingIds.length === 0) continue;
+          const exportedKey = await crypto.subtle.exportKey('jwk', myKey);
+          const keyEnvelopes: { userId: string; encryptedChannelKey: string; iv: string }[] = [];
+          for (const memberId of missingIds) {
+            if (memberId === currentUserKeys.userId) continue;
+            const member = allUsersRef.current.find(u => u.userId === memberId);
+            if (!member?.publicKey) continue;
+            try {
+              const sharedKey = await getOrDeriveSharedKey(memberId, member.publicKey);
+              if (!sharedKey) continue;
+              const env = await encryptChannelKeyForUser(exportedKey, sharedKey);
+              keyEnvelopes.push({ userId: memberId, encryptedChannelKey: env.encryptedKey, iv: env.iv });
+            } catch { /* skip */ }
+          }
+          if (keyEnvelopes.length > 0) {
+            await fetch(`${API_BASE}/api/channels/${ch.id}/keys`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ keys: keyEnvelopes }),
+            });
+            console.log(`[ChannelKey] Proactively distributed key for ${ch.id} to ${keyEnvelopes.length} member(s)`);
+          }
+        } catch { /* best-effort */ }
+      }
+    };
+    distributeMissingKeys();
+  }, [historyLoaded, channels, channelKeysCache, currentUserKeys, privateKeyObject, getOrDeriveSharedKey]);
 
   // ── TOFU Key Pinning & Signed Rotation Chain Verification ────────────────────
   const validatePeerKeyTofu = useCallback(async (peer: User): Promise<boolean> => {
@@ -640,6 +729,66 @@ export const App: React.FC = () => {
     const fp = await getFingerprint(peer.publicKey);
     setPeerFingerprint(fp);
     console.log(`[TOFU] Trusted & pinned new key fingerprint for ${peer.username}`);
+
+    // Clear stale shared key cache entries for this peer so next derivation uses fresh keys
+    setSharedKeysCache(prev => {
+      const next = new Map(prev);
+      for (const key of next.keys()) {
+        if (key.startsWith(`${peer.userId}:`)) next.delete(key);
+      }
+      return next;
+    });
+
+    // Re-fetch the peer's public key from server to ensure we have the latest
+    const freshPubKey = await fetchUserPublicKey(peer.userId);
+    if (freshPubKey && privateKeyObject) {
+      try {
+        const peerPubKey = await importPublicKey(freshPubKey);
+        const freshSharedKey = await deriveSharedKey(privateKeyObject, peerPubKey);
+        setSharedKeysCache(prev => new Map(prev).set(`${peer.userId}:${freshPubKey.slice(0, 16)}`, freshSharedKey));
+      } catch (e) {
+        console.error('[TOFU] Failed to re-derive shared key after trust:', e);
+      }
+    }
+
+    // Re-decrypt any undecrypted DM messages from this peer
+    try {
+      const undecrypted = await db.messages
+        .where('senderId').equals(peer.userId)
+        .and(m => !m.isDecrypted && !!m.ciphertext && !m.channelId)
+        .toArray();
+      for (const msg of undecrypted) {
+        const payload: EncryptedPayload = {
+          id: msg.id, tempId: msg.tempId, senderId: msg.senderId,
+          recipientId: msg.recipientId, ciphertext: msg.ciphertext!,
+          iv: msg.iv!, timestamp: msg.timestamp, status: msg.status,
+        };
+        const decrypted = await decryptPayloadRef.current(payload);
+        if (decrypted.isDecrypted) {
+          await saveMessage(decrypted);
+          console.log(`[TOFU] Re-decrypted message ${msg.id} from ${peer.username}`);
+        }
+      }
+      // Also re-decrypt messages where THIS user is the sender (peer's incoming messages we sent)
+      const undecryptedSelf = await db.messages
+        .where('recipientId').equals(peer.userId)
+        .and(m => !m.isDecrypted && !!m.ciphertext && !m.channelId)
+        .toArray();
+      for (const msg of undecryptedSelf) {
+        const payload: EncryptedPayload = {
+          id: msg.id, tempId: msg.tempId, senderId: msg.senderId,
+          recipientId: msg.recipientId, ciphertext: msg.ciphertext!,
+          iv: msg.iv!, timestamp: msg.timestamp, status: msg.status,
+        };
+        const decrypted = await decryptPayloadRef.current(payload);
+        if (decrypted.isDecrypted) {
+          await saveMessage(decrypted);
+          console.log(`[TOFU] Re-decrypted outgoing message ${msg.id} to ${peer.username}`);
+        }
+      }
+    } catch (e) {
+      console.error('[TOFU] Failed to re-decrypt messages:', e);
+    }
   };
 
   // ── Signed Key Rotation (device compromise / vault resync) ───────────────────
@@ -828,7 +977,7 @@ export const App: React.FC = () => {
   }) => {
     setAuthError(null);
     const { username, fullName, email, password, role, isRegister } = params;
-    const userId = `usr_${username.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+    const userId = `usr_${username.trim().replace(/[^a-zA-Z0-9]/g, '')}`;
 
     let keyPair = await getUserKeyPair(userId);
     let privKey: CryptoKey;
@@ -1195,14 +1344,17 @@ export const App: React.FC = () => {
         await markForwarded(localMsg.id);
       }
 
+      // Emit delivery receipt back to server (channel-aware)
+      socket.emit('message:delivered', { messageId: payload.id, tempId: payload.tempId, channelId: payload.channelId });
+
       // Play notification sound if not the active channel
       if (selectedChannelRef.current?.id !== payload.channelId) {
         playNotificationSound();
       }
 
-      // If recipient ALREADY has this channel open, emit read receipt immediately
+      // If recipient ALREADY has this channel open, emit read receipt to all members
       if (selectedChannelRef.current?.id === payload.channelId) {
-        socket.emit('message:read', { conversationId: payload.channelId, senderId: payload.senderId, lastReadMessageId: payload.id });
+        socket.emit('message:read', { conversationId: payload.channelId, lastReadMessageId: payload.id });
         // Update lastViewed so this message won't show as unread after refresh
         setLastViewedChannels(prev => ({ ...prev, [payload.channelId!]: localMsg.timestamp }));
         lastViewedChannelsRef.current = { ...lastViewedChannelsRef.current, [payload.channelId!]: localMsg.timestamp };
@@ -1375,9 +1527,11 @@ export const App: React.FC = () => {
     };
 
     const onChannelMemberAdded = async (data: { channelId: string; userId: string }) => {
-      // If the added member is the current user, refresh channels to show the new channel
+      // If the added member is the current user, refresh channels and request the key
       if (data.userId === currentUserKeysRef.current?.userId) {
         socket.emit('channels:get');
+        // Proactively request the channel key from existing members
+        socket.emit('channel:key:request', { channelId: data.channelId });
       }
       // Update the channel in the local state
       setChannels(prev => prev.map(c => 
@@ -1870,16 +2024,23 @@ export const App: React.FC = () => {
     setLastViewedChannels(prev => ({ ...prev, [channel.id]: now }));
     lastViewedChannelsRef.current = { ...lastViewedChannelsRef.current, [channel.id]: now };
     computeUnreadRef.current?.();
-    await getOrGenerateChannelKey(channel.id);
 
-    // Emit read receipt for this channel
-    if (currentUserKeys) {
-      const lastMsg = await db.messages.where('channelId').equals(channel.id).last().catch(() => undefined);
-      socket.emit('message:read', { conversationId: channel.id, senderId: currentUserKeys.userId, lastReadMessageId: lastMsg?.id });
+    // Join channel room FIRST so we receive key distribution events
+    socket.emit('channel:join', { channelId: channel.id });
+
+    // Try to get the channel key — if missing, request from online members and retry
+    let key = await getOrGenerateChannelKey(channel.id);
+    if (!key) {
+      socket.emit('channel:key:request', { channelId: channel.id });
+      await new Promise(r => setTimeout(r, 2000));
+      key = await getOrGenerateChannelKey(channel.id);
     }
 
-    // Join channel room to receive messages
-    socket.emit('channel:join', { channelId: channel.id });
+    // Emit read receipt for this channel (broadcast to all members, not self)
+    if (currentUserKeys) {
+      const lastMsg = await db.messages.where('channelId').equals(channel.id).last().catch(() => undefined);
+      socket.emit('message:read', { conversationId: channel.id, lastReadMessageId: lastMsg?.id });
+    }
   };
 
   const handleCloseChat = () => {
@@ -1932,7 +2093,7 @@ export const App: React.FC = () => {
     }
   }, [avatarMenu]);
 
-  const handleCreateChannel = async (channelData: { name: string; description: string; type: 'official' | 'team' | 'public' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => {
+  const handleCreateChannel = async (channelData: { name: string; description: string; type: 'official' | 'team' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => {
     if (!currentUserKeys) return;
     const channelId = channelData.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
