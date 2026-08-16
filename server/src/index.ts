@@ -248,9 +248,59 @@ interface StoredMessage {
 }
 
 // ── Runtime (volatile) Presence State — the rest lives in PostgreSQL ──────────
-const activeUsers  = new Map<string, ActiveUser>();
-const socketToUser = new Map<string, string>();
-const userToSocket = new Map<string, string>();
+// activeUsers: userId -> Map<socketId, ActiveUser> (supports multiple tabs/connections)
+const activeUsers = new Map<string, Map<string, ActiveUser>>();
+const socketToUser = new Map<string, string>();              // socketId -> userId
+const userToSockets = new Map<string, Set<string>>();        // userId -> Set<socketId>
+
+// Helper to get first active connection for a user (for DM delivery, typing, etc.)
+function getPrimarySocket(userId: string): string | undefined {
+  const conns = activeUsers.get(userId);
+  if (!conns || conns.size === 0) return undefined;
+  return conns.keys().next().value;
+}
+
+// Helper to check if user has any active connections
+function isUserOnline(userId: string): boolean {
+  const conns = activeUsers.get(userId);
+  return conns !== undefined && conns.size > 0;
+}
+
+// Helper to get all online userIds
+function getOnlineUserIds(): string[] {
+  const online: string[] = [];
+  for (const [userId, conns] of activeUsers) {
+    if (conns.size > 0) online.push(userId);
+  }
+  return online;
+}
+
+// Helper to build presence list from activeUsers
+function buildPresenceList(): { userId: string; isOnline: true; isAway: boolean; lastSeen: number }[] {
+  const now = Date.now();
+  const presence: { userId: string; isOnline: true; isAway: boolean; lastSeen: number }[] = [];
+  for (const [userId, conns] of activeUsers) {
+    if (conns.size === 0) continue;
+    // Use the most recent lastSeen across all connections
+    let latestSeen = 0;
+    for (const conn of conns.values()) {
+      if (conn.lastSeen > latestSeen) latestSeen = conn.lastSeen;
+    }
+    presence.push({
+      userId,
+      isOnline: true,
+      isAway: (now - latestSeen) > 5 * 60 * 1000,
+      lastSeen: latestSeen,
+    });
+  }
+  return presence;
+}
+
+// Broadcast current presence to all connected clients
+function broadcastPresence(): void {
+  const presence = buildPresenceList();
+  io.emit('users:presence', presence);
+}
 
 // ── Message Row Mappers ────────────────────────────────────────────────────────
 
@@ -369,8 +419,8 @@ async function buildUserDirectory(requestingUserId?: string) {
   return users
     .map(u => ({
       ...publicUser(u),
-      isOnline: activeUsers.has(u.userId),
-      socketId: activeUsers.get(u.userId)?.socketId,
+      isOnline: isUserOnline(u.userId),
+      socketId: getPrimarySocket(u.userId),
       blockedByMe: blockedSet.has(u.userId),
       blockedByThem: blockedBySet.has(u.userId),
     }))
@@ -509,9 +559,11 @@ app.put('/api/auth/password', async (req, res) => {
       await blockToken(tokenHash, userId, Date.now() + JWT_EXPIRY_MS);
     }
     // Force disconnect all sockets for this user
-    const userSocket = activeUsers.get(userId);
-    if (userSocket) {
-      io.to(userSocket.socketId).emit('user:password_changed', { reason: 'Password changed — please log in again' });
+    const userConns = activeUsers.get(userId);
+    if (userConns) {
+      for (const socketId of userConns.keys()) {
+        io.to(socketId).emit('user:password_changed', { reason: 'Password changed — please log in again' });
+      }
     }
     return res.json({ success: true });
   } catch (e) {
@@ -876,9 +928,11 @@ app.patch('/api/admin/users/:id/status', async (req, res) => {
     await logAudit(adminId, 'status_change', 'user', target.userId, status);
     // Force disconnect if suspending
     if (status === 'SUSPENDED') {
-      const userSocket = activeUsers.get(target.userId);
-      if (userSocket) {
-        io.to(userSocket.socketId).emit('user:suspended', { reason: 'Your account has been suspended' });
+      const userConns = activeUsers.get(target.userId);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('user:suspended', { reason: 'Your account has been suspended' });
+        }
       }
     }
     return res.json({ success: true });
@@ -1187,10 +1241,12 @@ app.post('/api/block/:userId', async (req, res) => {
   try {
     await blockUserOnServer(blockerId, blockedId);
     // Push updated directory to the blocked user so they see blockedByThem
-    const blockedSocket = activeUsers.get(blockedId);
-    if (blockedSocket) {
+    const userConns = activeUsers.get(blockedId);
+    if (userConns) {
       const directory = await buildUserDirectory(blockedId);
-      io.to(blockedSocket.socketId).emit('users:directory', directory);
+      for (const socketId of userConns.keys()) {
+        io.to(socketId).emit('users:directory', directory);
+      }
     }
     return res.json({ ok: true });
   } catch (e) {
@@ -1205,10 +1261,12 @@ app.delete('/api/block/:userId', async (req, res) => {
   try {
     await unblockUserOnServer(blockerId, blockedId);
     // Push updated directory to the unblocked user so they see blockedByThem is gone
-    const blockedSocket = activeUsers.get(blockedId);
-    if (blockedSocket) {
+    const userConns = activeUsers.get(blockedId);
+    if (userConns) {
       const directory = await buildUserDirectory(blockedId);
-      io.to(blockedSocket.socketId).emit('users:directory', directory);
+      for (const socketId of userConns.keys()) {
+        io.to(socketId).emit('users:directory', directory);
+      }
     }
     return res.json({ ok: true });
   } catch (e) {
@@ -1348,18 +1406,22 @@ app.patch('/api/channels/:channelId', async (req, res) => {
     // Emit member-specific events for real-time sidebar updates
     if (memberIds) {
       for (const memberId of newMembers) {
-        // Auto-join new member to channel room if they're online
-        const memberSocket = activeUsers.get(memberId);
-        if (memberSocket) {
-          io.to(memberSocket.socketId).socketsJoin(`channel:${req.params.channelId}`);
+        // Auto-join new member to channel room if they're online (all their connections)
+        const userConns = activeUsers.get(memberId);
+        if (userConns) {
+          for (const socketId of userConns.keys()) {
+            io.to(socketId).socketsJoin(`channel:${req.params.channelId}`);
+          }
         }
         io.emit('channel:member_added', { channelId: req.params.channelId, userId: memberId });
       }
       for (const memberId of removedMembers) {
-        // Remove from channel room
-        const memberSocket = activeUsers.get(memberId);
-        if (memberSocket) {
-          io.to(memberSocket.socketId).socketsLeave(`channel:${req.params.channelId}`);
+        // Remove from channel room (all their connections)
+        const userConns = activeUsers.get(memberId);
+        if (userConns) {
+          for (const socketId of userConns.keys()) {
+            io.to(socketId).socketsLeave(`channel:${req.params.channelId}`);
+          }
         }
         io.emit('channel:member_removed', { channelId: req.params.channelId, userId: memberId });
       }
@@ -1594,19 +1656,21 @@ io.use(async (socket, next) => {
 
 // Broadcast per-user filtered channel lists (respects private/team membership)
 async function broadcastChannels(): Promise<void> {
-  for (const [userId, user] of activeUsers) {
+  for (const [userId, userConns] of activeUsers) {
     try {
       const filtered = await getAllChannels(userId);
-      // Auto-join sockets to official channel rooms they aren't in yet
-      const sock = io.sockets.sockets.get(user.socketId);
-      if (sock) {
-        for (const ch of filtered) {
-          if (ch.type === 'official') {
-            sock.join(`channel:${ch.id}`);
+      // Auto-join ALL sockets to official channel rooms they aren't in yet
+      for (const [socketId, user] of userConns) {
+        const sock = io.sockets.sockets.get(socketId);
+        if (sock) {
+          for (const ch of filtered) {
+            if (ch.type === 'official') {
+              sock.join(`channel:${ch.id}`);
+            }
           }
         }
+        io.to(socketId).emit('channels:update', filtered);
       }
-      io.to(user.socketId).emit('channels:update', filtered);
     } catch (e) {
       console.error('[Channel] Broadcast error for user:', e);
     }
@@ -1668,24 +1732,43 @@ io.on('connection', (socket) => {
     const regUser = await getUserById(data.userId).catch(() => undefined);
     const activeUser = userToActive(data, socket.id, regUser);
 
-    activeUsers.set(data.userId, activeUser);
+    // Track this connection
+    let userConns = activeUsers.get(data.userId);
+    const isFirstConnection = !userConns || userConns.size === 0;
+    if (!userConns) {
+      userConns = new Map();
+      activeUsers.set(data.userId, userConns);
+    }
+    userConns.set(socket.id, activeUser);
+
+    // Track socket mappings
     socketToUser.set(socket.id, data.userId);
-    userToSocket.set(data.userId, socket.id);
+    let userSockets = userToSockets.get(data.userId);
+    if (!userSockets) {
+      userSockets = new Set();
+      userToSockets.set(data.userId, userSockets);
+    }
+    userSockets.add(socket.id);
+
     // Store username on socket for typing indicators
     (socket as any).username = data.username;
 
-    // Broadcast the new user's full data to ALL other connected clients FIRST
-    // so they have the public key for E2EE decryption before channel:member_added fires
-    const fullUser = {
-      userId: activeUser.userId,
-      username: activeUser.username,
-      fullName: activeUser.fullName,
-      role: activeUser.role,
-      avatarUrl: activeUser.avatarUrl,
-      publicKey: activeUser.publicKey,
-      isOnline: true,
-    };
-    socket.broadcast.emit('user:online', fullUser);
+    // If this is the user's FIRST connection, broadcast online status
+    if (isFirstConnection) {
+      // Broadcast the new user's full data to ALL other connected clients FIRST
+      // so they have the public key for E2EE decryption before channel:member_added fires
+      const fullUser = {
+        userId: activeUser.userId,
+        username: activeUser.username,
+        fullName: activeUser.fullName,
+        role: activeUser.role,
+        avatarUrl: activeUser.avatarUrl,
+        publicKey: activeUser.publicKey,
+        isOnline: true,
+      };
+      socket.broadcast.emit('user:online', fullUser);
+      io.emit('user:status_change', { userId: data.userId, isOnline: true, isAway: false, at: Date.now() });
+    }
 
     // Send full user directory (excluding self) to joining user
     const directory = await buildUserDirectory(data.userId).catch(() => []);
@@ -1708,10 +1791,7 @@ io.on('connection', (socket) => {
     } catch {}
 
     // Broadcast updated presence list to everyone (includes isAway for inactive users)
-    const now = Date.now();
-    const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (now - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
-    io.emit('users:presence', presence);
-    io.emit('user:status_change', { userId: data.userId, isOnline: true, isAway: false, at: Date.now() });
+    broadcastPresence();
 
     // Send channel list (persisted in PostgreSQL) — filtered per-user
     const channels = await getAllChannels(data.userId).catch(() => []);
@@ -1743,8 +1823,8 @@ socket.emit('channels:update', channels);
     if (!authenticatedUserId) return;
     if (isChannelCreateRateLimited()) return;
     // Permission check: only ADMIN can create official/announcement channels
-    const creator = activeUsers.get(authenticatedUserId);
-    const creatorRole = creator?.role || 'MEMBER';
+    const userConns = activeUsers.get(authenticatedUserId);
+    const creatorRole = userConns?.values().next().value?.role || 'MEMBER';
     if ((data.type === 'official' || data.isAnnouncement) && creatorRole !== 'ADMIN') {
       return;
     }
@@ -1769,10 +1849,12 @@ socket.emit('channels:update', channels);
     const invitedIds = (data.memberIds || []).filter(mid => mid !== authenticatedUserId);
     for (const mid of invitedIds) {
       await addChannelMember(channelId, mid, authenticatedUserId).catch(() => {});
-      // Join invited member's socket to channel room if online
-      const memberSocket = activeUsers.get(mid);
-      if (memberSocket) {
-        io.to(memberSocket.socketId).socketsJoin(`channel:${channelId}`);
+      // Join invited member's socket to channel room if online (all their connections)
+      const userConns = activeUsers.get(mid);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).socketsJoin(`channel:${channelId}`);
+        }
       }
     }
     // Auto-join creator to channel room
@@ -1932,8 +2014,8 @@ socket.emit('channels:update', channels);
 
     // Relay to recipient if online
     if (recipientId) {
-      const recipient = activeUsers.get(recipientId);
-      if (recipient) {
+      const userConns = activeUsers.get(recipientId);
+      if (userConns) {
         const relayPayload = { ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() };
         if (payload.attachment) {
           relayPayload.attachment = payload.attachment;
@@ -1949,7 +2031,9 @@ socket.emit('channels:update', channels);
             };
           }
         }
-        io.to(recipient.socketId).emit('message:receive', relayPayload);
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('message:receive', relayPayload);
+        }
 
       } else {
 
@@ -1999,8 +2083,8 @@ socket.emit('channels:update', channels);
 
     // Security: Check allowedRoles
     if (channel.allowedRoles && channel.allowedRoles.length > 0) {
-      const sender = activeUsers.get(senderId);
-      const senderRole = sender?.role || 'MEMBER';
+      const userConns = activeUsers.get(senderId);
+      const senderRole = userConns?.values().next().value?.role || 'MEMBER';
       if (!channel.allowedRoles.includes(senderRole)) {
         socket.emit('message:ack', { tempId: tempId || messageId, serverId: messageId, timestamp: Date.now(), status: 'failed', error: 'You do not have permission to post in this channel.' });
         return;
@@ -2009,8 +2093,8 @@ socket.emit('channels:update', channels);
 
     // Permission check for announcement channels: only ADMIN and SUPERVISOR can post
     if (channel.isAnnouncement) {
-      const sender = activeUsers.get(senderId);
-      const senderRole = sender?.role || 'MEMBER';
+      const userConns = activeUsers.get(senderId);
+      const senderRole = userConns?.values().next().value?.role || 'MEMBER';
       if (senderRole === 'MEMBER') {
         socket.emit('message:ack', {
           tempId: tempId || messageId,
@@ -2090,16 +2174,20 @@ socket.emit('channels:update', channels);
       // Channel message: look up the original sender from DB and notify them
       const msg = await getMessageById(data.messageId).catch(() => undefined);
       if (msg?.senderId) {
-        const sender = activeUsers.get(msg.senderId);
-        if (sender) {
-          io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+        const userConns = activeUsers.get(msg.senderId);
+        if (userConns) {
+          for (const socketId of userConns.keys()) {
+            io.to(socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+          }
         }
       }
     } else if (data.senderId) {
-      // DM: notify the original sender directly
-      const sender = activeUsers.get(data.senderId);
-      if (sender) {
-        io.to(sender.socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+      // DM: notify the original sender directly (all their connections)
+      const userConns = activeUsers.get(data.senderId);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('message:delivered_ack', { id: data.messageId, tempId: data.tempId });
+        }
       }
     }
     // Update message status in database
@@ -2109,10 +2197,12 @@ socket.emit('channels:update', channels);
   // Read receipt: Recipient opened active conversation thread ➔ Notify sender(s) of read status
   socket.on('message:read', async (data: { conversationId: string; senderId?: string; lastReadMessageId?: string }) => {
     if (data.senderId) {
-      // DM: notify the specific sender
-      const sender = activeUsers.get(data.senderId);
-      if (sender) {
-        io.to(sender.socketId).emit('message:read_ack', { conversationId: data.conversationId, lastReadMessageId: data.lastReadMessageId });
+      // DM: notify the specific sender (all their connections)
+      const userConns = activeUsers.get(data.senderId);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('message:read_ack', { conversationId: data.conversationId, lastReadMessageId: data.lastReadMessageId });
+        }
       }
     } else {
       // Channel: broadcast read receipt to ALL online members of that channel
@@ -2138,8 +2228,12 @@ socket.emit('channels:update', channels);
     }
     await updateMessageEdit(data.id, data.newCiphertext, data.newIv).catch(() => {});
     if (data.recipientId) {
-      const recipient = activeUsers.get(data.recipientId);
-      if (recipient) io.to(recipient.socketId).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+      const userConns = activeUsers.get(data.recipientId);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
+        }
+      }
     } else if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('message:edited', { id: data.id, newCiphertext: data.newCiphertext, newIv: data.newIv, editedAt: Date.now() });
     }
@@ -2155,8 +2249,12 @@ socket.emit('channels:update', channels);
     }
     await markMessageDeleted(data.id).catch(() => {});
     if (data.recipientId) {
-      const recipient = activeUsers.get(data.recipientId);
-      if (recipient) io.to(recipient.socketId).emit('message:deleted', { id: data.id, deletedForEveryone: true });
+      const userConns = activeUsers.get(data.recipientId);
+      if (userConns) {
+        for (const socketId of userConns.keys()) {
+          io.to(socketId).emit('message:deleted', { id: data.id, deletedForEveryone: true });
+        }
+      }
     } else if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('message:deleted', { id: data.id, deletedForEveryone: true });
     }
@@ -2237,7 +2335,7 @@ socket.emit('channels:update', channels);
     if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('user:typing', userData);
     } else if (data.recipientId) {
-      const recipientSocketId = userToSocket.get(data.recipientId);
+      const recipientSocketId = getPrimarySocket(data.recipientId);
       if (recipientSocketId) {
         io.to(recipientSocketId).emit('user:typing', userData);
       }
@@ -2251,7 +2349,7 @@ socket.emit('channels:update', channels);
     if (data.channelId) {
       socket.to(`channel:${data.channelId}`).emit('user:stop_typing', userData);
     } else if (data.recipientId) {
-      const recipientSocketId = userToSocket.get(data.recipientId);
+      const recipientSocketId = getPrimarySocket(data.recipientId);
       if (recipientSocketId) {
         io.to(recipientSocketId).emit('user:stop_typing', userData);
       }
@@ -2262,9 +2360,12 @@ socket.emit('channels:update', channels);
   socket.on('user:heartbeat', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      const user = activeUsers.get(userId);
-      if (user) {
-        user.lastSeen = Date.now();
+      const userConns = activeUsers.get(userId);
+      if (userConns) {
+        const conn = userConns.get(socket.id);
+        if (conn) {
+          conn.lastSeen = Date.now();
+        }
       }
     }
   });
@@ -2272,16 +2373,41 @@ socket.emit('channels:update', channels);
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      const user = activeUsers.get(userId);
-      const lastSeen = user?.lastSeen || Date.now();
-      console.log(`[Registry] Disconnected: ${user?.username} (${userId})`);
-      activeUsers.delete(userId);
+      const userConns = activeUsers.get(userId);
+      let lastSeen = Date.now();
+      let username = userId;
+      if (userConns) {
+        const conn = userConns.get(socket.id);
+        if (conn) {
+          lastSeen = conn.lastSeen || Date.now();
+          username = conn.username || userId;
+        }
+        // Remove this specific connection
+        userConns.delete(socket.id);
+        // If no more connections, user is fully offline
+        const isLastConnection = userConns.size === 0;
+        if (isLastConnection) {
+          activeUsers.delete(userId);
+        }
+      }
+      // Clean up socket mappings
       socketToUser.delete(socket.id);
-      userToSocket.delete(userId);
-      // Broadcast updated presence — user now offline
-      const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (Date.now() - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
-      io.emit('users:presence', presence);
-      io.emit('user:status_change', { userId, isOnline: false, isAway: true, at: lastSeen });
+      const userSockets = userToSockets.get(userId);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          userToSockets.delete(userId);
+        }
+      }
+      console.log(`[Registry] Disconnected: ${username} (${userId}), remaining connections: ${userConns?.size ?? 0}`);
+
+      // If this was the last connection, broadcast offline status
+      const userConnsAfter = activeUsers.get(userId);
+      if (!userConnsAfter || userConnsAfter.size === 0) {
+        io.emit('user:status_change', { userId, isOnline: false, isAway: true, at: lastSeen });
+      }
+      // Always broadcast updated presence
+      broadcastPresence();
     }
   });
 });
@@ -2330,22 +2456,32 @@ async function boot() {
     setInterval(() => {
       const now = Date.now();
       const staleThreshold = 3 * 60 * 1000;
-      let removed = 0;
-      for (const [userId, user] of activeUsers) {
-        if (now - user.lastSeen > staleThreshold) {
-          console.log(`[Registry] Removing stale user: ${user.username} (${userId}), lastSeen ${Math.round((now - user.lastSeen) / 1000)}s ago`);
-          activeUsers.delete(userId);
-          userToSocket.delete(userId);
-          for (const [socketId, uid] of socketToUser) {
-            if (uid === userId) socketToUser.delete(socketId);
+      let removedUsers = 0;
+      let removedConnections = 0;
+      for (const [userId, userConns] of activeUsers) {
+        // Remove stale connections
+        for (const [socketId, conn] of userConns) {
+          if (now - conn.lastSeen > staleThreshold) {
+            console.log(`[Registry] Removing stale connection for ${conn.username || userId} (socket: ${socketId}), lastSeen ${Math.round((now - conn.lastSeen) / 1000)}s ago`);
+            userConns.delete(socketId);
+            socketToUser.delete(socketId);
+            const userSockets = userToSockets.get(userId);
+            if (userSockets) {
+              userSockets.delete(socketId);
+              if (userSockets.size === 0) userToSockets.delete(userId);
+            }
+            removedConnections++;
           }
-          removed++;
+        }
+        // If no more connections, remove user entirely
+        if (userConns.size === 0) {
+          activeUsers.delete(userId);
+          removedUsers++;
         }
       }
-      if (removed > 0) {
-        const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (now - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
-        io.emit('users:presence', presence);
-        console.log(`[Registry] Broadcasted updated presence after removing ${removed} stale user(s)`);
+      if (removedUsers > 0 || removedConnections > 0) {
+        broadcastPresence();
+        console.log(`[Registry] Cleanup: removed ${removedConnections} stale connection(s), ${removedUsers} fully offline user(s)`);
       }
     }, 60 * 1000);
   });
