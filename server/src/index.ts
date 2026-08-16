@@ -2325,6 +2325,29 @@ async function boot() {
         else uploadsByUser.set(key, fresh);
       }
     }, 5 * 60 * 1000);
+
+    // Periodic cleanup: stale activeUsers (no heartbeat for 3 minutes)
+    setInterval(() => {
+      const now = Date.now();
+      const staleThreshold = 3 * 60 * 1000;
+      let removed = 0;
+      for (const [userId, user] of activeUsers) {
+        if (now - user.lastSeen > staleThreshold) {
+          console.log(`[Registry] Removing stale user: ${user.username} (${userId}), lastSeen ${Math.round((now - user.lastSeen) / 1000)}s ago`);
+          activeUsers.delete(userId);
+          userToSocket.delete(userId);
+          for (const [socketId, uid] of socketToUser) {
+            if (uid === userId) socketToUser.delete(socketId);
+          }
+          removed++;
+        }
+      }
+      if (removed > 0) {
+        const presence = Array.from(activeUsers.values()).map(u => ({ userId: u.userId, isOnline: true, isAway: (now - u.lastSeen) > 5 * 60 * 1000, lastSeen: u.lastSeen }));
+        io.emit('users:presence', presence);
+        console.log(`[Registry] Broadcasted updated presence after removing ${removed} stale user(s)`);
+      }
+    }, 60 * 1000);
   });
 }
 
