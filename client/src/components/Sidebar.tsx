@@ -682,11 +682,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={user.userId}
-                  onClick={() => handleSelectUserWrapper(user)}
-                  title={`${user.fullName || user.username} (${user.role})`}
+                  onClick={() => handleSelectUserWrapper(liveUser)}
+                  title={`${liveUser.fullName || liveUser.username} (${liveUser.role})`}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(user); }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(liveUser); }}
                   className="w-full text-left px-2 py-2 rounded-lg flex items-center group transition-smooth cursor-pointer"
                   style={{
                     backgroundColor: isSelected
@@ -791,11 +791,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   return (
                     <div
                       key={`hidden-${user.userId}`}
-                      onClick={() => handleSelectUserWrapper(user)}
-                      title={`${user.fullName || user.username} - Click to open, hover to unhide`}
+                      onClick={() => handleSelectUserWrapper(liveUser)}
+                      title={`${liveUser.fullName || liveUser.username} - Click to open, hover to unhide`}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(user); }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(liveUser); }}
                       className="w-full text-left px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth cursor-pointer"
                       style={{ opacity: 0.5 }}
                     >

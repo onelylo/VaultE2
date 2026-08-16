@@ -168,55 +168,53 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               )}
             </div>
 
-            {/* Shared Media */}
-            {sharedMessages.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(totalSize)}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}>{sharedMessages.length}</span>
-                  </div>
+{/* Shared Media */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>SHARED MEDIA</h4>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{formatSize(totalSize)}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}>{sharedMessages.length}</span>
                 </div>
+              </div>
 
-                {/* Tabs */}
-                <div className="flex gap-1 mb-3 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                  {tabs.map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[9px] font-bold transition-all"
-                      style={{ backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent', color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)' }}>
-                      <tab.icon className="w-3 h-3" />
-                      <span className="hidden sm:inline">{tab.label}</span>
-                      {tabCounts[tab.id] > 0 && <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>}
-                    </button>
+              {/* Tabs */}
+              <div className="flex gap-1 mb-3 p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+                {tabs.map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[9px] font-bold transition-all"
+                    style={{ backgroundColor: activeTab === tab.id ? 'var(--accent-primary)' : 'transparent', color: activeTab === tab.id ? 'var(--accent-text)' : 'var(--text-muted)' }}>
+                  <tab.icon className="w-3 h-3" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  {tabCounts[tab.id] > 0 && <span className="ml-0.5 opacity-70">{tabCounts[tab.id]}</span>}
+                </button>
+                ))}
+              </div>
+
+              {/* Media */}
+              {grouped.length > 0 ? (
+                <div className="space-y-3">
+                  {grouped.map(group => (
+                    <div key={group.label}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                        <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
+                        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
+                        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{group.items.length} {group.items.length === 1 ? 'item' : 'items'}</span>
+                      </div>
+                      <div className={activeTab === 'images' || activeTab === 'video' ? 'grid grid-cols-3 gap-1.5' : 'space-y-1.5'}>
+                        {group.items.map(msg => <MediaItem key={msg.id} msg={msg} activeTab={activeTab} onImageClick={onImageClick} onJumpToMessage={onJumpToMessage} />)}
+                      </div>
+                    </div>
                   ))}
                 </div>
-
-                {/* Media */}
-                {grouped.length > 0 ? (
-                  <div className="space-y-3">
-                    {grouped.map(group => (
-                      <div key={group.label}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
-                          <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{group.label}</span>
-                          <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-color)' }} />
-                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{group.items.length} {group.items.length === 1 ? 'item' : 'items'}</span>
-                        </div>
-                        <div className={activeTab === 'images' || activeTab === 'video' ? 'grid grid-cols-3 gap-1.5' : 'space-y-1.5'}>
-                          {group.items.map(msg => <MediaItem key={msg.id} msg={msg} activeTab={activeTab} onImageClick={onImageClick} onJumpToMessage={onJumpToMessage} />)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <Paperclip className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No {activeTab !== 'all' ? tabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} shared yet</p>
-                  </div>
-                )}
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-6">
+                  <Paperclip className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No {activeTab !== 'all' ? tabs.find(t => t.id === activeTab)?.label.toLowerCase() : ''} shared yet</p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer - block/unblock at the bottom */}

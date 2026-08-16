@@ -242,7 +242,7 @@ export const App: React.FC = () => {
         setRecentDMs(ordered.map(u => ({ ...u, isOnline: onlineIds.has(u.userId) })));
       }
     })();
-  }, [currentUserKeys, allUsers.length, historyLoaded]);
+  }, [currentUserKeys, allUsers.length, historyLoaded, onlineIds]);
 
   const upsertDMConversation = useCallback((peer: User, lastMessageText: string) => {
     setRecentDMs(prev => {
