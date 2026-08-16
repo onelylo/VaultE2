@@ -614,7 +614,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[var(--bg-app)]">
+    <div className="flex-1 flex flex-col h-full bg-[var(--bg-app)] relative">
       {mitmWarning && (
         <div className="bg-rose-950/90 border-b border-rose-500/80 p-3 text-rose-200 font-mono text-xs flex items-center justify-between space-x-3 z-10">
           <div className="flex items-center space-x-3">
@@ -792,19 +792,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             />
           ))
         )}
-        {showScrollDown && allMessages && allMessages.length > 0 && (
-          <button
-            onClick={() => {
-              scrollToBottom(true);
-              setShowScrollDown(false);
-            }}
-            className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10"
-            title="Scroll to latest messages"
-          >
-            <ArrowDown className="w-4 h-4" />
-          </button>
-        )}
       </div>
+
+      {/* Scroll to bottom button - positioned at bottom right, above input area */}
+      {showScrollDown && allMessages && allMessages.length > 0 && (
+        <button
+          onClick={() => {
+            scrollToBottom(true);
+            setShowScrollDown(false);
+          }}
+          className="absolute bottom-16 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10 animate-[slideUp_0.2s_ease-out]"
+          title="Scroll to latest messages"
+        >
+          <ArrowDown className="w-4 h-4" />
+        </button>
+      )}
 
       <div className="mx-4 mb-4">
         {micDenied && (
