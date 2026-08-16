@@ -123,6 +123,7 @@ export interface UserKeyPair {
   privateSigningKeyJwk?: JsonWebKey;
   publicSigningKeyJwk?: JsonWebKey;
   createdAt: number;
+  keyVersion?: number;
 }
 
 export interface TrustedKey {

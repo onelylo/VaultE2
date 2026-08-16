@@ -387,7 +387,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                     <span className="text-xs font-bold text-[var(--text-muted)] tracking-wide">ACTIVE SESSION</span>
                   </div>
                   <div className="space-y-2">
-                    {[['User', currentUser.username], ['Role', currentUser.role], ['Key Version', 'v1']].map(([k, v]) => (
+                    {[['User', currentUser.username], ['Role', currentUser.role], ['Key Version', `v${currentUser.keyVersion ?? 1}`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between text-xs">
                         <span className="text-[var(--text-muted)]">{k}</span>
                         <span className="font-bold">{v}</span>

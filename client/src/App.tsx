@@ -836,6 +836,7 @@ export const App: React.FC = () => {
         signingPublicKeyBase64: newSignPub,
         privateSigningKeyJwk: newSignPrivJwk,
         publicSigningKeyJwk: newSignPubJwk,
+        keyVersion: data.keyVersion ?? currentUserKeys.keyVersion,
       };
       await saveUserKeyPair(keyPair);
       const privKey = await importPrivateKeyFromJwk(newPrivJwk);
@@ -932,6 +933,7 @@ export const App: React.FC = () => {
               avatarUrl: data.user.avatarUrl || keyPair.avatarUrl,
               statusMessage: data.user.statusMessage || keyPair.statusMessage,
               phone: data.user.phone || keyPair.phone,
+              keyVersion: data.user.keyVersion ?? keyPair.keyVersion ?? 1,
             };
             setPrivateKeyObject(privKey);
             setCurrentUserKeys(enrichedKeyPair);
@@ -1162,6 +1164,7 @@ export const App: React.FC = () => {
         email: serverUser.email || keyPair.email,
         avatarUrl: serverUser.avatarUrl || keyPair.avatarUrl,
         statusMessage: serverUser.statusMessage || keyPair.statusMessage,
+        keyVersion: serverUser.keyVersion ?? keyPair.keyVersion ?? 1,
       };
       await saveUserKeyPair(enrichedKeyPair);
       setCurrentUserKeys(enrichedKeyPair);
@@ -1282,6 +1285,12 @@ export const App: React.FC = () => {
 
     const onChannelsUpdate = async (channelsList: Channel[]) => {
       setChannels(channelsList);
+      // Also update selectedChannel if its properties changed (e.g. isAnnouncement toggle)
+      setSelectedChannel(prev => {
+        if (!prev) return prev;
+        const updated = channelsList.find(c => c.id === prev.id);
+        return updated ? { ...prev, ...updated } : prev;
+      });
       // Clean up deleted channels from IndexedDB
       const serverIds = new Set(channelsList.map(c => c.id));
       const stored = await getStoredChannels();
