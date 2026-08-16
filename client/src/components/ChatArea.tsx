@@ -801,7 +801,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             scrollToBottom(true);
             setShowScrollDown(false);
           }}
-          className="absolute bottom-16 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10 animate-[slideUp_0.2s_ease-out]"
+          className="absolute bottom-24 right-4 w-9 h-9 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-surface)] transition-all z-10 animate-[slideUp_0.2s_ease-out]"
           title="Scroll to latest messages"
         >
           <ArrowDown className="w-4 h-4" />
