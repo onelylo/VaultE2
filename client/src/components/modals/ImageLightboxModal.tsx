@@ -148,15 +148,18 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         className="fixed inset-0 m-auto select-none pointer-events-none"
         style={{
           zIndex: 999999,
-          maxWidth: '85vw',
-          maxHeight: '85vh',
+          maxWidth: '90vw',
+          maxHeight: '90vh',
           width: 'auto',
           height: 'auto',
           objectFit: 'contain',
           transform: `translate(${offsetX}px, ${offsetY + swipeY}px) scale(${scale})`,
           transition: dragging.current ? 'none' : 'transform 0.25s ease-out, opacity 0.3s',
           opacity: imgOpacity,
+          imageRendering: 'auto',
         }}
+        // Force browser to load fresh image on navigation
+        key={imageUrl}
       />
 
       {/* Navigation arrows */}
