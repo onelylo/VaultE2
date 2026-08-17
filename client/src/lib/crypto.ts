@@ -623,7 +623,8 @@ export async function validatePeerKeyTofu(peer: { publicKey?: string; userId?: s
  */
 export async function derivePasswordWrappingKey(
   password: string,
-  saltBuffer: Uint8Array
+  saltBuffer: Uint8Array,
+  iterations: number = 600000
 ): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const passwordBuffer = encoder.encode(password);
@@ -640,7 +641,7 @@ export async function derivePasswordWrappingKey(
     {
       name: 'PBKDF2',
       salt: saltBuffer.buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations: iterations,
       hash: 'SHA-256'
     },
     baseKey,
@@ -702,18 +703,21 @@ export async function decryptPrivateKeyVault(
   const iv = combinedBuffer.slice(0, 12);
   const ciphertext = combinedBuffer.slice(12);
 
-  const wrappingKey = await derivePasswordWrappingKey(password, saltBuffer);
-
-  const decryptedBuffer = await getWebCrypto().subtle.decrypt(
-    {
-      name: 'AES-GCM',
-      iv
-    },
-    wrappingKey,
-    ciphertext
-  );
-
-  const decoder = new TextDecoder();
-  const jwkString = decoder.decode(decryptedBuffer);
-  return JSON.parse(jwkString);
+  // Try legacy iterations first (100000), then new (600000)
+  for (const iterations of [100000, 600000]) {
+    try {
+      const wrappingKey = await derivePasswordWrappingKey(password, saltBuffer, iterations);
+      const decryptedBuffer = await getWebCrypto().subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        wrappingKey,
+        ciphertext
+      );
+      const decoder = new TextDecoder();
+      const jwkString = decoder.decode(decryptedBuffer);
+      return JSON.parse(jwkString);
+    } catch {
+      // Try next iteration count
+    }
+  }
+  throw new Error('Failed to decrypt vault with any iteration count');
 }

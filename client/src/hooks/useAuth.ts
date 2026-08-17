@@ -6,8 +6,12 @@ import { importPrivateKeyFromJwk, getFingerprint } from '../lib/crypto';
 import { API_BASE } from '../lib/attachments';
 
 const isTokenExpired = (): boolean => {
-  const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
-  if (!token) return true;
+  const token = sessionStorage.getItem('vaultchat_jwt');
+  if (!token) {
+    // Token might be in httpOnly cookie — can't check expiry from JS
+    // Return false and let server validate via API call
+    return false;
+  }
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.exp * 1000 < Date.now();
@@ -46,12 +50,9 @@ export const useAuth = () => {
   };
 
   const setJwtToken = (token: string) => {
-    const stayLoggedIn = localStorage.getItem('vaultchat_stayLoggedIn') !== 'false';
-    if (stayLoggedIn) {
-      localStorage.setItem('vaultchat_jwt', token);
-    } else {
-      sessionStorage.setItem('vaultchat_jwt', token);
-    }
+    // Always store in sessionStorage for socket.io auth
+    // Persistent session is handled by httpOnly cookie set by the server
+    sessionStorage.setItem('vaultchat_jwt', token);
   };
 
   const removeJwtToken = () => {
@@ -63,13 +64,14 @@ export const useAuth = () => {
   useEffect(() => {
     const rehydrate = async () => {
       const token = getJwtToken();
-      if (!token) {
-        setIsRehydrating(false);
-        return;
-      }
       try {
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
         const res = await fetch(`${API_BASE}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          credentials: 'include',
         });
         const data = await res.json();
         if (res.ok && data.user) {
@@ -100,9 +102,6 @@ export const useAuth = () => {
               publicKey: enrichedKeyPair.publicKeyBase64,
               signingPublicKey: enrichedKeyPair.signingPublicKeyBase64,
             });
-            // Note: fetchUserDirectory and socket.emit('channels:get') are
-            // handled by the orchestrator App.tsx effect, not here to avoid
-            // double-firing. The rehydrate effect here is focused on auth state.
             console.log(`[Rehydration] Session restored for ${enrichedKeyPair.username}`);
           }
         } else {

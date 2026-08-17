@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import cookieParser from 'cookie-parser';
 import {
   initDatabase,
   getUploadsDir,
@@ -144,10 +145,19 @@ app.use(helmet({
       frameAncestors: ["'none'"],
     },
   },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
 }));
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // Rate limiting for auth endpoints
 const authLimiter = rateLimit({
@@ -205,17 +215,17 @@ async function verifyJwt(token: string): Promise<any> {
   } catch { return null; }
 }
 async function requireAuth(req: express.Request, res: express.Response): Promise<string | null> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return null; }
-  const decoded = await verifyJwt(auth.split(' ')[1]);
+  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
+  const decoded = await verifyJwt(token);
   if (!decoded?.userId) { res.status(401).json({ error: 'Invalid token' }); return null; }
   return decoded.userId as string;
 }
 
 async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return null; }
-  const decoded = await verifyJwt(auth.split(' ')[1]);
+  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
+  const decoded = await verifyJwt(token);
   if (!decoded?.userId) { res.status(401).json({ error: 'Invalid token' }); return null; }
   // Re-verify role from database — don't trust JWT claim
   const user = await getUserById(decoded.userId).catch(() => undefined);
@@ -590,12 +600,12 @@ app.put('/api/auth/password', async (req, res) => {
 });
 
 app.post('/api/auth/logout', async (req, res) => {
-  const auth = req.headers.authorization;
-  if (auth?.startsWith('Bearer ')) {
-    const token = auth.split(' ')[1];
+  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     await blockToken(tokenHash, '', Date.now() + JWT_EXPIRY_MS).catch(() => {});
   }
+  res.clearCookie('token');
   return res.json({ success: true });
 });
 
@@ -651,6 +661,12 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const token = signJwt({ userId, username: newUser.username, role: userRole });
     console.log(`[Auth] Registered: ${sanitizeLog(newUser.username)} (${userId}) [${userRole}]`);
     io.emit('user:registered', { user: publicUser(newUser) });
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
     return res.json({
       token,
       user: { ...publicUser(newUser, true), encryptedPrivateKey, keySalt }
@@ -696,6 +712,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     }
     const token = signJwt({ userId, username: user.username, role: user.role });
     console.log(`[Auth] Login: ${sanitizeLog(user.username)} (${userId})`);
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: IS_PRODUCTION,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
     return res.json({
       token,
       user: {
