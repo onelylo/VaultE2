@@ -233,7 +233,7 @@ type UserRole = 'ADMIN' | 'SUPERVISOR' | 'MEMBER';
 interface ActiveUser {
   userId: string;
   username: string;
-  fullName: string;
+  displayName: string;
   email: string;
   role: UserRole;
   avatarUrl?: string;
@@ -402,11 +402,11 @@ function dmKey(a: string, b: string) {
 }
 
 function publicUser(u: DbUser, includePrivate = false) {
-  const avatar = u.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((u.fullName || u.username).trim())}`;
+  const avatar = u.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((u.displayName || u.username).trim())}`;
   const base: any = {
     userId:   u.userId,
     username: u.username,
-    fullName: u.fullName,
+    displayName: u.displayName,
     role:     u.role,
     avatarUrl: avatar,
     avatar:   avatar,
@@ -445,17 +445,17 @@ async function buildUserDirectory(requestingUserId?: string) {
     .filter(u => u.userId !== requestingUserId); // exclude self from directory
 }
 
-function userToActive(data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; avatarUrl?: string }, socketId: string, regUser?: DbUser): ActiveUser {
+function userToActive(data: { userId: string; username: string; displayName?: string; role?: UserRole; publicKey: string; avatarUrl?: string }, socketId: string, regUser?: DbUser): ActiveUser {
   const role: UserRole = (regUser?.role as UserRole) || 'MEMBER';
   const username = regUser?.username || data.username;
-  const fullName = regUser?.fullName || data.fullName || username;
+  const displayName = regUser?.displayName || data.displayName || username;
   const email = regUser?.email || `${username}@vaultchat.internal`;
-  const avatarUrl = regUser?.avatarUrl || data.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fullName.trim())}`;
+  const avatarUrl = regUser?.avatarUrl || data.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName.trim())}`;
   const publicKey = regUser?.publicKey || data.publicKey;
   return {
     userId: data.userId,
     username,
-    fullName,
+    displayName,
     email,
     role,
     avatarUrl,
@@ -488,10 +488,10 @@ const handleProfileUpdate = async (req: any, res: any) => {
   const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
-    const { fullName, email, avatarUrl, avatar, status, statusMessage, username, phone } = req.body;
+    const { displayName, email, avatarUrl, avatar, bannerUrl, bio, status, statusMessage, username, phone } = req.body;
     // Input validation
-    if (fullName !== undefined && (typeof fullName !== 'string' || fullName.length > 100)) {
-      return res.status(400).json({ error: 'Full name must be a string, max 100 characters' });
+    if (displayName !== undefined && (typeof displayName !== 'string' || displayName.length > 100)) {
+      return res.status(400).json({ error: 'Display name must be a string, max 100 characters' });
     }
     if (email !== undefined && (typeof email !== 'string' || email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))) {
       return res.status(400).json({ error: 'Invalid email format' });
@@ -515,10 +515,10 @@ const handleProfileUpdate = async (req: any, res: any) => {
       }
     }
     const finalAvatarUrl = avatarUrl || avatar;
-    await updateUserProfile(userId, { fullName, email, avatarUrl: finalAvatarUrl, status, statusMessage, username, phone });
+    await updateUserProfile(userId, { displayName, email, avatarUrl: finalAvatarUrl, bannerUrl, bio, status, statusMessage, username, phone });
     const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId, fullName: user.fullName, username: user.username, avatarUrl: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
+    io.emit('user:profile-update', { userId, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
     return res.json({ user: publicUser(user, true) });
   } catch (e) {
     console.error('[Profile] Update error:', e);
@@ -600,7 +600,7 @@ app.post('/api/auth/logout', async (req, res) => {
 });
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { username, fullName, email, password, publicKey, signingPublicKey, encryptedPrivateKey, keySalt } = req.body;
+  const { username, displayName, email, password, publicKey, signingPublicKey, encryptedPrivateKey, keySalt } = req.body;
   if (!username || !password || !publicKey) {
     return res.status(400).json({ error: 'Username, password, and public key are required.' });
   }
@@ -637,7 +637,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const newUser: DbUser = {
       userId,
       username: username.trim(),
-      fullName: (fullName || username).trim(),
+      displayName: (displayName || username).trim(),
       email: (email || `${normalized}@vaultchat.internal`).trim(),
       role: userRole,
       passwordHash: await hashPassword(password),
@@ -866,14 +866,14 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
   }
 });
 
-// Admin update user profile fields (fullName, phone)
+// Admin update user profile fields (displayName, phone)
 app.patch('/api/admin/users/:id/profile', async (req, res) => {
   const adminId = await requireAdmin(req, res);
   if (!adminId) return;
   try {
     const target = await getUserById(req.params.id);
     if (!target) return res.status(404).json({ error: 'User not found' });
-    const { fullName, phone, email, username } = req.body;
+    const { displayName, phone, email, username } = req.body;
     // Validate username if changing
     if (username && username !== target.username) {
       if (typeof username !== 'string' || username.length < 3 || username.length > 30 || !/^[a-zA-Z0-9_]+$/.test(username)) {
@@ -884,10 +884,10 @@ app.patch('/api/admin/users/:id/profile', async (req, res) => {
         return res.status(409).json({ error: 'Username already taken' });
       }
     }
-    await updateUserProfile(target.userId, { fullName, phone, email, username });
+    await updateUserProfile(target.userId, { displayName, phone, email, username });
     const updated = await getUserById(target.userId);
     if (!updated) return res.status(404).json({ error: 'User not found' });
-    io.emit('user:profile-update', { userId: updated.userId, fullName: updated.fullName, username: updated.username, avatarUrl: updated.avatarUrl });
+    io.emit('user:profile-update', { userId: updated.userId, displayName: updated.displayName, username: updated.username, avatarUrl: updated.avatarUrl });
     return res.json({ success: true, user: publicUser(updated, true) });
   } catch (e) {
     return res.status(500).json({ error: 'Profile update failed' });
@@ -1886,7 +1886,7 @@ io.on('connection', (socket) => {
     return false;
   };
 
-  socket.on('user:join', async (data: { userId: string; username: string; fullName?: string; role?: UserRole; publicKey: string; signingPublicKey?: string }) => {
+  socket.on('user:join', async (data: { userId: string; username: string; displayName?: string; role?: UserRole; publicKey: string; signingPublicKey?: string }) => {
     // Verify the claimed userId matches the authenticated socket user
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (data.userId !== authenticatedUserId) {
@@ -1925,7 +1925,7 @@ io.on('connection', (socket) => {
       const fullUser = {
         userId: activeUser.userId,
         username: activeUser.username,
-        fullName: activeUser.fullName,
+        displayName: activeUser.displayName,
         role: activeUser.role,
         avatarUrl: activeUser.avatarUrl,
         publicKey: activeUser.publicKey,

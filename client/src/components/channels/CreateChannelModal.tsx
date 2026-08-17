@@ -136,7 +136,7 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
                       >
                         {u.username.slice(0, 2).toUpperCase()}
                       </div>
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>{u.fullName || u.username}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>{u.displayName || u.username}</span>
                     </div>
                     <input
                       type="checkbox"

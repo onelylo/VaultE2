@@ -117,7 +117,7 @@ function ChannelSettingsInner({
   const currentMembers = useMemo(() => memberIds.map(id => allUsers.find(u => u.userId === id)).filter(Boolean) as User[], [memberIds, allUsers]);
   const availableUsers = useMemo(() => {
     const sl = memberSearch.toLowerCase();
-    return allUsers.filter(u => !memberIds.includes(u.userId) && (u.username.toLowerCase().includes(sl) || (u.fullName || '').toLowerCase().includes(sl)));
+    return allUsers.filter(u => !memberIds.includes(u.userId) && (u.username.toLowerCase().includes(sl) || (u.displayName || '').toLowerCase().includes(sl)));
   }, [allUsers, memberIds, memberSearch]);
 
   const triggerShake = useCallback(() => {
@@ -174,7 +174,7 @@ function ChannelSettingsInner({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-main)' }}>
-              {member.fullName || member.username}
+              {member.displayName || member.username}
             </span>
             {member.userId === channel.createdBy && (
               <Crown className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--accent-primary)' }} />
@@ -399,7 +399,7 @@ function ChannelSettingsInner({
                         style={{ color: 'var(--text-main)' }}
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--hover-color)'}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
-                        <span className="font-semibold truncate">{user.fullName || user.username}</span>
+                        <span className="font-semibold truncate">{user.displayName || user.username}</span>
                         <UserPlus className="w-3 h-3 ml-auto" style={{ color: '#34d399' }} />
                       </button>
                     ))}

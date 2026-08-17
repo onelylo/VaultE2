@@ -238,7 +238,7 @@ export const App: React.FC = () => {
         socketObj.emit('user:join', {
           userId: currentUserKeys.userId,
           username: currentUserKeys.username,
-          fullName: currentUserKeys.fullName,
+          displayName: currentUserKeys.displayName,
           role: currentUserKeys.role,
           publicKey: currentUserKeys.publicKeyBase64,
           signingPublicKey: currentUserKeys.signingPublicKeyBase64,
@@ -524,8 +524,8 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const handleAuthenticate = useCallback(async (params: { username: string; fullName?: string; email?: string; password: string; role: string; isRegister: boolean }) => {
-    const { username, fullName, email, password, role, isRegister } = params;
+  const handleAuthenticate = useCallback(async (params: { username: string; displayName?: string; email?: string; password: string; role: string; isRegister: boolean }) => {
+    const { username, displayName, email, password, role, isRegister } = params;
     const userId = `usr_${username.trim().replace(/[^a-zA-Z0-9]/g, '')}`;
 
     let keyPair: any;
@@ -546,7 +546,7 @@ export const App: React.FC = () => {
 
       keyPair = {
         userId, username: username.trim(),
-        fullName: fullName || username.trim(),
+        displayName: displayName || username.trim(),
         email: email || `${username.toLowerCase()}@petroshield.internal`,
         role, publicKeyBase64: pubKeyBase64,
         privateKeyJwk: privJwk, publicKeyJwk: pubJwk,
@@ -561,7 +561,7 @@ export const App: React.FC = () => {
       const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/auth/register`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username, fullName, email, password, role,
+          username, displayName, email, password, role,
           publicKey: pubKeyBase64,
           signingPublicKey: signPub,
           encryptedPrivateKey: vault.encryptedPrivateKey,
@@ -576,7 +576,7 @@ export const App: React.FC = () => {
       setPrivateKeyObject(privKey);
       const registeredKeyPair = {
         ...keyPair,
-        fullName: data.user.fullName || keyPair.fullName,
+        displayName: data.user.displayName || keyPair.displayName,
         email: data.user.email || keyPair.email,
         avatarUrl: data.user.avatarUrl || keyPair.avatarUrl,
         statusMessage: data.user.statusMessage || keyPair.statusMessage,
@@ -587,7 +587,7 @@ export const App: React.FC = () => {
       setShowProfileDrawer(false);
 
       if (!socketObj.connected) connectSocket();
-      socketObj.emit('user:join', { userId: registeredKeyPair.userId, username: registeredKeyPair.username, fullName: data.user.fullName, role: registeredKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: registeredKeyPair.signingPublicKeyBase64 });
+      socketObj.emit('user:join', { userId: registeredKeyPair.userId, username: registeredKeyPair.username, displayName: data.user.displayName, role: registeredKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: registeredKeyPair.signingPublicKeyBase64 });
       await fetchUserDirectory(data.token);
       // Initialize recent DMs from active partners
       const activePartnerIds = await getActiveDMPartners(registeredKeyPair.userId);
@@ -641,7 +641,7 @@ export const App: React.FC = () => {
           const { ecdh, ecdsa } = crypto.unwrapKeyVault(decrypted);
           privKey = await crypto.importPrivateKeyFromJwk(ecdh);
           pubKeyBase64 = serverUser.publicKey;
-          keyPair = { userId, username: serverUser.username, fullName: serverUser.fullName, email: serverUser.email, role: serverUser.role, publicKeyBase64: pubKeyBase64, privateKeyJwk: ecdh, publicKeyJwk: {} as any, signingPublicKeyBase64: serverUser.signingPublicKey, createdAt: Date.now() };
+          keyPair = { userId, username: serverUser.username, displayName: serverUser.displayName, email: serverUser.email, role: serverUser.role, publicKeyBase64: pubKeyBase64, privateKeyJwk: ecdh, publicKeyJwk: {} as any, signingPublicKeyBase64: serverUser.signingPublicKey, createdAt: Date.now() };
           if (ecdsa) keyPair.privateSigningKeyJwk = ecdsa;
           keyPair = await ensureSigningKeys(keyPair);
           await saveUserKeyPair(keyPair);
@@ -661,7 +661,7 @@ export const App: React.FC = () => {
         const signPubJwk = await crypto.exportKeyToJwk(signPair.publicKey);
         const vault = await crypto.encryptKeyVaultPair(privJwk, signPrivJwk, password);
 
-        keyPair = { userId, username: username.trim(), fullName: serverUser.fullName || username.trim(), email: serverUser.email || `${username.toLowerCase()}@petroshield.internal`, role: serverUser.role || role, publicKeyBase64: pubKeyBase64, privateKeyJwk: privJwk, publicKeyJwk: pubJwk, signingPublicKeyBase64: signPub, privateSigningKeyJwk: signPrivJwk, publicSigningKeyJwk: signPubJwk, createdAt: Date.now() };
+        keyPair = { userId, username: username.trim(), displayName: serverUser.displayName || username.trim(), email: serverUser.email || `${username.toLowerCase()}@petroshield.internal`, role: serverUser.role || role, publicKeyBase64: pubKeyBase64, privateKeyJwk: privJwk, publicKeyJwk: pubJwk, signingPublicKeyBase64: signPub, privateSigningKeyJwk: signPrivJwk, publicSigningKeyJwk: signPubJwk, createdAt: Date.now() };
         await saveUserKeyPair(keyPair);
         privKey = rawPair.privateKey;
         await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, publicKey: pubKeyBase64, signingPublicKey: signPub, encryptedPrivateKey: vault.encryptedPrivateKey, keySalt: vault.keySalt, forceKeyRotation: true }) });
@@ -670,14 +670,14 @@ export const App: React.FC = () => {
       setJwtToken(data.token);
       const fp = await crypto.getFingerprint(pubKeyBase64);
       setPrivateKeyObject(privKey);
-      const enrichedKeyPair = { ...keyPair, fullName: serverUser.fullName || keyPair.fullName, email: serverUser.email || keyPair.email, avatarUrl: serverUser.avatarUrl || keyPair.avatarUrl, statusMessage: serverUser.statusMessage || keyPair.statusMessage, keyVersion: serverUser.keyVersion ?? keyPair.keyVersion ?? 1 };
+      const enrichedKeyPair = { ...keyPair, displayName: serverUser.displayName || keyPair.displayName, email: serverUser.email || keyPair.email, avatarUrl: serverUser.avatarUrl || keyPair.avatarUrl, statusMessage: serverUser.statusMessage || keyPair.statusMessage, keyVersion: serverUser.keyVersion ?? keyPair.keyVersion ?? 1 };
       await saveUserKeyPair(enrichedKeyPair);
       setCurrentUserKeys(enrichedKeyPair);
       setUserFingerprint(fp);
       setShowProfileDrawer(false);
 
       if (!socketObj.connected) connectSocket();
-      socketObj.emit('user:join', { userId: enrichedKeyPair.userId, username: enrichedKeyPair.username, fullName: serverUser.fullName || enrichedKeyPair.fullName, role: enrichedKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: enrichedKeyPair.signingPublicKeyBase64 });
+      socketObj.emit('user:join', { userId: enrichedKeyPair.userId, username: enrichedKeyPair.username, displayName: serverUser.displayName || enrichedKeyPair.displayName, role: enrichedKeyPair.role, publicKey: pubKeyBase64, signingPublicKey: enrichedKeyPair.signingPublicKeyBase64 });
       await fetchUserDirectory(data.token);
       // Initialize recent DMs from active partners
       const activePartnerIds = await getActiveDMPartners(enrichedKeyPair.userId);
@@ -697,7 +697,7 @@ export const App: React.FC = () => {
     }
   }, [crypto, setJwtToken, setCurrentUserKeys, setPrivateKeyObject, setUserFingerprint, setShowProfileDrawer, fetchUserDirectory]);
 
-  const handleUpdateProfile = useCallback(async (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string }) => {
+  const handleUpdateProfile = useCallback(async (data: { displayName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string; bio?: string; bannerUrl?: string }) => {
     const token = getJwtToken();
     if (!token) throw new Error('Not authenticated');
     

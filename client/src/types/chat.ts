@@ -3,7 +3,7 @@ export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'MEMBER';
 export interface User {
   userId: string;
   username: string;
-  fullName: string;
+  displayName: string;
   email: string;
   role: UserRole;
   avatarUrl?: string;
@@ -111,7 +111,7 @@ export interface LocalMessage {
 export interface UserKeyPair {
   userId: string;
   username: string;
-  fullName?: string;
+  displayName?: string;
   email?: string;
   avatarUrl?: string;
   role: UserRole;

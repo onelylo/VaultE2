@@ -6,7 +6,7 @@ interface EditUserModalProps {
   user: {
     id: string;
     username: string;
-    fullName?: string;
+    displayName?: string;
     email?: string;
     role: string;
     status?: string;
@@ -17,7 +17,7 @@ interface EditUserModalProps {
   onSave: (updatedData: {
     userId: string;
     role: string;
-    fullName: string;
+    displayName: string;
     email?: string;
     username?: string;
     status: string;
@@ -29,7 +29,7 @@ interface EditUserModalProps {
 
 export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalProps) {
   const [role, setRole] = useState(user?.role || 'MEMBER');
-  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [displayName, setFullName] = useState(user?.displayName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [username, setUsername] = useState(user?.username || '');
   const [status, setStatus] = useState(user?.status || 'ACTIVE');
@@ -42,7 +42,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
   useEffect(() => {
     if (user) {
       setRole(user.role || 'MEMBER');
-      setFullName(user.fullName || '');
+      setFullName(user.displayName || '');
       setEmail(user.email || '');
       setUsername(user.username || '');
       setStatus(user.status || 'ACTIVE');
@@ -54,7 +54,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
 
   if (!isOpen || !user) return null;
 
-  const hasChanges = role !== user.role || fullName !== (user.fullName || '') || email !== (user.email || '') || username !== user.username || status !== (user.status || 'ACTIVE') || phone !== (user.phone || '') || newPassword.trim() || revokeKeys;
+  const hasChanges = role !== user.role || displayName !== (user.displayName || '') || email !== (user.email || '') || username !== user.username || status !== (user.status || 'ACTIVE') || phone !== (user.phone || '') || newPassword.trim() || revokeKeys;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +70,7 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
     onSave({
       userId: user.id,
       role,
-      fullName,
+      displayName,
       email,
       username,
       status,
@@ -112,8 +112,8 @@ export function EditUserModal({ user, isOpen, onClose, onSave }: EditUserModalPr
 
             {/* Full Name */}
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>FULL NAME</label>
-              <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>DISPLAY NAME</label>
+              <input type="text" value={displayName} onChange={e => setFullName(e.target.value)}
                 className="w-full rounded-xl py-2 px-3 text-sm focus:outline-none"
                 style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
                 onFocus={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}

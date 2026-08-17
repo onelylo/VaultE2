@@ -6,7 +6,7 @@ import type { UserRole } from '../types/chat';
 interface AuthModalProps {
   onAuthenticate: (params: {
     username: string;
-    fullName?: string;
+    displayName?: string;
     email?: string;
     password: string;
     role: UserRole;
@@ -18,7 +18,7 @@ interface AuthModalProps {
 export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: authError }) => {
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
     setLoading(true);
     setError(null);
     try {
-      await onAuthenticate({ username: username.trim(), fullName: fullName.trim() || username.trim(), email: email.trim(), password, role: 'MEMBER', isRegister });
+      await onAuthenticate({ username: username.trim(), displayName: displayName.trim() || username.trim(), email: email.trim(), password, role: 'MEMBER', isRegister });
     } catch (err: any) {
       setError(err?.message || 'Authentication failed');
     } finally {
@@ -45,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
     setIsRegister(register);
     setError(null);
     setUsername('');
-    setFullName('');
+    setDisplayName('');
     setEmail('');
     setPassword('');
   };
@@ -156,15 +156,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, error: aut
               <>
                 <div>
                   <label className="block text-[10px] font-bold mb-1 tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                    FULL NAME
+                    DISPLAY NAME
                   </label>
                   <div className="relative">
                     <input
                       type="text"
-                      value={fullName}
-                      onChange={e => setFullName(e.target.value)}
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
                       disabled={loading}
-                      placeholder="Your full name"
+                      placeholder="Your display name"
                       className="w-full rounded-lg px-3 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 pr-8"
                       style={{
                         backgroundColor: 'var(--bg-input)',

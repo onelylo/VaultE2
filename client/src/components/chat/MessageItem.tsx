@@ -162,7 +162,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const senderName = isSelf
     ? 'YOU'
     : selectedUser
-    ? selectedUser.fullName || selectedUser.username
+    ? selectedUser.displayName || selectedUser.username
     : userLookup.get(msg.senderId) || msg.senderId;
 
   const replyToMsg = msg.replyTo ? messages.find(m => m.id === msg.replyTo) : null;
@@ -170,7 +170,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     ? replyToMsg.senderId === currentUserId
       ? 'You'
       : selectedUser
-      ? selectedUser.fullName || selectedUser.username
+      ? selectedUser.displayName || selectedUser.username
       : userLookup.get(replyToMsg.senderId) || replyToMsg.senderId
     : null;
 

@@ -51,7 +51,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
   const userLookup = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const u of allUsers) {
-      map.set(u.userId, u.fullName || u.username);
+      map.set(u.userId, u.displayName || u.username);
     }
     return map;
   }, [allUsers]);
@@ -187,7 +187,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={selectedChannel ? `Search in #${selectedChannel.name}…` : selectedUser ? `Search with ${selectedUser.fullName || selectedUser.username}…` : 'Search messages…'}
+            placeholder={selectedChannel ? `Search in #${selectedChannel.name}…` : selectedUser ? `Search with ${selectedUser.displayName || selectedUser.username}…` : 'Search messages…'}
             className="flex-1 bg-transparent text-sm focus:outline-none px-2 py-1 rounded-lg"
             style={{ color: 'var(--text-main)', backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           />
@@ -248,7 +248,7 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
 
           {!query.trim() && (
             <div className="p-6 text-center">
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{selectedChannel ? `Search messages in #${selectedChannel.name}` : selectedUser ? `Search messages with ${selectedUser.fullName || selectedUser.username}` : 'Type to search across all messages'}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{selectedChannel ? `Search messages in #${selectedChannel.name}` : selectedUser ? `Search messages with ${selectedUser.displayName || selectedUser.username}` : 'Type to search across all messages'}</p>
               <div className="flex items-center justify-center gap-4 mt-3">
                 <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>↑↓</kbd>

@@ -110,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filteredUsers = (searchMode
     ? otherUsers.filter(u =>
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (u.displayName || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     : (() => {
         // Merge recentDMs (instant) with activeDMPartners (Dexie-backed)
@@ -689,7 +689,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   key={user.userId}
                   onClick={() => handleSelectUserWrapper(liveUser)}
-                  title={`${liveUser.fullName || liveUser.username} (${liveUser.role})`}
+                  title={liveUser.displayName || liveUser.username}
                   role="button"
                   tabIndex={0}
                   onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(liveUser); }}
@@ -741,7 +741,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-1.5">
                           <span className="font-semibold text-xs truncate" style={{ color: unread > 0 ? 'var(--text-main)' : 'var(--text-main)', fontWeight: unread > 0 ? 700 : 500 }}>
-                            {user.fullName || user.username}
+                            {user.displayName || user.username}
                           </span>
                         </div>
                         {latestDMMessages[user.userId] && (
@@ -798,7 +798,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div
                       key={`hidden-${user.userId}`}
                       onClick={() => handleSelectUserWrapper(liveUser)}
-                      title={`${liveUser.fullName || liveUser.username} - Click to open, hover to unhide`}
+                      title={`${liveUser.displayName || liveUser.username} - Click to open, hover to unhide`}
                       role="button"
                       tabIndex={0}
                       onKeyDown={e => { if (e.key === 'Enter') handleSelectUserWrapper(liveUser); }}
@@ -818,7 +818,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
                         {!isCollapsed && (
                           <span className="font-semibold text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                            {user.fullName || user.username}
+                            {user.displayName || user.username}
                           </span>
                         )}
                       </div>
@@ -885,7 +885,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {currentUser.username}
                 </div>
                 <div className="text-[9px] truncate flex items-center space-x-1" style={{ color: 'var(--text-muted)' }}>
-                  <span className="font-bold" style={{ color: 'var(--accent-primary)' }}>{currentUser.role}</span>
+                  <span className="font-bold" style={{ color: 'var(--accent-primary)' }}>MEMBER</span>
                 </div>
               </div>
             </div>
@@ -893,7 +893,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex justify-center">
               <div
                 onClick={onOpenProfileDrawer}
-                title={`${currentUser.username} (${currentUser.role})`}
+                title={currentUser.username}
                 className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[10px] cursor-pointer overflow-hidden"
                 style={{ 
                   backgroundColor: 'var(--bg-input)',
@@ -938,7 +938,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-main)' }}>Close Chat</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-              Hide {closeConfirmUser.fullName || closeConfirmUser.username} from your chat list? You can still find them in the user list.
+              Hide {closeConfirmUser.displayName || closeConfirmUser.username} from your chat list? You can still find them in the user list.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setCloseConfirmUser(null)} className="flex-1 py-2 rounded-xl text-xs font-bold"

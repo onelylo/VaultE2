@@ -27,7 +27,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   const filteredUsers = useMemo(() => {
     return allUsers.filter(u => u.userId !== currentUserId && (
       u.username.toLowerCase().includes(query.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(query.toLowerCase())
+      u.displayName.toLowerCase().includes(query.toLowerCase())
     ));
   }, [allUsers, currentUserId, query]);
 
@@ -137,7 +137,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 >
                   <MessageSquare className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-primary)' }} />
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">{user.fullName || user.username}</span>
+                    <span className="font-medium">{user.displayName || user.username}</span>
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>@{user.username}</span>
                   </div>
                 </button>

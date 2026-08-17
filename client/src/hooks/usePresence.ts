@@ -154,7 +154,7 @@ export const usePresence = (
       }
     };
 
-    const onUserProfileUpdate = (data: { userId: string; fullName?: string; username?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
+    const onUserProfileUpdate = (data: { userId: string; displayName?: string; username?: string; avatarUrl?: string; statusMessage?: string; phone?: string }) => {
       setAllUsers(prev => prev.map(u =>
         u.userId === data.userId ? { ...u, ...data } : u
       ));

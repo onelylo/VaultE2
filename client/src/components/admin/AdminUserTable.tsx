@@ -56,7 +56,7 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-xs truncate flex items-center space-x-1.5">
-                  <span className="truncate" style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</span>
+                  <span className="truncate" style={{ color: 'var(--text-main)' }}>{user.displayName || user.username}</span>
                   {isSelf && (
                     <span className="text-[9px] px-1 rounded shrink-0" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent)', color: 'var(--accent-primary)' }}>YOU</span>
                   )}
@@ -128,7 +128,7 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
                           <h3 className="text-lg font-bold" style={{ color: 'var(--text-main)' }}>Delete User</h3>
                         </div>
                         <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-                          Delete <strong style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</strong> (@{user.username})?
+                          Delete <strong style={{ color: 'var(--text-main)' }}>{user.displayName || user.username}</strong> (@{user.username})?
                           <br /><br />
                           <strong style={{ color: '#fbbf24' }}>⚠ This action cannot be undone.</strong>
                           <br /><br />

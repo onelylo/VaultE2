@@ -80,7 +80,7 @@ export const useAuth = () => {
             // Merge server-side profile data into the keypair
             const enrichedKeyPair: UserKeyPair = {
               ...keyPair,
-              fullName: data.user.fullName || keyPair.fullName,
+              displayName: data.user.displayName || keyPair.displayName,
               email: data.user.email || keyPair.email,
               avatarUrl: data.user.avatarUrl || keyPair.avatarUrl,
               statusMessage: data.user.statusMessage || keyPair.statusMessage,
@@ -95,7 +95,7 @@ export const useAuth = () => {
             socket.emit('user:join', {
               userId: enrichedKeyPair.userId,
               username: enrichedKeyPair.username,
-              fullName: enrichedKeyPair.fullName,
+              displayName: enrichedKeyPair.displayName,
               role: enrichedKeyPair.role,
               publicKey: enrichedKeyPair.publicKeyBase64,
               signingPublicKey: enrichedKeyPair.signingPublicKeyBase64,

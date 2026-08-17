@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id                     TEXT PRIMARY KEY,
   username               TEXT NOT NULL UNIQUE,
-  full_name              TEXT,
+  display_name           TEXT,
   email                  TEXT,
   role                   TEXT NOT NULL DEFAULT 'MEMBER',
   password_hash          TEXT NOT NULL DEFAULT '',
@@ -221,5 +221,9 @@ CREATE INDEX IF NOT EXISTS idx_group_visibility_user ON group_visibility (user_i
 
 -- User profile extensions
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE users RENAME COLUMN full_name TO display_name;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+
+-- Remove company roles: set all users to MEMBER (admin dashboard still uses role field)
+UPDATE users SET role = 'MEMBER' WHERE role IS NULL OR role = '';

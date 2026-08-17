@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ShieldCheck, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight, Ban, MessageSquare, Phone } from 'lucide-react';
+import { X, Image, FileText, Camera, Mic, Paperclip, Film, Calendar, ArrowRight, Ban, MessageSquare, Phone } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import type { User, LocalMessage } from '../types/chat';
@@ -124,12 +124,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   style={{ borderColor: 'var(--bg-surface)', backgroundColor: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: user.isOnline ? (user.isAway ? '0 0 8px #f59e0b' : '0 0 8px #34d399') : 'none' }} />
               </div>
               <div className="text-center">
-                <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{user.fullName || user.username}</h3>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{user.displayName || user.username}</h3>
                 <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>@{user.username}</span>
               </div>
             </div>
 
-            {/* Status + Role */}
+            {/* Status */}
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
                 <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>STATUS</span>
@@ -137,17 +137,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: user.isOnline ? (user.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
                   <span className="text-[11px]" style={{ color: user.isOnline ? (user.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)' }}>{user.isOnline ? (user.isAway ? 'Away' : 'Online') : 'Offline'}</span>
                 </div>
-              </div>
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-                <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>ROLE</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1" style={{
-                  backgroundColor: user.role === 'ADMIN' ? 'rgba(239,68,68,0.1)' : user.role === 'SUPERVISOR' ? 'rgba(245,158,11,0.1)' : 'rgba(100,116,139,0.1)',
-                  color: user.role === 'ADMIN' ? '#ef4444' : user.role === 'SUPERVISOR' ? '#f59e0b' : '#94a3b8',
-                  border: `1px solid ${user.role === 'ADMIN' ? 'rgba(239,68,68,0.3)' : user.role === 'SUPERVISOR' ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.3)'}`,
-                }}>
-                  {user.role === 'ADMIN' && <ShieldCheck className="w-3 h-3" />}
-                  {user.role}
-                </span>
               </div>
               {user.phone && (
                 <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
@@ -255,8 +244,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </h3>
             <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
               {confirmAction === 'block'
-                ? `Block ${user.fullName || user.username}? They won't be able to send you messages.`
-                : `Unblock ${user.fullName || user.username}? They will be able to send you messages again.`}
+                ? `Block ${user.displayName || user.username}? They won't be able to send you messages.`
+                : `Unblock ${user.displayName || user.username}? They will be able to send you messages again.`}
             </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmAction(null)} className="flex-1 py-2 rounded-xl text-xs font-bold"

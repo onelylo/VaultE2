@@ -162,7 +162,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const userLookup = useMemo(() => {
     const map = new Map<string, string>();
     for (const u of allUsers) {
-      map.set(u.userId, u.fullName || u.username);
+      map.set(u.userId, u.displayName || u.username);
     }
     return map;
   }, [allUsers]);
@@ -688,7 +688,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const senderName = msg.senderId === currentUserId
       ? 'You'
       : selectedUser
-      ? selectedUser.fullName || selectedUser.username
+      ? selectedUser.displayName || selectedUser.username
       : userLookup.get(msg.senderId) || msg.senderId;
     setActiveReply({ msgId: msg.id, senderName, text: msg.text });
     textareaRef.current?.focus();
@@ -803,7 +803,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               <div className="min-w-0 ml-3 cursor-pointer" onClick={() => setShowProfileModal(true)}>
                 <div className="flex items-center space-x-2">
                   <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-main)' }}>
-                    {selectedUser.fullName || selectedUser.username}
+                    {selectedUser.displayName || selectedUser.username}
                   </span>
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: liveSelectedUser?.isOnline ? (liveSelectedUser?.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: liveSelectedUser?.isOnline ? (liveSelectedUser?.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
                 </div>

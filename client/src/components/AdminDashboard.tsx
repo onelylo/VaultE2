@@ -150,7 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingUser(user);
   };
 
-  const handleSaveUser = async (data: { userId: string; role: string; fullName: string; email?: string; username?: string; status: string; phone?: string; newPassword?: string; revokeKeys?: boolean }) => {
+  const handleSaveUser = async (data: { userId: string; role: string; displayName: string; email?: string; username?: string; status: string; phone?: string; newPassword?: string; revokeKeys?: boolean }) => {
     const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
     if (!token) return;
 
@@ -160,12 +160,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (!ok) return;
     }
 
-    // Profile fields (fullName, phone, email, username)
+    // Profile fields (displayName, phone, email, username)
     try {
       await fetch(`${API_BASE}/api/admin/users/${data.userId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ fullName: data.fullName, phone: data.phone, email: data.email, username: data.username }),
+        body: JSON.stringify({ displayName: data.displayName, phone: data.phone, email: data.email, username: data.username }),
       });
     } catch {}
 
@@ -534,7 +534,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         user={editingUser ? {
           id: editingUser.userId,
           username: editingUser.username,
-          fullName: editingUser.fullName,
+          displayName: editingUser.displayName,
           email: editingUser.email,
           role: editingUser.role,
           status: editingUser.status || 'ACTIVE',

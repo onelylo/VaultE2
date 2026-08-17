@@ -29,7 +29,7 @@ let embedded: EmbeddedPostgres | null = null;
 export interface DbUser {
   userId: string;
   username: string;
-  fullName: string;
+  displayName: string;
   email: string;
   role: string;
   passwordHash: string;
@@ -176,7 +176,7 @@ async function seedAdminAccount(): Promise<void> {
   const createdAt = Date.now();
 
   await getPool().query(
-    `INSERT INTO users (id, username, full_name, email, role, password_hash, public_key, status, created_at)
+    `INSERT INTO users (id, username, display_name, email, role, password_hash, public_key, status, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [userId, username, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
   );
@@ -190,14 +190,14 @@ function getPool(): pg.Pool {
 
 // ── Users ───────────────────────────────────────────────────────────────────
 
-const USER_COLS = 'id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
-const USER_COLS_SAFE = 'id, username, full_name, email, role, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
+const USER_COLS = 'id, username, display_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
+const USER_COLS_SAFE = 'id, username, display_name, email, role, public_key, encrypted_private_key, key_salt, key_version, key_rotation_signature, old_public_key, signing_public_key, old_signing_public_key, avatar_url, status, status_message, phone, deleted_at, created_at';
 
 function mapUserRow(row: any): DbUser {
   return {
     userId: row.id,
     username: row.username,
-    fullName: row.full_name,
+    displayName: row.display_name,
     email: row.email,
     role: row.role,
     passwordHash: row.password_hash,
@@ -220,9 +220,9 @@ function mapUserRow(row: any): DbUser {
 
 export async function insertUser(user: DbUser): Promise<void> {
   await getPool().query(
-    `INSERT INTO users (id, username, full_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, signing_public_key, created_at)
+    `INSERT INTO users (id, username, display_name, email, role, password_hash, public_key, encrypted_private_key, key_salt, key_version, signing_public_key, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-    [user.userId, user.username, user.fullName, user.email, user.role, user.passwordHash, user.publicKey, user.encryptedPrivateKey ?? null, user.keySalt ?? null, user.keyVersion ?? 1, user.signingPublicKey ?? null, user.createdAt]
+    [user.userId, user.username, user.displayName, user.email, user.role, user.passwordHash, user.publicKey, user.encryptedPrivateKey ?? null, user.keySalt ?? null, user.keyVersion ?? 1, user.signingPublicKey ?? null, user.createdAt]
   );
 }
 
@@ -305,13 +305,15 @@ export async function revokeUserKeys(userId: string): Promise<void> {
   );
 }
 
-export async function updateUserProfile(userId: string, data: { fullName?: string; email?: string; avatarUrl?: string; status?: string; statusMessage?: string; username?: string; phone?: string }): Promise<void> {
+export async function updateUserProfile(userId: string, data: { displayName?: string; email?: string; avatarUrl?: string; bannerUrl?: string; bio?: string; status?: string; statusMessage?: string; username?: string; phone?: string }): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [userId];
   let idx = 2;
-  if (data.fullName !== undefined) { sets.push(`full_name = $${idx++}`); vals.push(data.fullName); }
+  if (data.displayName !== undefined) { sets.push(`display_name = $${idx++}`); vals.push(data.displayName); }
   if (data.email !== undefined) { sets.push(`email = $${idx++}`); vals.push(data.email); }
   if (data.avatarUrl !== undefined) { sets.push(`avatar_url = $${idx++}`); vals.push(data.avatarUrl); }
+  if (data.bannerUrl !== undefined) { sets.push(`banner_url = $${idx++}`); vals.push(data.bannerUrl); }
+  if (data.bio !== undefined) { sets.push(`bio = $${idx++}`); vals.push(data.bio); }
   if (data.status !== undefined) { sets.push(`status = $${idx++}`); vals.push(data.status); }
   if (data.statusMessage !== undefined) { sets.push(`status_message = $${idx++}`); vals.push(data.statusMessage); }
   if (data.username !== undefined) { sets.push(`username = $${idx++}`); vals.push(data.username); }

@@ -15,7 +15,7 @@ interface ProfileDrawerProps {
   userFingerprint: string;
   onClose: () => void;
   onLogout: () => void;
-  onUpdateProfile: (data: { fullName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string }) => Promise<any>;
+  onUpdateProfile: (data: { displayName?: string; email?: string; avatar?: string; username?: string; statusMessage?: string; phone?: string; bio?: string; bannerUrl?: string }) => Promise<any>;
   theme: string;
   onThemeChange: (theme: string) => void;
 }
@@ -54,8 +54,11 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   onThemeChange,
 }) => {
   const [username, setUsername] = useState(currentUser.username || '');
+  const [displayName, setDisplayName] = useState(currentUser.displayName || '');
   const [email, setEmail] = useState(currentUser.email || '');
   const [phone, setPhone] = useState(currentUser.phone || '');
+  const [bio, setBio] = useState((currentUser as any).bio || '');
+  const [bannerUrl, setBannerUrl] = useState((currentUser as any).bannerUrl || '');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -127,7 +130,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           if (res.ok) { const data = await res.json(); finalAvatarUrl = data.avatarUrl; }
         }
       }
-      await onUpdateProfile({ fullName: currentUser.fullName, email, avatar: finalAvatarUrl, username, phone });
+      await onUpdateProfile({ displayName, email, avatar: finalAvatarUrl, username, phone, bio, bannerUrl });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -168,7 +171,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
   const displayAvatar = avatarUrl || currentUser.avatarUrl;
 
-  const hasChanges = username !== currentUser.username || email !== currentUser.email || phone !== (currentUser.phone || '') || !!avatarUrl;
+  const hasChanges = username !== currentUser.username || displayName !== (currentUser.displayName || '') || email !== currentUser.email || phone !== (currentUser.phone || '') || !!avatarUrl;
 
   const handleClose = useCallback(() => {
     if (hasChanges) { setShaking(true); setTimeout(() => setShaking(false), 400); return; }
@@ -260,9 +263,9 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                 {/* Fields */}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">FULL NAME</label>
-                    <input type="text" value={currentUser.fullName || ''} disabled
-                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-muted)] cursor-not-allowed" />
+                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">DISPLAY NAME</label>
+                    <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">USERNAME</label>
@@ -278,6 +281,21 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                     <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">PHONE</label>
                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9+\-\s()]/g, ''))}
                       placeholder="e.g. +1 555 123 4567"
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">BIO</label>
+                    <textarea value={bio} onChange={(e) => setBio(e.target.value)}
+                      placeholder="Tell us about yourself..."
+                      maxLength={500}
+                      rows={3}
+                      className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors resize-none" />
+                    <div className="text-[10px] text-[var(--text-muted)] text-right mt-1">{bio.length}/500</div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-muted)] mb-1.5 tracking-wide">BANNER URL</label>
+                    <input type="url" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)}
+                      placeholder="https://example.com/banner.jpg"
                       className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] rounded-xl py-2.5 px-3 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors" />
                   </div>
                 </div>
@@ -304,7 +322,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                 {/* Save button */}
                 <div className={`flex justify-end ${shaking ? 'animate-shake' : ''}`}>
                   <button onClick={() => {
-                    const hasChanges2 = username !== currentUser.username || email !== currentUser.email || phone !== (currentUser.phone || '') || avatarUrl;
+                    const hasChanges2 = username !== currentUser.username || displayName !== (currentUser.displayName || '') || email !== currentUser.email || phone !== (currentUser.phone || '') || avatarUrl;
                     if (!hasChanges2) { setShaking(true); setTimeout(() => setShaking(false), 400); return; }
                     setShowSaveConfirm(true);
                   }} disabled={saving}
@@ -387,7 +405,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                     <span className="text-xs font-bold text-[var(--text-muted)] tracking-wide">ACTIVE SESSION</span>
                   </div>
                   <div className="space-y-2">
-                    {[['User', currentUser.username], ['Role', currentUser.role], ['Key Version', `v${currentUser.keyVersion ?? 1}`]].map(([k, v]) => (
+                    {[['User', currentUser.username], ['Key Version', `v${currentUser.keyVersion ?? 1}`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between text-xs">
                         <span className="text-[var(--text-muted)]">{k}</span>
                         <span className="font-bold">{v}</span>
