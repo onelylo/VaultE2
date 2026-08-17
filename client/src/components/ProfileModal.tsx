@@ -12,7 +12,7 @@ interface ProfileModalProps {
   onBlock?: () => void;
   onUnblock?: () => void;
   isBlocked?: boolean;
-  onImageClick?: (url: string, name?: string) => void;
+  onImageClick?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
 }
 
@@ -337,17 +337,17 @@ function MediaItem({ msg, activeTab, onImageClick, onJumpToMessage }: {
     );
   }
 
-  return (
-    <div className="flex items-center gap-2 p-2 rounded-lg group cursor-default" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer" style={{ backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)' }}
-        onClick={() => onImageClick?.('', meta.fileName)}>
+return (
+      <div className="flex items-center gap-2 p-2 rounded-lg group cursor-default" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer" style={{ backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)' }}
+          onClick={() => onImageClick?.(msg.id)}>
         <FileText className="w-4 h-4" style={{ color: '#6366f1' }} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
+          <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{size} • {ts}</p>
+        </div>
+        {jumpBtn}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
-        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{size} • {ts}</p>
-      </div>
-      {jumpBtn}
-    </div>
-  );
-}
+    );
+  }

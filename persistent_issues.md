@@ -44,3 +44,29 @@
 
 *Documented on: 2026-08-17*
 *Status: Known issues, deferred for future fix*
+
+---
+
+## DM List Position Resets on Refresh (Partially Fixed)
+
+**Issue**: The DM list order should persist across sessions. Currently it works via localStorage but has edge cases.
+
+**Current Implementation**: 
+- `vaultchat_recentDMs` localStorage key stores ordered user IDs
+- On login, DM partners are sorted using saved order
+- `upsertDMConversation` moves peer to front on new message
+
+**Edge Cases to Fix**:
+1. Hidden conversations lose position when unhidden
+2. Muted conversations may not maintain order across sessions
+3. If localStorage is cleared, order resets to Dexie default
+
+**Next Steps to Try**:
+1. Include hidden conversation IDs in localStorage order
+2. Verify muted conversation persistence
+3. Consider migrating DM order to Dexie for more reliable persistence
+
+---
+
+*Documented on: 2026-08-17*
+*Status: Known issues, deferred for future fix*

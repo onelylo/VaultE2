@@ -275,23 +275,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return groups;
   }, [visibleMessages.map(m => m.id).join(',')]);
 
-  const openLightbox = useCallback((url: string, name?: string, groupImages?: string[], messageId?: string) => {
-    const images = groupImages || allImageUrls;
-    let idx = 0;
-    if (messageId && groupImages) {
-      // Find position by message ID within the group
-      const groupMsgs = groupedMessages.find(g => g.messages.some(m => m.id === messageId));
-      if (groupMsgs) {
-        const imageMsgs = groupMsgs.messages.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'));
-        idx = imageMsgs.findIndex(m => m.id === messageId);
-        if (idx < 0) idx = 0;
-      }
-    } else {
-      idx = images.indexOf(url);
-      if (idx < 0) idx = 0;
+const openLightbox = useCallback((url: string, name?: string, groupImages?: string[]) => {
+    const images = groupImages || [url];
+    const idx = images.indexOf(url);
+    if (idx < 0) {
+      setActiveLightbox({ url, allImages: images, currentIndex: 0 });
+      return;
     }
-    setActiveLightbox({ url, name, allImages: images, currentIndex: idx });
-  }, [allImageUrls, groupedMessages]);
+    setActiveLightbox({ url, allImages: images, currentIndex: idx });
+  }, []);
 
   // Reactions: Map<messageId, {userId: string, emoji: string}[]>
   type ReactionEntry = { userId: string; emoji: string };
@@ -1079,14 +1071,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 .filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'))
                 .map(m => m.attachmentMeta?.thumbnailDataUrl || '')
                 .filter(Boolean);
-              const handleGroupImageClick = (url: string) => openLightbox(url, '', groupImages);
+              const handleGroupImageClick = (url: string) => openLightbox(url, '', group.messages.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/')).map(m => m.attachmentMeta?.thumbnailDataUrl || '').filter(Boolean));
               return (
                 <div key={`group-${firstMsg.id}`} className={`relative flex ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} max-w-lg`}>
-                  <div className="rounded-2xl p-2 shadow-sm" style={{ 
-                    backgroundColor: isSelf ? 'var(--accent-primary)' : 'var(--bg-surface)',
-                    border: isSelf ? 'none' : '1px solid var(--border-color)',
-                    borderRadius: isSelf ? '20px 20px 4px 20px' : '20px 20px 20px 4px'
-                  }}>
+                  <div
+                    className={`rounded-2xl p-2 shadow-sm max-w-[85%] leading-relaxed ${
+                      isSelf
+                        ? 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-main)] rounded-tr-sm'
+                        : 'bg-[var(--bg-card)] border-[var(--bg-surface)] text-[var(--text-main)] rounded-tl-sm'
+                    }`}
+                  >
                     {!isSelf && selectedChannel && (
                       <span className="text-xs font-bold text-[var(--accent-primary)] block mb-1 px-1">
                         {userLookup.get(firstMsg.senderId) || firstMsg.senderId}
@@ -1116,7 +1110,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           {group.messages.length > 4 && (
                             <div 
                               className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center cursor-pointer hover:bg-black/50 transition-colors"
-                              onClick={() => openLightbox(groupImages[3] || '', 'Group', groupImages)}
+                              onClick={() => openLightbox(group.messages[3].attachmentMeta?.thumbnailDataUrl || '', '', group.messages.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/')).map(m => m.attachmentMeta?.thumbnailDataUrl || '').filter(Boolean))}
                             >
                               <span className="text-white font-bold text-sm">+{group.messages.length - 4}</span>
                             </div>
@@ -1155,7 +1149,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 setPendingDeleteForMeId={setPendingDeleteForMeId}
                 setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
 resolveKey={resolveMessageKey}
-                onImageClick={(url: string) => openLightbox(url, '', [])}
+                onImageClick={(url: string, name?: string) => openLightbox(url, name, [])}
                 reactions={reactionsMap.get(msg.id) || []}
                 onAddReaction={handleAddReaction}
                 onRemoveReaction={handleRemoveReaction}

@@ -723,7 +723,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             color: 'var(--accent-primary)',
                           }}
                         >
-                          {(req.displayName || req.username).substring(0, 2).toUpperCase()}
+                          {(req.displayName || req.username || '').substring(0, 2).toUpperCase()}
                         </div>
                         {req.avatarUrl && (
                           <img
