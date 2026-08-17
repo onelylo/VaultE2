@@ -1154,8 +1154,30 @@ app.get('/api/messages/channel/:channelId', async (req, res) => {
   }
 });
 
-// ── Reactions Batch Endpoint ────────────────────────────────────────────────
-app.post('/api/reactions/batch', async (req, res) => {
+  // Get single message by ID (for lightbox, etc.)
+  app.get('/api/messages/:messageId', async (req, res) => {
+    const userId = await requireAuth(req, res);
+    if (!userId) return;
+    try {
+      const msg = await getMessageById(req.params.messageId);
+      if (!msg) return res.status(404).json({ error: 'Message not found' });
+      // Check if user has access to this message
+      let hasAccess = msg.senderId === userId || msg.recipientId === userId;
+      if (msg.channelId) {
+        const members = await getChannelMembers(msg.channelId);
+        hasAccess = hasAccess || members.includes(userId);
+      }
+      if (!hasAccess) return res.status(403).json({ error: 'Forbidden' });
+      const enriched = await enrichMessagesWithAttachments([msg]);
+      return res.json({ message: enriched[0] });
+    } catch (e) {
+      logger.error({ err: e }, '[History] Single message fetch error');
+      return res.status(500).json({ error: 'Message fetch failed' });
+    }
+  });
+
+  // ── Reactions Batch Endpoint ────────────────────────────────────────────────
+  app.post('/api/reactions/batch', async (req, res) => {
   const userId = await requireAuth(req, res);
   if (!userId) return;
   const { messageIds } = req.body;
