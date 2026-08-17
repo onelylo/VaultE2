@@ -3,14 +3,15 @@ import { WifiOff, Clock } from 'lucide-react';
 
 interface OfflineBannerProps {
   pendingCount: number;
+  className?: string;
 }
 
-export const OfflineBanner: React.FC<OfflineBannerProps> = ({ pendingCount }) => {
+export const OfflineBanner: React.FC<OfflineBannerProps> = ({ pendingCount, className }) => {
   return (
     <div
       role="alert"
       aria-live="assertive"
-      className="flex items-center justify-between px-4 py-2.5 bg-emergency-amber/10 border-b border-emergency-amber/40 select-none"
+      className={`flex items-center justify-between px-4 py-2.5 bg-emergency-amber/10 border-b border-emergency-amber/40 select-none ${className || ''}`}
     >
       <div className="flex items-center space-x-2.5">
         {/* Pulsing signal dot */}

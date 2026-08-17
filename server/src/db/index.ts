@@ -971,6 +971,154 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// ── Friends ────────────────────────────────────────────────────────────────
+
+export async function addFriend(userId: string, friendId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO friends (user_id, friend_id, status, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, friend_id) DO NOTHING',
+    [userId, friendId, 'pending', Date.now()]
+  );
+}
+
+export async function acceptFriend(userId: string, friendId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'UPDATE friends SET status = $3 WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+    [userId, friendId, 'accepted']
+  );
+}
+
+export async function removeFriend(userId: string, friendId: string): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'DELETE FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)',
+    [userId, friendId]
+  );
+}
+
+export async function getFriends(userId: string): Promise<{ userId: string; status: string }[]> {
+  const db = getPool();
+  const res = await db.query(
+    `SELECT CASE WHEN user_id = $1 THEN friend_id ELSE user_id END as friend_id, status 
+     FROM friends WHERE (user_id = $1 OR friend_id = $1) AND status = 'accepted'`,
+    [userId]
+  );
+  return res.rows.map(r => ({ userId: r.friend_id, status: r.status }));
+}
+
+export async function getFriendRequests(userId: string): Promise<{ userId: string; status: string }[]> {
+  const db = getPool();
+  const res = await db.query(
+    'SELECT user_id, status FROM friends WHERE friend_id = $1 AND status = $2',
+    [userId, 'pending']
+  );
+  return res.rows.map(r => ({ userId: r.user_id, status: r.status }));
+}
+
+export async function isFriend(userId: string, friendId: string): Promise<boolean> {
+  const db = getPool();
+  const res = await db.query(
+    "SELECT 1 FROM friends WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)) AND status = 'accepted'",
+    [userId, friendId]
+  );
+  return res.rows.length > 0;
+}
+
+// ── Hubs ───────────────────────────────────────────────────────────────────
+
+export async function createHub(hub: { id: string; name: string; description?: string; iconUrl?: string; bannerUrl?: string; createdBy: string }): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO hubs (id, name, description, icon_url, banner_url, created_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [hub.id, hub.name, hub.description || '', hub.iconUrl || null, hub.bannerUrl || null, hub.createdBy, Date.now()]
+  );
+  await db.query(
+    'INSERT INTO hub_members (hub_id, user_id, role, joined_at) VALUES ($1, $2, $3, $4)',
+    [hub.id, hub.createdBy, 'owner', Date.now()]
+  );
+}
+
+export async function getHub(hubId: string): Promise<any | null> {
+  const db = getPool();
+  const res = await db.query('SELECT * FROM hubs WHERE id = $1', [hubId]);
+  return res.rows[0] || null;
+}
+
+export async function getUserHubs(userId: string): Promise<any[]> {
+  const db = getPool();
+  const res = await db.query(
+    `SELECT h.*, hm.role FROM hubs h 
+     JOIN hub_members hm ON h.id = hm.hub_id 
+     WHERE hm.user_id = $1 ORDER BY h.name`,
+    [userId]
+  );
+  return res.rows;
+}
+
+export async function joinHub(hubId: string, userId: string, role = 'member'): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO hub_members (hub_id, user_id, role, joined_at) VALUES ($1, $2, $3, $4) ON CONFLICT (hub_id, user_id) DO NOTHING',
+    [hubId, userId, role, Date.now()]
+  );
+}
+
+export async function leaveHub(hubId: string, userId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM hub_members WHERE hub_id = $1 AND user_id = $2', [hubId, userId]);
+}
+
+export async function getHubMembers(hubId: string): Promise<{ userId: string; role: string }[]> {
+  const db = getPool();
+  const res = await db.query('SELECT user_id, role FROM hub_members WHERE hub_id = $1', [hubId]);
+  return res.rows.map(r => ({ userId: r.user_id, role: r.role }));
+}
+
+export async function deleteHub(hubId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM hubs WHERE id = $1', [hubId]);
+}
+
+// ── Groups ─────────────────────────────────────────────────────────────────
+
+export async function createGroup(group: { id: string; hubId: string; name: string; description?: string; type?: string; position?: number }): Promise<void> {
+  const db = getPool();
+  await db.query(
+    'INSERT INTO groups (id, hub_id, name, description, type, position, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [group.id, group.hubId, group.name, group.description || '', group.type || 'text', group.position || 0, Date.now()]
+  );
+}
+
+export async function getHubGroups(hubId: string): Promise<any[]> {
+  const db = getPool();
+  const res = await db.query('SELECT * FROM groups WHERE hub_id = $1 ORDER BY position, name', [hubId]);
+  return res.rows;
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  const db = getPool();
+  await db.query('DELETE FROM groups WHERE id = $1', [groupId]);
+}
+
+export async function setGroupVisibility(groupId: string, userId: string, visible: boolean): Promise<void> {
+  const db = getPool();
+  if (visible) {
+    await db.query('INSERT INTO group_visibility (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [groupId, userId]);
+  } else {
+    await db.query('DELETE FROM group_visibility WHERE group_id = $1 AND user_id = $2', [groupId, userId]);
+  }
+}
+
+export async function getVisibleGroups(hubId: string, userId: string): Promise<string[]> {
+  const db = getPool();
+  const res = await db.query(
+    'SELECT g.id FROM groups g LEFT JOIN group_visibility gv ON g.id = gv.group_id WHERE g.hub_id = $1 AND (gv.user_id = $2 OR gv.user_id IS NULL)',
+    [hubId, userId]
+  );
+  return res.rows.map(r => r.id);
+}
+
 export async function shutdownDatabase(): Promise<void> {
   try { await pool?.end(); } catch { /* ignore */ }
   if (embedded) {

@@ -1,18 +1,18 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus, getBlockedUsers, blockUser, unblockUser } from '../lib/db';
+import { db, saveDraft, getDraft, deleteDraft, getForwardedStatus, blockUser, unblockUser } from '../lib/db';
 import { socket } from '../lib/socket';
 import { showToast } from '../lib/toast';
 import {
   Lock, Shield, ShieldAlert, X, Paperclip, Send, Loader2, Reply,
-  Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText,
+  Search, Menu, ShieldCheck, Mic, ArrowDown, Info, FileText, Pin, Bookmark, Star,
 } from 'lucide-react';
 import type { User, Channel, LocalMessage, UserKeyPair } from '../types/chat';
 import { AttachmentMessage } from './AttachmentMessage';
 import { ImageLightboxModal } from './modals/ImageLightboxModal';
 import { ConfirmModal } from './modals/ConfirmModal';
 import { ProfileModal } from './ProfileModal';
-import { MessageItem } from './chat/MessageItem';
+import { MessageItem, DeliveryIcon } from './chat/MessageItem';
 import { ForwardModal } from './modals/ForwardModal';
 import { MAX_ATTACHMENT_BYTES, formatFileSize, generateImageThumbnail, API_BASE } from '../lib/attachments';
 
@@ -51,6 +51,7 @@ interface ChatAreaProps {
   channels?: Channel[];
   onBlockUser?: (userId: string) => void;
   onUnblockUser?: (userId: string) => void;
+  showAdmin?: boolean;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -86,6 +87,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   channels = [],
   onBlockUser,
   onUnblockUser,
+  showAdmin = false,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,10 +125,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [text, selectedChannel?.id, selectedUser?.userId]);
 
   const [activeReply, setActiveReply] = useState<{ msgId: string; senderName: string; text: string } | null>(null);
-  const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string } | null>(null);
+  const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string; allImages?: string[]; currentIndex?: number } | null>(null);
   const [forwardMsg, setForwardMsg] = useState<LocalMessage | null>(null);
   const [inspectedUser, setInspectedUser] = useState<User | null>(null);
   const [pendingDeleteForMeId, setPendingDeleteForMeId] = useState<string | null>(null);
+
+  // Live user lookup — always use latest presence data from allUsers
+  const liveSelectedUser = selectedUser ? (allUsers.find(u => u.userId === selectedUser.userId) || selectedUser) : null;
   const [pendingDeleteEveryoneId, setPendingDeleteEveryoneId] = useState<string | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -137,11 +142,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    getBlockedUsers().then(setBlockedUsers);
-  }, []);
+  const blockedUsersData = useLiveQuery(() => db.blockedUsers.toArray(), []);
+  const blockedUsers = useMemo(() => new Set((blockedUsersData || []).map(b => b.userId)), [blockedUsersData]);
+  const [showPinnedStarredBox, setShowPinnedStarredBox] = useState(false);
 
   // Cleanup voice recorder on unmount
   useEffect(() => {
@@ -163,6 +166,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
     return map;
   }, [allUsers]);
+
+  // Ctrl+K to open search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        onOpenSearch?.();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onOpenSearch]);
 
   // Lazy loading: start with 50 messages, load more on scroll to top
   const INITIAL_LOAD = 50;
@@ -203,6 +218,76 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Visible messages (lazy loaded, filter out removed)
   const visibleMessages = allMessages.filter(m => !m.removed).slice(-loadCount);
+
+  // Collect all image URLs for lightbox navigation
+  const allImageUrls = React.useMemo(() => {
+    return visibleMessages
+      .filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'))
+      .map(m => m.attachmentMeta?.thumbnailDataUrl || '')
+      .filter(Boolean);
+  }, [visibleMessages]);
+
+  // Group consecutive attachment-only messages from same sender (WhatsApp-style)
+  const groupedMessages = React.useMemo(() => {
+    const groups: { messages: typeof visibleMessages; isGroup: boolean }[] = [];
+    let i = 0;
+    while (i < visibleMessages.length) {
+      const msg = visibleMessages[i];
+      // Only group image/video attachments (not documents/audio)
+      const isMedia = msg.attachment && !msg.text && msg.attachmentMeta?.mimeType && 
+        (msg.attachmentMeta.mimeType.startsWith('image/') || msg.attachmentMeta.mimeType.startsWith('video/'));
+      
+      if (isMedia) {
+        // Look ahead for consecutive media attachments from same sender within 60s
+        const group = [msg];
+        let j = i + 1;
+        while (j < visibleMessages.length) {
+          const next = visibleMessages[j];
+          const nextIsMedia = next.attachment && !next.text && next.attachmentMeta?.mimeType &&
+            (next.attachmentMeta.mimeType.startsWith('image/') || next.attachmentMeta.mimeType.startsWith('video/'));
+          const sameSender = next.senderId === msg.senderId;
+          const withinTime = Math.abs(next.timestamp - msg.timestamp) < 60000;
+          if (nextIsMedia && sameSender && withinTime) {
+            group.push(next);
+            j++;
+          } else {
+            break;
+          }
+        }
+        // Only group 4+ media items; less than 4 render individually
+        if (group.length >= 4) {
+          groups.push({ messages: group, isGroup: true });
+        } else {
+          for (const m of group) {
+            groups.push({ messages: [m], isGroup: false });
+          }
+        }
+        i = j;
+      } else {
+        groups.push({ messages: [msg], isGroup: false });
+        i++;
+      }
+    }
+    return groups;
+  }, [visibleMessages.map(m => m.id).join(',')]);
+
+  const openLightbox = useCallback((url: string, name?: string, groupImages?: string[], messageId?: string) => {
+    const images = groupImages || allImageUrls;
+    let idx = 0;
+    if (messageId && groupImages) {
+      // Find position by message ID within the group
+      const groupMsgs = groupedMessages.find(g => g.messages.some(m => m.id === messageId));
+      if (groupMsgs) {
+        const imageMsgs = groupMsgs.messages.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'));
+        idx = imageMsgs.findIndex(m => m.id === messageId);
+        if (idx < 0) idx = 0;
+      }
+    } else {
+      idx = images.indexOf(url);
+      if (idx < 0) idx = 0;
+    }
+    setActiveLightbox({ url, name, allImages: images, currentIndex: idx });
+  }, [allImageUrls, groupedMessages]);
 
   // Reactions: Map<messageId, {userId: string, emoji: string}[]>
   type ReactionEntry = { userId: string; emoji: string };
@@ -293,6 +378,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     if (!visibleMessages || visibleMessages.length === 0) return;
     const ids = visibleMessages.map(m => m.id);
+    if (ids.length === 0) return;
     const token = localStorage.getItem('vaultchat_jwt');
     if (!token) return;
     fetch(`${API_BASE}/api/starred/batch`, {
@@ -314,9 +400,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (!token) return;
     if (isStarred) {
       setStarredSet(prev => { const next = new Set(prev); next.delete(messageId); return next; });
+      setStarredInConversation(prev => { const next = new Set(prev); next.delete(messageId); return next; });
       await fetch(`${API_BASE}/api/starred/${messageId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     } else {
       setStarredSet(prev => new Set(prev).add(messageId));
+      setStarredInConversation(prev => new Set(prev).add(messageId));
       await fetch(`${API_BASE}/api/starred`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -324,6 +412,30 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       }).catch(() => {});
     }
   }, []);
+
+  // Fetch starred message IDs for current conversation
+  const [starredInConversation, setStarredInConversation] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!selectedUser?.userId) {
+      setStarredInConversation(new Set());
+      return;
+    }
+    const token = localStorage.getItem('vaultchat_jwt');
+    if (!token) return;
+    // Only fetch starred for DMs (endpoint exists)
+    fetch(`${API_BASE}/api/starred/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ messageIds: allMessages.filter(m => m.recipientId === selectedUser.userId || m.senderId === selectedUser.userId).map(m => m.id) }),
+    })
+      .then(r => r.json())
+      .then((data: { status: Record<string, boolean> }) => {
+        const starred = Object.keys(data.status || {}).filter(k => data.status[k]);
+        setStarredInConversation(new Set(starred));
+      })
+      .catch(() => {});
+  }, [selectedUser?.userId, allMessages.length]);
 
   // Load more when scrolling to top
   const handleScrollTop = useCallback(() => {
@@ -596,11 +708,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const isAnnouncementChannel = selectedChannel?.isAnnouncement || false;
   const userRole = currentUserKeys?.role || 'MEMBER';
-  const isBlockedDM = !!(selectedUser && (blockedUsers.has(selectedUser.userId) || selectedUser.blockedByThem));
+  const isBlockedDM = !!(selectedUser && blockedUsers.has(selectedUser.userId));
+  const blockedByMe = !!(selectedUser && blockedUsers.has(selectedUser.userId));
   const disabled = !selectedUser && !selectedChannel;
   const isReadOnly = isAnnouncementChannel && userRole === 'MEMBER';
   const canSend = !disabled && !isPreparing && !isReadOnly && !isBlockedDM && (text.trim() || selectedFiles.length > 0);
-  const placeholderText = disabled ? 'Select a conversation to start messaging...' : isBlockedDM ? (selectedUser?.blockedByThem ? 'This user blocked you...' : 'You blocked this user...') : 'Type a message...';
+  const placeholderText = disabled ? 'Select a conversation to start messaging...' : isBlockedDM ? 'You blocked this user...' : 'Type a message...';
 
   if (!selectedUser && !selectedChannel) {
     return (
@@ -616,7 +729,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-[var(--bg-app)] relative">
       {mitmWarning && (
-        <div className="bg-rose-950/90 border-b border-rose-500/80 p-3 text-rose-200 font-mono text-xs flex items-center justify-between space-x-3 z-10">
+        <div className="bg-rose-950/90 border-b border-rose-500/80 p-3 text-rose-200 font-mono text-xs flex items-center justify-between space-x-3 z-10 shrink-0">
           <div className="flex items-center space-x-3">
             <ShieldAlert className="w-5 h-5 text-rose-500 animate-bounce flex-shrink-0" />
             <div>
@@ -689,10 +802,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               </div>
               <div className="min-w-0 ml-3 cursor-pointer" onClick={() => setShowProfileModal(true)}>
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-sm truncate hover:underline" style={{ color: 'var(--text-main)' }}>
+                  <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-main)' }}>
                     {selectedUser.fullName || selectedUser.username}
                   </span>
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedUser.isOnline ? (selectedUser.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: selectedUser.isOnline ? (selectedUser.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: liveSelectedUser?.isOnline ? (liveSelectedUser?.isAway ? '#f59e0b' : '#34d399') : 'var(--text-muted)', boxShadow: liveSelectedUser?.isOnline ? (liveSelectedUser?.isAway ? '0 0 6px #f59e0b' : '0 0 6px #34d399') : 'none' }} />
                 </div>
                 <span className="text-[10px] block" style={{ color: 'var(--text-muted)' }}>@{selectedUser.username}</span>
                 {typingUsers.length > 0 && (
@@ -724,13 +837,148 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </button>
           )}
 
-          {(selectedUser || selectedChannel) && onOpenSearch && (
+          {!showAdmin && (selectedUser || selectedChannel) && onOpenSearch && (
             <button onClick={onOpenSearch} title="Search messages (Ctrl+K)" className="w-8 h-8 rounded-lg flex items-center justify-center transition-smooth"
               style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
               <Search className="w-4 h-4" />
             </button>
           )}
+
+          {!showAdmin && (selectedChannel || selectedUser) ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowPinnedStarredBox(prev => !prev)}
+                title="Pinned & Starred Messages"
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-smooth"
+                style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                <Bookmark className="w-4 h-4" />
+              </button>
+              {showPinnedStarredBox && (
+                <>
+                  <div className="fixed inset-0 z-40" 
+                    onClick={() => setShowPinnedStarredBox(false)}
+                    onMouseEnter={(e) => e.stopPropagation()}
+                    onMouseLeave={(e) => e.stopPropagation()} />
+                  <div className="absolute right-0 top-10 w-80 max-h-96 overflow-y-auto rounded-xl border border-[var(--border-color)] shadow-xl z-50"
+                    style={{ backgroundColor: 'var(--bg-surface)' }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseEnter={(e) => e.stopPropagation()}
+                    onMouseLeave={(e) => e.stopPropagation()}>
+                    {/* Pinned Messages Section */}
+                    {selectedChannel && pinnedMessages.length > 0 && (
+                      <>
+                        <div className="p-3 border-b border-[var(--border-color)] flex items-center justify-between">
+                          <span className="text-xs font-bold" style={{ color: 'var(--text-main)' }}>
+                            <Pin className="w-3 h-3 inline mr-1" style={{ color: 'var(--accent-primary)' }} />
+                            Pinned Messages
+                          </span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({pinnedMessages.length})</span>
+                        </div>
+                        {pinnedMessages.map(pm => {
+                          const msg = allMessages.find(m => m.id === pm.messageId);
+                          return (
+                            <div key={pm.messageId} className="px-3 py-2 border-b border-[var(--border-color)] last:border-b-0 hover:bg-[var(--hover-color)] transition-colors relative group">
+                              <div className="text-[11px] font-mono pr-8" style={{ color: 'var(--text-main)' }}>
+                                {msg?.text || `Message ${pm.messageId.slice(0, 8)}...`}
+                              </div>
+                              <div className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                                Pinned by {userLookup.get(pm.pinnedBy) || pm.pinnedBy}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (msg) {
+                                    const el = scrollRef.current?.querySelector(`#msg-${pm.messageId}`);
+                                    if (el) {
+                                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      const bubble = el.querySelector('[data-bubble]') as HTMLElement;
+                                      const target = bubble || el;
+                                      target.style.transition = 'box-shadow 0.4s ease';
+                                      target.style.boxShadow = '0 0 16px 3px var(--accent-primary)';
+                                      setTimeout(() => {
+                                        target.style.transition = 'box-shadow 0.8s ease';
+                                        target.style.boxShadow = 'none';
+                                      }, 1200);
+                                    }
+                                    setShowPinnedStarredBox(false);
+                                  }
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-[9px]"
+                                style={{ backgroundColor: 'var(--accent-primary)', color: 'white' }}
+                                title="Jump to message"
+                              >
+                                Jump
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {/* Starred Messages Section */}
+                    {selectedUser && starredInConversation.size > 0 && (
+                      <>
+                        <div className="p-3 border-b border-[var(--border-color)] flex items-center justify-between">
+                          <span className="text-xs font-bold" style={{ color: 'var(--text-main)' }}>
+                            <Star className="w-3 h-3 inline mr-1" style={{ color: '#eab308' }} />
+                            Starred Messages
+                          </span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>({starredInConversation.size})</span>
+                        </div>
+                        {Array.from(starredInConversation).filter(msgId => {
+                          const msg = allMessages.find(m => m.id === msgId);
+                          return msg && !msg.removed;
+                        }).map(msgId => {
+                          const msg = allMessages.find(m => m.id === msgId);
+                          return (
+                            <div key={msgId} className="px-3 py-2 border-b border-[var(--border-color)] last:border-b-0 hover:bg-[var(--hover-color)] transition-colors relative group">
+                              <div className="text-[11px] font-mono pr-8" style={{ color: 'var(--text-main)' }}>
+                                {msg?.text || `Message ${msgId.slice(0, 8)}...`}
+                              </div>
+                              <div className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                                {msg?.senderId === currentUserId ? 'You' : userLookup.get(msg?.senderId || '') || 'Unknown'}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (msg) {
+                                    const el = scrollRef.current?.querySelector(`#msg-${msgId}`);
+                                    if (el) {
+                                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      const bubble = el.querySelector('[data-bubble]') as HTMLElement;
+                                      const target = bubble || el;
+                                      target.style.transition = 'box-shadow 0.4s ease';
+                                      target.style.boxShadow = '0 0 16px 3px #eab308';
+                                      setTimeout(() => {
+                                        target.style.transition = 'box-shadow 0.8s ease';
+                                        target.style.boxShadow = 'none';
+                                      }, 1200);
+                                    }
+                                    setShowPinnedStarredBox(false);
+                                  }
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-[9px]"
+                                style={{ backgroundColor: '#eab308', color: 'white' }}
+                                title="Jump to message"
+                              >
+                                Jump
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                    {pinnedMessages.length === 0 && starredInConversation.size === 0 && (
+                      <div className="p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                        No pinned or starred messages
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
 
           <div className="flex items-center space-x-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isConnected ? '#34d399' : '#f59e0b', boxShadow: isConnected ? '0 0 6px #34d399' : 'none', animation: !isConnected ? 'pulse-soft 2s infinite' : 'none' }} />
@@ -746,6 +994,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       </header>
 
+      {isBlockedDM && (
+        <div className="w-full px-4 py-3 flex items-center justify-center gap-3 shrink-0" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', borderBottom: '2px solid rgba(239, 68, 68, 0.5)' }}>
+          <ShieldAlert className="w-5 h-5 flex-shrink-0" style={{ color: '#ef4444' }} />
+          <span className="text-sm font-bold text-center" style={{ color: '#ef4444' }}>
+            You blocked this user. Unblock to send messages.
+          </span>
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 font-sans relative">
         {allMessages === undefined ? (
           <div className="flex items-center justify-center h-full">
@@ -760,37 +1017,102 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </p>
           </div>
         ) : (
-          visibleMessages.map(msg => (
-            <MessageItem
-              key={msg.id}
-              msg={msg}
-              currentUserId={currentUserId}
-              selectedUser={selectedUser}
-              selectedChannel={selectedChannel}
-              messages={allMessages}
-              userLookup={userLookup}
-              chatType={selectedChannel ? 'channel' : 'dm'}
-              editingMsgId={editingMsgId}
-              editText={editText}
-              setEditText={setEditText}
-              setEditingMsgId={setEditingMsgId}
-              handleSaveEdit={handleSaveEdit}
-              handleStartReply={handleStartReply}
-              handleStartEdit={handleStartEdit}
-              setPendingDeleteForMeId={setPendingDeleteForMeId}
-              setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
-              resolveKey={resolveMessageKey}
-              onImageClick={(url, name) => setActiveLightbox({ url, name })}
-              reactions={reactionsMap.get(msg.id) || []}
-              onAddReaction={handleAddReaction}
-              onRemoveReaction={handleRemoveReaction}
-              allUsers={allUsers}
-              onForward={setForwardMsg}
-              isStarred={starredSet.has(msg.id)}
-              onToggleStar={handleToggleStar}
-              isForwarded={forwardedSet.has(msg.id)}
-            />
-          ))
+          groupedMessages.map((group, groupIdx) => {
+            if (group.isGroup) {
+              const firstMsg = group.messages[0];
+              const isSelf = firstMsg.senderId === currentUserId;
+              const groupImages = group.messages
+                .filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'))
+                .map(m => m.attachmentMeta?.thumbnailDataUrl || '')
+                .filter(Boolean);
+              const handleGroupImageClick = (url: string, name?: string, messageId?: string) => openLightbox(url, name, groupImages, messageId);
+              return (
+                <div key={`group-${firstMsg.id}`} className={`relative flex ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} max-w-lg`}>
+                  <div className="rounded-2xl p-2 shadow-sm" style={{ 
+                    backgroundColor: isSelf ? 'var(--accent-primary)' : 'var(--bg-surface)',
+                    border: isSelf ? 'none' : '1px solid var(--border-color)',
+                    borderRadius: isSelf ? '20px 20px 4px 20px' : '20px 20px 20px 4px'
+                  }}>
+                    {!isSelf && selectedChannel && (
+                      <span className="text-xs font-bold text-[var(--accent-primary)] block mb-1 px-1">
+                        {userLookup.get(firstMsg.senderId) || firstMsg.senderId}
+                      </span>
+                    )}
+                    {group.messages.length === 1 ? (
+                      <AttachmentMessage message={group.messages[0]} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} />
+                    ) : group.messages.length === 2 ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {group.messages.map(msg => <div key={msg.id} className="aspect-square overflow-hidden"><AttachmentMessage message={msg} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} /></div>)}
+                      </div>
+                    ) : group.messages.length === 3 ? (
+                      <div className="flex flex-col gap-1">
+                        <div className="grid grid-cols-2 gap-1">
+                          <div className="aspect-square overflow-hidden"><AttachmentMessage message={group.messages[0]} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} /></div>
+                          <div className="aspect-square overflow-hidden"><AttachmentMessage message={group.messages[1]} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} /></div>
+                        </div>
+                        <AttachmentMessage message={group.messages[2]} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-1">
+                        {group.messages.slice(0, 3).map(msg => (
+                          <div key={msg.id} className="aspect-square overflow-hidden"><AttachmentMessage message={msg} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} /></div>
+                        ))}
+                        <div className="relative aspect-square overflow-hidden">
+                          <AttachmentMessage message={group.messages[3]} isMe={isSelf} resolveKey={resolveMessageKey} onImageClick={handleGroupImageClick} />
+                          {group.messages.length > 4 && (
+                            <div 
+                              className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center cursor-pointer hover:bg-black/50 transition-colors"
+                              onClick={() => openLightbox(groupImages[3] || '', 'Group', groupImages)}
+                            >
+                              <span className="text-white font-bold text-sm">+{group.messages.length - 4}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-end space-x-1 mt-1 px-1">
+                      <span className="text-[10px] select-none" style={{ color: isSelf ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>
+                        {(() => { const ts = firstMsg.timestamp; if (!ts || typeof ts !== 'number' || ts < 1000000000) return ''; try { const ms = ts < 10000000000 ? ts * 1000 : ts; const d = new Date(ms); return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })()}
+                      </span>
+                      {isSelf && <DeliveryIcon status={firstMsg.status} />}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            const msg = group.messages[0];
+            return (
+              <MessageItem
+                key={msg.id}
+                msg={msg}
+                currentUserId={currentUserId}
+                selectedUser={selectedUser}
+                selectedChannel={selectedChannel}
+                messages={allMessages}
+                userLookup={userLookup}
+                chatType={selectedChannel ? 'channel' : 'dm'}
+                editingMsgId={editingMsgId}
+                editText={editText}
+                setEditText={setEditText}
+                setEditingMsgId={setEditingMsgId}
+                handleSaveEdit={handleSaveEdit}
+                handleStartReply={handleStartReply}
+                handleStartEdit={handleStartEdit}
+                setPendingDeleteForMeId={setPendingDeleteForMeId}
+                setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
+                resolveKey={resolveMessageKey}
+                onImageClick={(url, name) => openLightbox(url, name)}
+                reactions={reactionsMap.get(msg.id) || []}
+                onAddReaction={handleAddReaction}
+                onRemoveReaction={handleRemoveReaction}
+                allUsers={allUsers}
+                onForward={setForwardMsg}
+                isStarred={starredSet.has(msg.id)}
+                onToggleStar={handleToggleStar}
+                isForwarded={forwardedSet.has(msg.id)}
+              />
+            );
+          })
         )}
       </div>
 
@@ -832,7 +1154,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         )}
 
         {selectedFiles.length > 0 && (
-          <div className="mb-2 space-y-2">
+          <div className="mb-2 space-y-2 max-h-24 overflow-y-auto">
             {selectedFiles.map((file, index) => (
               <div key={`${file.name}-${file.size}-${index}`} className="flex items-center space-x-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 animate-[fadeIn_0.15s_ease-out]">
                 {file.type.startsWith('image/') && previewDataUrl ? (
@@ -882,7 +1204,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           onDragOver={e => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          className={`rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] shadow-lg p-2 flex items-center gap-2 transition-colors ${isDragging ? 'border-[var(--accent-primary)]/70' : ''}`}
+          className={`rounded-2xl bg-[var(--bg-surface)] border shadow-lg p-2 flex items-center gap-2 transition-colors ${isBlockedDM ? 'border-red-500/50' : `border-[var(--border-color)] ${isDragging ? 'border-[var(--accent-primary)]/70' : ''}`}`}
         >
 {!isBlockedDM && (
             <button
@@ -934,15 +1256,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               <div className="py-2.5 px-3 text-sm text-[var(--text-muted)] italic bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] text-center">
                 Only Admins and Supervisors can post in this announcement channel.
               </div>
-            ) : selectedUser && blockedUsers.has(selectedUser.userId) ? (
+            ) : isBlockedDM ? (
               <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border text-center"
                 style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
-                You blocked this user. Unblock to send messages.
-              </div>
-            ) : selectedUser && selectedUser.blockedByThem ? (
-              <div className="py-2.5 px-3 text-sm italic bg-[var(--bg-card)] rounded-xl border text-center"
-                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}>
-                This user has blocked you. You cannot send messages.
+                {blockedByMe ? 'You blocked this user. Unblock to send messages.' : 'This user blocked you. You cannot send messages.'}
               </div>
             ) : (
               <textarea
@@ -993,6 +1310,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isOpen={!!activeLightbox}
           onClose={() => setActiveLightbox(null)}
           fileName={activeLightbox?.name ?? 'Media Preview'}
+          allImages={activeLightbox?.allImages || []}
+          currentIndex={activeLightbox?.currentIndex || 0}
+          onNavigate={(idx) => {
+            const imgs = activeLightbox?.allImages || [];
+            if (imgs[idx]) setActiveLightbox({ url: imgs[idx], allImages: imgs, currentIndex: idx });
+          }}
         />
 
       {inspectedUser && (
@@ -1000,20 +1323,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={inspectedUser}
           currentUserId={currentUserId}
           onClose={() => setInspectedUser(null)}
-          onImageClick={(url, name) => setActiveLightbox({ url, name })}
+          onImageClick={(url, name) => openLightbox(url, name)}
           isBlocked={blockedUsers.has(inspectedUser.userId)}
           onBlock={async () => {
             await blockUser(inspectedUser.userId);
             const token = localStorage.getItem('vaultchat_jwt');
             if (token) await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-            setBlockedUsers(prev => new Set(prev).add(inspectedUser.userId));
             onBlockUser?.(inspectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(inspectedUser.userId);
             const token = localStorage.getItem('vaultchat_jwt');
             if (token) await fetch(`${API_BASE}/api/block/${inspectedUser.userId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-            setBlockedUsers(prev => { const next = new Set(prev); next.delete(inspectedUser.userId); return next; });
             onUnblockUser?.(inspectedUser.userId);
           }}
         />
@@ -1024,20 +1345,18 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={selectedUser}
           currentUserId={currentUserId}
           onClose={() => setShowProfileModal(false)}
-          onImageClick={(url, name) => setActiveLightbox({ url, name })}
+          onImageClick={(url, name) => openLightbox(url, name)}
           isBlocked={blockedUsers.has(selectedUser.userId)}
           onBlock={async () => {
             await blockUser(selectedUser.userId);
             const token = localStorage.getItem('vaultchat_jwt');
             if (token) await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-            setBlockedUsers(prev => new Set(prev).add(selectedUser.userId));
             onBlockUser?.(selectedUser.userId);
           }}
           onUnblock={async () => {
             await unblockUser(selectedUser.userId);
             const token = localStorage.getItem('vaultchat_jwt');
             if (token) await fetch(`${API_BASE}/api/block/${selectedUser.userId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-            setBlockedUsers(prev => { const next = new Set(prev); next.delete(selectedUser.userId); return next; });
             onUnblockUser?.(selectedUser.userId);
           }}
           onJumpToMessage={(messageId) => {

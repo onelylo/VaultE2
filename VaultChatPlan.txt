@@ -1,0 +1,167 @@
+================================================================================
+          VAULTCHAT HIGH-PERFORMANCE MEDIA ENGINE MASTER BLUEPRINT
+        Real-Time P2P Calling, Mediasoup SFU & SFrame E2EE Architecture
+================================================================================
+
+--------------------------------------------------------------------------------
+SECTION 1: ARCHITECTURAL OVERVIEW & DEEP-DIVE LOGIC
+--------------------------------------------------------------------------------
+
+1. HYBRID MEDIA ROUTING (P2P Mesh vs. SFU)
+   To match WhatsApp's instant responsiveness and low latency for 1:1 calls while 
+   competing with Discord's massive multi-user voice channels and screen shares, 
+   VaultChat utilizes a hybrid dual-engine approach:
+
+   A. 1:1 Calls (Direct WebRTC Mesh):
+      - Audio and video packets flow directly between Peer A and Peer B via RTCPeerConnection.
+      - Zero media server bandwidth or latency overhead.
+      - NAT Traversal is resolved using Coturn (STUN/TURN) servers over TLS (TURNS) 
+        to ensure connection success across strict firewalls and mobile networks.
+
+   B. Group Channels & Screen Streams (Selective Forwarding Unit - SFU):
+      - Uses Mediasoup (a C++ media engine bound to Node.js).
+      - Unlike traditional MCU media servers that decode, re-encode, and mix streams 
+        (costing extreme CPU usage), an SFU acts as a ultra-low-latency router.
+      - It receives raw RTP streams from producers and selectively forwards them to 
+        consumers without decoding media payloads.
+      - Supports SVC (Scalable Video Coding) in VP9/AV1 codecs: a single stream is sent 
+        with multiple spatial/temporal layers (e.g., 1080p, 720p, 360p). The SFU dynamically 
+        routes lower resolution layers to users with constrained bandwidth without 
+        re-encoding.
+
+2. ZERO-TRUST END-TO-END ENCRYPTION (SFrame & Insertable Streams)
+   - Standard WebRTC encrypts packets in transit using DTLS-SRTP, but the SFU 
+     server usually holds the decryption keys.
+   - To adhere to VaultChat's Zero-Trust policy, media uses WebRTC Insertable Streams 
+     (RTCRtpScriptTransform / WebCodecs).
+   - Audio (Opus) and Video (AV1/VP9) frames are intercepted on the client *before* 
+     packetization.
+   - Frames are encrypted using AES-256-GCM using client-side keys negotiated via 
+     ECDH (Elliptic Curve Diffie-Hellman).
+   - The SFU routes encrypted ciphertext. The server cannot inspect or record audio/video.
+
+3. EXTREME PERFORMANCE & LOW RESOURCE CONSUMPTION
+   - CPU & Battery Optimization: When video stream tabs are minimized or off-screen, 
+     the client automatically scales incoming frame rates down to 5 FPS.
+   - Hardware Acceleration: Enforces hardware-accelerated H.264/AV1 codecs via 
+     NVENC, QuickSync, or VideoToolbox to bypass software CPU encoding.
+   - Dynamic Opus Bandwidth Adaptation: Speech scales dynamically between 16 kbps 
+     (crisp voice) and 64 kbps (high-fidelity audio) with built-in noise suppression 
+     (RNNoise / WebRTC AEC).
+
+
+================================================================================
+SECTION 2: PHASED IMPLEMENTATION ROADMAP
+================================================================================
+
+  Phase 1: Signaling Core, Coturn Infrastructure & 1:1 Mesh
+  Phase 2: Insertable Streams (SFrame E2EE) & Floating Call Overlay
+  Phase 3: Mediasoup SFU Node Integration & Multi-User Voice Channels
+  Phase 4: 60 FPS Screen Sharing, AV1 SVC & Performance Optimization
+
+
+================================================================================
+SECTION 3: STEP-BY-STEP PROMPTS FOR OPENCODE AI
+================================================================================
+
+--------------------------------------------------------------------------------
+TASK 1: Signaling Protocol, Coturn Config & WebRTC Client Manager
+--------------------------------------------------------------------------------
+[COPY & PASTE TO OPENCODE]
+
+# TASK 1 DIRECTIVE: WebRTC Signaling Core & P2P Mesh Connection Manager
+
+Execute the initial signaling infrastructure for 1:1 audio/video calling.
+
+### Requirements:
+1. **Server Signaling Events (`server/src/index.ts` or `server/src/sockets/call.ts`)**:
+   - Create WebSocket message handlers for:
+     * `call:initiate` -> `{ targetUserId, mediaType: 'audio'|'video' }`
+     * `call:offer` -> `{ targetUserId, sdp }`
+     * `call:answer` -> `{ targetUserId, sdp }`
+     * `call:ice_candidate` -> `{ targetUserId, candidate }`
+     * `call:reject` / `call:hangup` -> `{ targetUserId }`
+   - Validate target availability and forward payloads directly to `targetUserId`.
+
+2. **WebRTC Client Engine (`client/src/services/webrtc/P2PManager.ts`)**:
+   - Create a clean class managing `RTCPeerConnection` lifecycle.
+   - Include STUN/TURN server configuration fetched dynamically or from env variables.
+   - Implement ice candidate collection, local/remote stream attachment, and call termination cleanup.
+
+3. **Verification**:
+   - Run typechecks: `npm run typecheck --prefix ./server && npm run typecheck --prefix ./client`
+
+--------------------------------------------------------------------------------
+TASK 2: Zero-Trust SFrame E2EE Pipeline & Call Overlay UI
+--------------------------------------------------------------------------------
+[COPY & PASTE TO OPENCODE]
+
+# TASK 2 DIRECTIVE: Insertable Streams Media Encryption & Call UI Overlay
+
+Implement end-to-end encryption for WebRTC media streams and build the frontend floating call interface.
+
+### Requirements:
+1. **Media Encryption Pipeline (`client/src/services/webrtc/encryption.ts`)**:
+   - Implement frame-level encryption using WebRTC Insertable Streams (`RTCRtpSender.createEncodedStreams()`).
+   - Encrypt video and audio frames with AES-256-GCM using client-side ECDH derived keys.
+   - Add decryption transforms on `RTCRtpReceiver`.
+
+2. **Call UI Components (`client/src/components/calls/`)**:
+   - Create `IncomingCallModal.tsx`: Displays incoming call banner with Accept (Audio/Video) and Reject buttons.
+   - Create `ActiveCallOverlay.tsx`: Floating draggable/minimizable bar showing call duration, remote avatar/video feed, microphone mute toggle, camera toggle, and end call button.
+   - Integrate status indicators in `ChatArea.tsx` and `Header.tsx`.
+
+3. **Verification**:
+   - Build client: `npm run build --prefix ./client`
+
+--------------------------------------------------------------------------------
+TASK 3: Mediasoup SFU Server Integration & Discord-Style Voice Channels
+--------------------------------------------------------------------------------
+[COPY & PASTE TO OPENCODE]
+
+# TASK 3 DIRECTIVE: Mediasoup SFU Server Engine & Multi-User Voice Channels
+
+Build the server-side SFU routing engine using Mediasoup to support scalable multi-user voice channels.
+
+### Requirements:
+1. **Mediasoup SFU Server Setup (`server/src/sfu/`)**:
+   - Install and initialize `mediasoup` server instance with worker pools matching CPU core counts.
+   - Create router instances for channel voice sessions.
+   - Handle signaling events: `sfu:get_router_capabilities`, `sfu:create_transport`, `sfu:connect_transport`, `sfu:produce`, `sfu:consume`.
+
+2. **Client SFU Transport (`client/src/services/webrtc/SFUManager.ts`)**:
+   - Integrate `mediasoup-client` library.
+   - Handle send/receive transport creation and producer/consumer stream management.
+
+3. **Discord-Style Voice UI (`client/src/components/sidebar/VoiceChannelRow.tsx`)**:
+   - Click to join voice channel directly without switching current text view.
+   - Display active participants nested inside the channel row in `Sidebar.tsx`.
+   - Add green border highlight (`ring-2 ring-[var(--accent-primary)]`) around active speakers using client-side Voice Activity Detection (VAD).
+
+4. **Verification**:
+   - Run full typecheck and build sequence across client and server.
+
+--------------------------------------------------------------------------------
+TASK 4: 60 FPS Screen Sharing, AV1 SVC & Performance Optimization
+--------------------------------------------------------------------------------
+[COPY & PASTE TO OPENCODE]
+
+# TASK 4 DIRECTIVE: Screen Sharing Engine, Adaptive Bitrate & Battery Saver
+
+Implement high-fps screen streaming and client performance optimizations.
+
+### Requirements:
+1. **Screen Capture Engine (`client/src/services/webrtc/ScreenShareManager.ts`)**:
+   - Implement `navigator.mediaDevices.getDisplayMedia()` with options for system audio capture, 1080p60 FPS target, and AV1/VP9 codec selection with SVC layers.
+   - Support seamless switching between camera feed and screen stream during an active call.
+
+2. **Client Performance & Battery Throttling**:
+   - Detect when screen/video components are out of viewport or window is blurred, and dynamically instruct the SFU/Peer connection to reduce incoming frame rates to 5 FPS.
+   - Add hardware acceleration preference flags on video elements (`transform: translateZ(0)` / GPU compositing).
+
+3. **Network Health Monitor**:
+   - Periodically check `RTCPeerConnection.getStats()` for packet loss, jitter, and round-trip time.
+   - Display a network quality indicator badge (Green/Yellow/Red) in `ActiveCallOverlay.tsx`.
+
+4. **Verification**:
+   - Run clean builds: `npm run typecheck --prefix ./client && npm run build --prefix ./client`

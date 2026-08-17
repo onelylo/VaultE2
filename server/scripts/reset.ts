@@ -6,7 +6,7 @@ console.log(`
 1. DATABASE:
    The server uses embedded PostgreSQL (persistent).
    To fully reset, delete the .pgdata directory:
-     rm -rf .pgdata
+     Remove-Item -Recurse -Force .pgdata
    Then restart the server — it will re-initialize with
    default channels and seeded admin account.
 

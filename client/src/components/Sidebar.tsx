@@ -21,6 +21,8 @@ import {
   VolumeX,
   Volume2,
   XCircle,
+  Bookmark,
+  ArrowRight,
 } from 'lucide-react';
 import type { User, Channel, UserKeyPair } from '../types/chat';
 import { getFingerprint } from '../lib/crypto';
@@ -38,13 +40,14 @@ interface SidebarProps {
   userFingerprint: string;
   isAdmin: boolean;
   showAdmin: boolean;
+  setShowAdmin: (show: boolean) => void;
   onSelectView: (view: 'channels' | 'dms') => void;
   onSelectUser: (user: User) => void;
   onSelectChannel: (channel: Channel) => void;
   onCreateChannel: (channel: { name: string; description: string; type: 'official' | 'team' | 'private'; isAnnouncement?: boolean; memberIds?: string[] }) => void;
   onShowFingerprintModal: () => void;
   onOpenProfileDrawer: () => void;
-  onToggleAdmin: () => void;
+  onToggleAdmin: (show: boolean) => void;
   onSelectAdminTab: (tab: 'overview' | 'users' | 'infrastructure') => void;
   onLogout: () => void;
   onOpenChannelSettings: (channel: Channel) => void;
@@ -67,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   userFingerprint,
   isAdmin,
   showAdmin,
+  setShowAdmin,
   onSelectView,
   onSelectUser,
   onSelectChannel,
@@ -121,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const filteredChannels = channels.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ).filter((c, idx, arr) => arr.findIndex(x => x.id === c.id) === idx);
 
   // Load active DM partners
   const loadActiveDMs = useCallback(async () => {
@@ -269,7 +273,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ].map(({ view, icon: Icon, label, unread }) => (
               <button
                 key={view}
-                onClick={() => onSelectView(view)}
+                onClick={() => { onSelectView(view); setShowAdmin(false); }}
                 className="flex-1 px-2 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition-smooth relative"
                 style={{
                   backgroundColor: activeView === view && !showAdmin ? 'var(--accent-primary)' : 'transparent',
@@ -292,7 +296,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {isAdmin && (
               <button
-                onClick={onToggleAdmin}
+                onClick={() => onToggleAdmin(!showAdmin)}
                 className="flex-1 px-2 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition-smooth"
                 style={{
                   backgroundColor: showAdmin ? 'var(--accent-primary)' : 'transparent',
@@ -336,7 +340,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {isAdmin && (
               <button
-                onClick={onToggleAdmin}
+                onClick={() => onToggleAdmin(!showAdmin)}
                 title="Admin Dashboard"
                 className="w-10 h-10 rounded-xl flex items-center justify-center transition-smooth"
                 style={{
@@ -352,7 +356,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* List Header & Search (Only when Expanded and not in admin mode) */}
+      {/* List Header & Search (Only when Expanded and not in admin) */}
       {!isCollapsed && !showAdmin && (
         <div className="p-3 space-y-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <div className="flex items-center justify-between">
@@ -389,30 +393,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>NEW</span>
               </button>
             ) : (
-              <button
-                onClick={() => {
-                  setSearchMode(!searchMode);
-                  setSearchTerm('');
-                }}
-                className="px-2 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 transition-smooth"
-                style={{
-                  backgroundColor: searchMode ? 'color-mix(in srgb, var(--accent-primary) 15%, transparent)' : 'color-mix(in srgb, var(--accent-primary) 12%, transparent)',
-                  border: `1px solid ${searchMode ? 'color-mix(in srgb, var(--accent-primary) 35%, transparent)' : 'color-mix(in srgb, var(--accent-primary) 30%, transparent)'}`,
-                  color: 'var(--accent-primary)'
-                }}
-              >
-                {searchMode ? (
-                  <>
-                    <X className="w-3 h-3" />
-                    <span>CLOSE</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-3 h-3" />
-                    <span>NEW DM</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setSearchMode(!searchMode);
+                    setSearchTerm('');
+                  }}
+                  className="px-2 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 transition-smooth"
+                  style={{
+                    backgroundColor: searchMode ? 'color-mix(in srgb, var(--accent-primary) 15%, transparent)' : 'color-mix(in srgb, var(--accent-primary) 12%, transparent)',
+                    border: `1px solid ${searchMode ? 'color-mix(in srgb, var(--accent-primary) 35%, transparent)' : 'color-mix(in srgb, var(--accent-primary) 30%, transparent)'}`,
+                    color: 'var(--accent-primary)'
+                  }}
+                >
+                  {searchMode ? (
+                    <>
+                      <X className="w-3 h-3" />
+                      <span>CLOSE</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3 h-3" />
+                      <span>NEW DM</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 

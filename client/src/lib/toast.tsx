@@ -84,7 +84,7 @@ export function ToastContainer() {
 
   if (items.length === 0) return null;
   return createPortal(
-    <div className="fixed bottom-4 right-4 z-[99999] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-5 right-4 z-[99999] flex flex-col gap-2 pointer-events-none">
       {items.map(t => <div key={t.id} className="pointer-events-auto"><ToastItem toast={t} /></div>)}
     </div>,
     document.body

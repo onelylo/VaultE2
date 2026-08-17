@@ -148,8 +148,15 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
   if (!isOpen) return null;
 
   const formatTime = (ts: number) => {
-    const d = new Date(ts);
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!ts || ts < 1000000000) return '';
+    try {
+      const ms = ts < 10000000000 ? ts * 1000 : ts;
+      const d = new Date(ms);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
   };
 
   const getConversationName = (msg: LocalMessage) => {
@@ -181,8 +188,8 @@ export const MessageSearch: React.FC<MessageSearchProps> = ({
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={selectedChannel ? `Search in #${selectedChannel.name}…` : selectedUser ? `Search with ${selectedUser.fullName || selectedUser.username}…` : 'Search messages…'}
-            className="flex-1 bg-transparent text-sm focus:outline-none"
-            style={{ color: 'var(--text-main)' }}
+            className="flex-1 bg-transparent text-sm focus:outline-none px-2 py-1 rounded-lg"
+            style={{ color: 'var(--text-main)', backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           />
           {query && (
             <button onClick={() => setQuery('')} className="p-1 rounded-lg transition-smooth" style={{ color: 'var(--text-muted)' }}>

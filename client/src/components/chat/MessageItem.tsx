@@ -8,7 +8,7 @@ import { AttachmentMessage } from '../AttachmentMessage';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ReactionPicker } from '../ReactionPicker';
 
-const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) => {
+export const DeliveryIcon: React.FC<{ status: LocalMessage['status'] }> = ({ status }) => {
   if (status === 'pending_sync') {
     return (
       <span title="Queued locally — will send when online">
@@ -55,7 +55,7 @@ interface MessageItemProps {
   setPendingDeleteForMeId: (id: string | null) => void;
   setPendingDeleteEveryoneId: (id: string | null) => void;
   resolveKey: (msg: LocalMessage) => Promise<CryptoKey | null>;
-  onImageClick: (url: string, name?: string) => void;
+  onImageClick: (url: string, name?: string, messageId?: string) => void;
   reactions?: { userId: string; emoji: string }[];
   onAddReaction?: (messageId: string, emoji: string) => void;
   onRemoveReaction?: (messageId: string, emoji: string) => void;
@@ -96,10 +96,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 }) => {
   const isSelf = msg.senderId === currentUserId;
   const hasAttachment = Boolean(msg.attachment || msg.attachmentMeta);
-  const timeStr = new Date(Number(msg.timestamp ?? Date.now())).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const safeTime = (ts: number | undefined | null): string => {
+    if (!ts || typeof ts !== 'number' || ts < 1000000000) return '';
+    try {
+      const ms = ts < 10000000000 ? ts * 1000 : ts;
+      const d = new Date(ms);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  };
+  const timeStr = safeTime(msg.timestamp);
 
   // Long-press support for mobile action menu
   const [showActions, setShowActions] = useState(false);
@@ -219,9 +225,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         ) : (
           <>
             {/* Forwarded label */}
-            {isForwarded && (
+            {(isForwarded || msg.forwardedFrom) && (
               <span className="text-[10px] font-medium italic block mb-1" style={{ color: 'var(--text-muted)' }}>
-                ↪ Forwarded
+                ↪ Forwarded from @{msg.forwardedFrom ? (allUsers.find(u => u.userId === msg.forwardedFrom)?.username || (currentUserId === msg.forwardedFrom ? 'you' : msg.forwardedFrom.slice(0, 8))) : 'unknown'}
               </span>
             )}
 
@@ -287,7 +293,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   message={msg}
                   isMe={isSelf}
                   resolveKey={resolveKey}
-                  onImageClick={(url, name) => onImageClick(url, name)}
+                  onImageClick={(url, name) => onImageClick(url, name, msg.id)}
                 />
               </div>
             )}
@@ -405,7 +411,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         )}
 
         {/* Edit button — own messages, within 5m, not audio */}
-        {isSelf && !msg.isDeleted && editingMsgId !== msg.id && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
+        {isSelf && !msg.isDeleted && editingMsgId !== msg.id && msg.text && msg.text.trim().length > 0 && !(msg.attachmentMeta?.mimeType?.startsWith('audio/')) && (Date.now() - msg.timestamp <= 5 * 60 * 1000) && (
           <button
             type="button"
             onClick={() => handleStartEdit(msg)}

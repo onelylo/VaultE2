@@ -117,7 +117,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setConfirmDialog({
       isOpen: true,
       title: 'Change Role',
-      message: `Change ${user.username}'s role to <strong>${next}</strong>?`,
+      message: `Change ${user.username}'s role to ${next}?`,
       variant: 'primary',
       onConfirm: async () => {
         setBusyId(user.userId);
@@ -133,7 +133,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setConfirmDialog({
       isOpen: true,
       title: 'Delete User',
-      message: `Delete <strong>${user.username}</strong>? This will remove their account. Message history and encryption keys will be preserved so existing conversations remain decryptable. <strong>This cannot be undone.</strong>`,
+      message: `Delete ${user.username}? This will remove their account. Message history and encryption keys will be preserved so existing conversations remain decryptable. This cannot be undone.`,
       variant: 'danger',
       confirmLabel: 'Delete',
       onConfirm: async () => {

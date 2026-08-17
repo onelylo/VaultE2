@@ -1,17 +1,25 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface ImageLightboxModalProps {
   imageUrl: string | null;
   isOpen: boolean;
   onClose: () => void;
   fileName?: string;
+  allImages?: string[];
+  currentIndex?: number;
+  onNavigate?: (index: number) => void;
 }
 
 export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   imageUrl,
   isOpen,
   onClose,
+  fileName,
+  allImages = [],
+  currentIndex = 0,
+  onNavigate,
 }) => {
   const [scale, setScale] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
@@ -21,12 +29,34 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
   const lastPos = useRef({ x: 0, y: 0 });
   const lastPinchDist = useRef(0);
 
+  const hasMultiple = allImages.length > 1;
+  const canGoLeft = hasMultiple && currentIndex > 0;
+  const canGoRight = hasMultiple && currentIndex < allImages.length - 1;
+
+  const goLeft = useCallback(() => {
+    if (canGoLeft && onNavigate) {
+      onNavigate(currentIndex - 1);
+      setScale(1); setOffsetX(0); setOffsetY(0);
+    }
+  }, [canGoLeft, currentIndex, onNavigate]);
+
+  const goRight = useCallback(() => {
+    if (canGoRight && onNavigate) {
+      onNavigate(currentIndex + 1);
+      setScale(1); setOffsetX(0); setOffsetY(0);
+    }
+  }, [canGoRight, currentIndex, onNavigate]);
+
   useEffect(() => {
     if (!isOpen) return;
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') goLeft();
+      if (e.key === 'ArrowRight') goRight();
+    };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, goLeft, goRight]);
 
   useEffect(() => {
     if (!isOpen) { setScale(1); setOffsetX(0); setOffsetY(0); setSwipeY(0); }
@@ -128,6 +158,56 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
           opacity: imgOpacity,
         }}
       />
+
+      {/* Navigation arrows */}
+      {hasMultiple && (
+        <>
+          {canGoLeft && (
+            <button
+              onClick={(e) => { e.stopPropagation(); goLeft(); }}
+              className="fixed left-4 top-1/2 -translate-y-1/2 z-[1000000] w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+          {canGoRight && (
+            <button
+              onClick={(e) => { e.stopPropagation(); goRight(); }}
+              className="fixed right-4 top-1/2 -translate-y-1/2 z-[1000000] w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+          {/* Thumbnail strip */}
+          <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-[1000000] flex gap-1.5 px-3 py-2 rounded-xl bg-black/40 backdrop-blur-sm max-w-[90vw] overflow-x-auto">
+            {allImages.map((img, idx) => (
+              <button
+                key={idx}
+                onClick={(e) => { e.stopPropagation(); onNavigate?.(idx); }}
+                className={`w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${
+                  idx === currentIndex 
+                    ? 'border-white scale-110 shadow-lg' 
+                    : 'border-transparent opacity-60 hover:opacity-100'
+                }`}
+              >
+                <img src={img} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+          {/* Counter */}
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000000] px-3 py-1.5 rounded-full bg-black/50 text-white text-xs font-medium">
+            {currentIndex + 1} / {allImages.length}
+          </div>
+        </>
+      )}
+
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="fixed top-4 right-4 z-[1000000] w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+      >
+        <X className="w-5 h-5" />
+      </button>
     </>,
     document.body
   );

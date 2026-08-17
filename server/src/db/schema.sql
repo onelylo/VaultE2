@@ -161,3 +161,65 @@ CREATE TABLE IF NOT EXISTS token_blocklist (
 
 CREATE INDEX IF NOT EXISTS idx_token_blocklist_user ON token_blocklist (user_id);
 CREATE INDEX IF NOT EXISTS idx_token_blocklist_expires ON token_blocklist (expires_at);
+
+-- Friends system
+CREATE TABLE IF NOT EXISTS friends (
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  friend_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'pending', -- pending, accepted, blocked
+  created_at  BIGINT NOT NULL,
+  PRIMARY KEY (user_id, friend_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friends_user ON friends (user_id);
+CREATE INDEX IF NOT EXISTS idx_friends_friend ON friends (friend_id);
+CREATE INDEX IF NOT EXISTS idx_friends_status ON friends (status);
+
+-- Hubs (servers/guilds)
+CREATE TABLE IF NOT EXISTS hubs (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  icon_url    TEXT,
+  banner_url  TEXT,
+  created_by  TEXT REFERENCES users(id),
+  created_at  BIGINT NOT NULL
+);
+
+-- Hub members
+CREATE TABLE IF NOT EXISTS hub_members (
+  hub_id    TEXT NOT NULL REFERENCES hubs(id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role      TEXT NOT NULL DEFAULT 'member', -- owner, admin, member
+  joined_at BIGINT NOT NULL,
+  PRIMARY KEY (hub_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hub_members_user ON hub_members (user_id);
+
+-- Groups within hubs (categories/channels)
+CREATE TABLE IF NOT EXISTS groups (
+  id          TEXT PRIMARY KEY,
+  hub_id      TEXT NOT NULL REFERENCES hubs(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  type        TEXT NOT NULL DEFAULT 'text', -- text, voice, announcement
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_groups_hub ON groups (hub_id);
+
+-- Group visibility (which members can see/access)
+CREATE TABLE IF NOT EXISTS group_visibility (
+  group_id  TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_visibility_user ON group_visibility (user_id);
+
+-- User profile extensions
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;

@@ -3,6 +3,8 @@
  * Built on native browser WebCrypto API (ECDH P-256 + AES-256-GCM + PBKDF2 Vault Wrapping)
  */
 
+import { getTrustedKey, saveTrustedKey, saveChannelKey } from './db';
+
 // Helper functions for ArrayBuffer <-> Base64 conversion
 export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = new Uint8Array(buffer);
@@ -422,6 +424,196 @@ export async function decryptChannelKeyForUser(
 ): Promise<JsonWebKey> {
   const jwkString = await decryptMessage(encryptedKeyBase64, ivBase64, userSharedKey);
   return JSON.parse(jwkString);
+}
+
+// ── CACHED SHARED KEYS / CHANNEL KEYS ────────────────────────────────────────
+const sharedKeysCache = new Map<string, CryptoKey>();
+const channelKeysCache = new Map<string, CryptoKey>();
+
+/**
+ * Gets cached shared key or derives it from private/public key pair
+ */
+export async function getOrDeriveSharedKey(
+  privateKey: CryptoKey,
+  peerPublicKeyBase64: string,
+  peerUserId?: string
+): Promise<CryptoKey | null> {
+  const cacheKey = peerUserId
+    ? `${peerUserId}:${peerPublicKeyBase64.slice(0, 16)}`
+    : peerPublicKeyBase64.slice(0, 32);
+  if (sharedKeysCache.has(cacheKey)) return sharedKeysCache.get(cacheKey)!;
+  try {
+    const peerPubKey = await importPublicKey(peerPublicKeyBase64);
+    const derivedKey = await deriveSharedKey(privateKey, peerPubKey);
+    sharedKeysCache.set(cacheKey, derivedKey);
+    return derivedKey;
+  } catch (err) {
+    console.error('[crypto] Failed to derive shared key:', err);
+    return null;
+  }
+}
+
+export function clearSharedKeyCache(peerUserId?: string, peerPublicKeyBase64?: string): void {
+  if (peerUserId && peerPublicKeyBase64) {
+    const cacheKey = `${peerUserId}:${peerPublicKeyBase64.slice(0, 16)}`;
+    sharedKeysCache.delete(cacheKey);
+  } else if (peerUserId) {
+    for (const key of sharedKeysCache.keys()) {
+      if (key.startsWith(`${peerUserId}:`)) sharedKeysCache.delete(key);
+    }
+  } else if (peerPublicKeyBase64) {
+    const prefix = peerPublicKeyBase64.slice(0, 32);
+    for (const key of sharedKeysCache.keys()) {
+      if (key.endsWith(`:${prefix}`)) sharedKeysCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Gets cached channel symmetric key or generates it from stored JWK
+ */
+export async function getOrGenerateChannelKey(
+  channelId: string,
+  db?: { channelKeys: { get: (id: string) => Promise<{ keyJwk: JsonWebKey } | undefined> } },
+  privateKey?: CryptoKey,
+  allUsers?: Array<{ userId: string; publicKey: string }>,
+  currentUserId?: string,
+  channelCreatorId?: string
+): Promise<CryptoKey | null> {
+  if (channelKeysCache.has(channelId)) return channelKeysCache.get(channelId)!;
+  if (db) {
+    const stored = await db.channelKeys.get(channelId);
+    if (stored?.keyJwk) {
+      const key = await importSymmetricKeyFromJwk(stored.keyJwk);
+      channelKeysCache.set(channelId, key);
+      return key;
+    }
+  }
+
+  // Fetch encrypted channel key envelope from server
+  try {
+    const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt');
+    if (!token) return null;
+    const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+    const res = await fetch(`${API}/api/channels/${channelId}/key`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => null);
+    if (!res) return null;
+    if (res.ok) {
+      const data = await res.json();
+      const { encryptedChannelKey, iv } = data.key || {};
+      if (!encryptedChannelKey || !iv) return null;
+
+      // Try to decrypt with ECDH shared key for each channel member
+      if (privateKey && allUsers) {
+        // Build candidate list with creator first (most likely to have the key)
+        const candidateIds: string[] = [];
+        if (channelCreatorId) candidateIds.push(channelCreatorId);
+        for (const u of allUsers) {
+          if (!candidateIds.includes(u.userId)) candidateIds.push(u.userId);
+        }
+        if (currentUserId && !candidateIds.includes(currentUserId)) candidateIds.push(currentUserId);
+
+        for (const candidateId of candidateIds) {
+          const candidate = candidateId === currentUserId
+            ? { userId: currentUserId, publicKey: allUsers.find(u => u.userId === currentUserId)?.publicKey }
+            : allUsers.find(u => u.userId === candidateId);
+          if (!candidate?.publicKey) continue;
+          try {
+            const sharedKey = await getOrDeriveSharedKey(privateKey, candidate.publicKey);
+            if (!sharedKey) continue;
+            const keyJwk = await decryptChannelKeyForUser(encryptedChannelKey, iv, sharedKey);
+            const imported = await importSymmetricKeyFromJwk(keyJwk);
+            channelKeysCache.set(channelId, imported);
+            // Save to Dexie for future use
+            if (db) {
+              await saveChannelKey({ channelId, keyJwk });
+            }
+            return imported;
+          } catch {
+            // This candidate didn't encrypt this envelope
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`[ChannelKey] Server fetch failed for ${channelId}:`, e);
+  }
+
+  return null;
+}
+
+/**
+ * Resolves the appropriate encryption key for a message (DM or channel)
+ */
+export async function resolveMessageKey(
+  msg: { channelId?: string; senderId?: string; recipientId?: string },
+  currentUserId: string,
+  privateKey: CryptoKey,
+  peerPublicKeyBase64?: string,
+  db?: { channelKeys: { get: (id: string) => Promise<{ keyJwk: JsonWebKey } | undefined> } }
+): Promise<CryptoKey | null> {
+  if (msg.channelId) {
+    return getOrGenerateChannelKey(msg.channelId, db);
+  }
+  const peerId = msg.senderId === currentUserId ? msg.recipientId : msg.senderId;
+  if (!peerId || !peerPublicKeyBase64) return null;
+  return getOrDeriveSharedKey(privateKey, peerPublicKeyBase64);
+}
+
+/**
+ * Validates a peer's public key using TOFU (Trust On First Use) model
+ * Returns true if key matches stored fingerprint, false if mismatch
+ */
+export async function validatePeerKeyTofu(peer: { publicKey?: string; userId?: string; keyVersion?: number; oldPublicKey?: string; oldSigningPublicKey?: string; signingPublicKey?: string; keyRotationSignature?: string; username?: string }): Promise<boolean> {
+  if (!peer.publicKey || !peer.userId) return false;
+  try {
+    const currentFp = await computePublicKeyFingerprint(peer.publicKey);
+    const trusted = await getTrustedKey(peer.userId);
+    if (!trusted) {
+      // First use — store the key
+      await saveTrustedKey({
+        peerUserId: peer.userId,
+        fingerprint: currentFp,
+        publicKey: peer.publicKey,
+        keyVersion: peer.keyVersion ?? 1,
+        firstSeenAt: Date.now(),
+        lastValidatedAt: Date.now(),
+      });
+      return true;
+    }
+    const matches = compareFingerprints(trusted.fingerprint, currentFp);
+    if (matches) return true;
+
+    // Key mismatch — check if it's a valid signed rotation
+    const oldKey = peer.oldPublicKey;
+    const oldSigningKey = peer.oldSigningPublicKey;
+    const newSigningKey = peer.signingPublicKey;
+    const rotationSig = peer.keyRotationSignature;
+    const rotated = (peer.keyVersion ?? 1) > (trusted.keyVersion ?? 1)
+      && !!oldKey && !!oldSigningKey && !!newSigningKey && !!rotationSig
+      && compareFingerprints(await computePublicKeyFingerprint(oldKey), trusted.fingerprint);
+    if (rotated) {
+      const valid = await verifyKeyRotationSignature(peer.publicKey, newSigningKey, oldKey, rotationSig, oldSigningKey);
+      if (valid) {
+        await saveTrustedKey({
+          peerUserId: peer.userId,
+          fingerprint: currentFp,
+          publicKey: peer.publicKey,
+          keyVersion: peer.keyVersion ?? 1,
+          firstSeenAt: trusted.firstSeenAt,
+          lastValidatedAt: Date.now(),
+        });
+        console.log(`[TOFU] Accepted signed key rotation for ${peer.username} (v${peer.keyVersion})`);
+        return true;
+      }
+    }
+    console.warn(`[TOFU] Key mismatch for ${peer.username} — possible MITM`);
+    return false;
+  } catch (e) {
+    console.error('[TOFU] Validation error — blocking by default:', e);
+    return false;
+  }
 }
 
 // ── ENCRYPTED KEY VAULT (PBKDF2 + AES-GCM) ───────────────────────────────────

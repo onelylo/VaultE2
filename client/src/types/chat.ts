@@ -101,6 +101,7 @@ export interface LocalMessage {
   isDeleted?: boolean;
   removed?: boolean;
   replyTo?: string;
+  forwardedFrom?: string;
   attachment?: AttachmentPayload;
   attachmentMeta?: AttachmentMeta; // Decrypted locally — not persisted in cleartext
   pendingUpload?: PendingUpload;   // Attachment queued while offline (cleared after upload)

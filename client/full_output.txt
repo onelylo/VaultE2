@@ -1,0 +1,141 @@
+src/hooks/useAuth.ts(65,31): error TS2304: Cannot find name 'getUserKeyPair'.
+src/hooks/useAuth.ts(65,73): error TS2304: Cannot find name 'getAnyUserKeyPair'.
+src/hooks/useAuth.ts(113,11): error TS2304: Cannot find name 'isTokenExpired'.
+src/hooks/useAuth.ts(130,5): error TS2304: Cannot find name 'setSelectedPeer'.
+src/hooks/useAuth.ts(131,5): error TS2304: Cannot find name 'setSelectedChannel'.
+src/hooks/useAuth.ts(132,5): error TS2304: Cannot find name 'setAllUsers'.
+src/hooks/useAuth.ts(133,5): error TS2304: Cannot find name 'setOnlineIds'.
+src/hooks/useAuth.ts(134,5): error TS2304: Cannot find name 'setShowAdmin'.
+src/hooks/useAuth.ts(135,5): error TS2304: Cannot find name 'setAvatarMenu'.
+src/hooks/useChannels.ts(7,29): error TS7006: Parameter 'currentUserKeys' implicitly has an 'any' type.
+src/hooks/useChannels.ts(7,46): error TS7006: Parameter 'allUsers' implicitly has an 'any' type.
+src/hooks/useChannels.ts(7,56): error TS7006: Parameter 'setAllUsers' implicitly has an 'any' type.
+src/hooks/useChannels.ts(7,69): error TS7006: Parameter 'dispatch' implicitly has an 'any' type.
+src/hooks/useChannels.ts(8,35): error TS2304: Cannot find name 'useState'.
+src/hooks/useChannels.ts(8,44): error TS2304: Cannot find name 'Channel'.
+src/hooks/useChannels.ts(9,49): error TS2304: Cannot find name 'useState'.
+src/hooks/useChannels.ts(9,58): error TS2304: Cannot find name 'Channel'.
+src/hooks/useChannels.ts(10,49): error TS2304: Cannot find name 'useState'.
+src/hooks/useChannels.ts(10,58): error TS2304: Cannot find name 'Channel'.
+src/hooks/useChannels.ts(23,50): error TS7006: Parameter 'channelData' implicitly has an 'any' type.
+src/hooks/useChannels.ts(33,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(34,81): error TS2304: Cannot find name 'Channel'.
+src/hooks/useChannels.ts(35,75): error TS7006: Parameter 'existing' implicitly has an 'any' type.
+src/hooks/useChannels.ts(47,50): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/hooks/useChannels.ts(47,54): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(51,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(51,34): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(58,50): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/hooks/useChannels.ts(61,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(61,37): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(68,43): error TS7006: Parameter 'channelId' implicitly has an 'any' type.
+src/hooks/useChannels.ts(77,10): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(79,35): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(80,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(80,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(85,37): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(86,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(86,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(87,81): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/hooks/useChannels.ts(94,40): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(96,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(96,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(99,48): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(104,21): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(104,38): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(105,15): error TS2304: Cannot find name 'saveChannelKey'.
+src/hooks/useChannels.ts(105,32): error TS18004: No value exists in scope for the shorthand property 'channelId'. Either declare one or provide an initializer.
+src/hooks/useChannels.ts(112,44): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(113,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/useChannels.ts(113,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/hooks/useChannels.ts(118,40): error TS7006: Parameter 'data' implicitly has an 'any' type.
+src/hooks/useChannels.ts(122,5): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(123,5): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(124,5): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(125,5): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(126,5): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(129,7): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(130,7): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(131,7): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(132,7): error TS2304: Cannot find name 'socket'.
+src/hooks/useChannels.ts(133,7): error TS2304: Cannot find name 'socket'.
+src/hooks/useCrypto.ts(38,32): error TS2304: Cannot find name 'useCallback'.
+src/hooks/useCrypto.ts(45,53): error TS2554: Expected 2 arguments, but got 1.
+src/hooks/useMessages.ts(4,10): error TS2724: '"../lib/crypto"' has no exported member named 'getOrDeriveSharedKey'. Did you mean 'deriveSharedKey'?
+src/hooks/useMessages.ts(4,32): error TS2305: Module '"../lib/crypto"' has no exported member 'getOrGenerateChannelKey'.
+src/hooks/useMessages.ts(4,57): error TS2305: Module '"../lib/crypto"' has no exported member 'decryptPayload'.
+src/hooks/useMessages.ts(4,73): error TS2305: Module '"../lib/crypto"' has no exported member 'resolveMessageKey'.
+src/hooks/useMessages.ts(13,29): error TS7006: Parameter 'currentUserKeys' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,46): error TS7006: Parameter 'privateKeyObject' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,64): error TS7006: Parameter 'selectedPeer' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,78): error TS7006: Parameter 'selectedChannel' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,95): error TS7006: Parameter 'allUsers' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,105): error TS7006: Parameter 'onlineIds' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,116): error TS7006: Parameter 'lastViewedDmsRef' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,134): error TS7006: Parameter 'lastViewedChannelsRef' implicitly has an 'any' type.
+src/hooks/useMessages.ts(13,157): error TS7006: Parameter 'dispatch' implicitly has an 'any' type.
+src/hooks/useMessages.ts(14,47): error TS2304: Cannot find name 'useState'.
+src/hooks/useMessages.ts(22,19): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(32,23): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(41,32): error TS2304: Cannot find name 'validatePeerKeyTofu'.
+src/hooks/useMessages.ts(49,23): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(67,19): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(77,23): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(87,34): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/hooks/useMessages.ts(89,32): error TS2304: Cannot find name 'validatePeerKeyTofu'.
+src/hooks/useMessages.ts(94,23): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(114,32): error TS2304: Cannot find name 'validatePeerKeyTofu'.
+src/hooks/useMessages.ts(135,67): error TS2304: Cannot find name 'encryptBinaryData'.
+src/hooks/useMessages.ts(137,19): error TS2304: Cannot find name 'AttachmentMeta'.
+src/hooks/useMessages.ts(156,21): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(157,28): error TS2304: Cannot find name 'PendingUpload'.
+src/hooks/useMessages.ts(158,25): error TS2304: Cannot find name 'AttachmentPayload'.
+src/hooks/useMessages.ts(160,23): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/useMessages.ts(221,11): error TS2304: Cannot find name 'deleteMessageLocally'.
+src/hooks/useMessages.ts(249,93): error TS2304: Cannot find name 'LocalMessage'.
+src/hooks/usePresence.ts(6,29): error TS7006: Parameter 'currentUserKeys' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,46): error TS7006: Parameter 'allUsers' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,56): error TS7006: Parameter 'onlineIds' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,67): error TS7006: Parameter 'awayIds' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,76): error TS7006: Parameter 'setAllUsers' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,89): error TS7006: Parameter 'setOnlineIds' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,103): error TS7006: Parameter 'setAwayIds' implicitly has an 'any' type.
+src/hooks/usePresence.ts(6,115): error TS7006: Parameter 'dispatch' implicitly has an 'any' type.
+src/hooks/usePresence.ts(33,10): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(35,42): error TS2304: Cannot find name 'User'.
+src/hooks/usePresence.ts(50,33): error TS2304: Cannot find name 'User'.
+src/hooks/usePresence.ts(51,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/usePresence.ts(52,36): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/hooks/usePresence.ts(54,27): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/hooks/usePresence.ts(58,20): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/usePresence.ts(62,20): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/hooks/usePresence.ts(68,54): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/hooks/usePresence.ts(77,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(78,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(79,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(80,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(81,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(84,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(85,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(86,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(87,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(88,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(100,9): error TS2304: Cannot find name 'selectedChannel'.
+src/hooks/usePresence.ts(100,34): error TS2339: Property 'channelId' does not exist on type '{ userId: any; username: any; }'.
+src/hooks/usePresence.ts(100,46): error TS2304: Cannot find name 'selectedChannel'.
+src/hooks/usePresence.ts(101,14): error TS2304: Cannot find name 'selectedPeer'.
+src/hooks/usePresence.ts(101,36): error TS2339: Property 'recipientId' does not exist on type '{ userId: any; username: any; }'.
+src/hooks/usePresence.ts(101,50): error TS2304: Cannot find name 'selectedPeer'.
+src/hooks/usePresence.ts(103,5): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(107,7): error TS2304: Cannot find name 'socket'.
+src/hooks/usePresence.ts(111,24): error TS2304: Cannot find name 'selectedChannel'.
+src/hooks/usePresence.ts(111,41): error TS2304: Cannot find name 'selectedPeer'.
+src/hooks/usePresence.ts(118,28): error TS2304: Cannot find name 'selectedPeer'.
+src/hooks/usePresence.ts(119,31): error TS2304: Cannot find name 'selectedChannel'.
+src/hooks/usePresence.ts(167,24): error TS2304: Cannot find name 'selectedPeer'.
+src/hooks/usePresence.ts(167,38): error TS2304: Cannot find name 'selectedChannel'.
+src/hooks/useSocket.ts(2,33): error TS2305: Module '"../lib/socket"' has no exported member 'isOffline'.
+src/hooks/useSocket.ts(5,27): error TS7006: Parameter 'currentUserKeys' implicitly has an 'any' type.
+src/hooks/useUIState.ts(42,56): error TS2304: Cannot find name 'User'.
+src/hooks/useUIState.ts(43,58): error TS2304: Cannot find name 'Channel'.
+src/hooks/useUIState.ts(56,44): error TS2304: Cannot find name 'User'.

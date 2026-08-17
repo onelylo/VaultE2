@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Users, Trash2, UserPlus, UserMinus, Crown, Search, LogOut, Hash, Lock, Megaphone, Paperclip, Image, FileText, Film, Calendar, Mic } from 'lucide-react';
+import { X, Users, Trash2, UserPlus, UserMinus, Crown, Search, LogOut, Hash, Lock, Megaphone, Paperclip, Image, FileText, Film, Calendar, Mic, ArrowRight } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../lib/db';
 import type { Channel, User, UserKeyPair, LocalMessage } from '../../types/chat';
@@ -22,27 +22,29 @@ function formatSize(bytes: number) {
 }
 
 export function ChannelSettingsModal({
-  channel, isOpen, onClose, onUpdate, onDelete, allUsers, currentUser, onMemberClick, onLeaveChannel,
+  channel, isOpen, onClose, onUpdate, onDelete, allUsers, currentUser, onMemberClick, onLeaveChannel, onJumpToMessage,
 }: {
   channel?: Channel; isOpen: boolean; onClose: () => void;
   onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allUsers: User[]; currentUser?: User | UserKeyPair;
   onMemberClick?: (user: User) => void; onLeaveChannel?: (channelId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }) {
   if (!isOpen || !channel) return null;
   return <ChannelSettingsInner channel={channel} onClose={onClose} onUpdate={onUpdate} onDelete={onDelete}
-    allUsers={allUsers} currentUser={currentUser} onMemberClick={onMemberClick} onLeaveChannel={onLeaveChannel} />;
+    allUsers={allUsers} currentUser={currentUser} onMemberClick={onMemberClick} onLeaveChannel={onLeaveChannel} onJumpToMessage={onJumpToMessage} />;
 }
 
 function ChannelSettingsInner({
-  channel, onClose, onUpdate, onDelete, allUsers, currentUser, onMemberClick, onLeaveChannel,
+  channel, onClose, onUpdate, onDelete, allUsers, currentUser, onMemberClick, onLeaveChannel, onJumpToMessage,
 }: {
   channel: Channel; onClose: () => void;
   onUpdate: (id: string, data: Partial<Pick<Channel, 'name' | 'description' | 'memberIds' | 'isAnnouncement' | 'allowedRoles' | 'slowModeSeconds'>>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   allUsers: User[]; currentUser?: User | UserKeyPair;
   onMemberClick?: (user: User) => void; onLeaveChannel?: (channelId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }) {
   const [name, setName] = useState(channel.name);
   const [description, setDescription] = useState(channel.description || '');
@@ -349,6 +351,15 @@ function ChannelSettingsInner({
                               <p className="font-bold truncate" style={{ color: 'var(--text-main)' }}>{meta.fileName}</p>
                               <p style={{ color: 'var(--text-muted)' }}>{formatSize(meta.fileSize || 0)}</p>
                             </div>
+                            {onJumpToMessage && (
+                              <button
+                                onClick={() => onJumpToMessage(msg.id)}
+                                className="p-1.5 rounded text-[9px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] transition-colors"
+                                title="Jump to message"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         );
                       })}

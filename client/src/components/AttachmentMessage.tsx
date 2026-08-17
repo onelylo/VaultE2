@@ -12,7 +12,7 @@ interface AttachmentMessageProps {
   message: LocalMessage;
   isMe: boolean;
   resolveKey: (msg: LocalMessage) => Promise<CryptoKey | null>;
-  onImageClick: (url: string, fileName?: string) => void;
+  onImageClick: (url: string, fileName?: string, messageId?: string) => void;
 }
 
 export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, isMe, resolveKey, onImageClick }) => {
@@ -76,7 +76,7 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
       if (isAudio) {
         setAudioUrl(url);
       } else {
-        onImageClick(url, meta?.fileName);
+        onImageClick(url, meta?.fileName, message.id);
       }
     } catch (e) {
       console.error('[Attachment] Decrypt error:', e);
@@ -127,14 +127,14 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
 
   if (isImage) {
     return (
-      <div className="relative group/att">
+      <div className="relative group/att w-full h-full">
         {meta.thumbnailDataUrl ? (
           <img
             src={meta.thumbnailDataUrl}
             alt={meta.fileName}
             onClick={decryptAndOpen}
             title="Click to decrypt & view full image"
-            className="max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-zoom-in"
+            className="w-full h-full max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-zoom-in"
             style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
           />
 ) : (

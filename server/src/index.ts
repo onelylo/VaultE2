@@ -85,6 +85,24 @@ import {
   getUndeliveredMessages,
   deleteUndecryptableMessages,
   getMembersWithoutKeyEnvelope,
+  addFriend,
+  acceptFriend,
+  removeFriend,
+  getFriends,
+  getFriendRequests,
+  isFriend,
+  createHub,
+  getHub,
+  getUserHubs,
+  joinHub,
+  leaveHub,
+  getHubMembers,
+  deleteHub,
+  createGroup,
+  getHubGroups,
+  deleteGroup,
+  setGroupVisibility,
+  getVisibleGroups,
   type DbUser,
   type DbChannel,
   type DbMessage,
@@ -1301,6 +1319,153 @@ app.post('/api/messages/cleanup', async (req, res) => {
   }
 });
 
+// ── Friends API ────────────────────────────────────────────────────────────
+
+app.post('/api/friends/add', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username required' });
+  try {
+    const targetUser = await getUserByUsername(username);
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+    if (targetUser.userId === userId) return res.status(400).json({ error: 'Cannot add yourself' });
+    await addFriend(userId, targetUser.userId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Friends] Add error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/friends/accept', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { friendId } = req.body;
+  if (!friendId) return res.status(400).json({ error: 'Friend ID required' });
+  try {
+    await acceptFriend(userId, friendId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Friends] Accept error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/friends/remove', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { friendId } = req.body;
+  if (!friendId) return res.status(400).json({ error: 'Friend ID required' });
+  try {
+    await removeFriend(userId, friendId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Friends] Remove error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/friends', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const friends = await getFriends(userId);
+    const requests = await getFriendRequests(userId);
+    return res.json({ friends, requests });
+  } catch (e) {
+    console.error('[Friends] List error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Hubs API ───────────────────────────────────────────────────────────────
+
+app.post('/api/hubs', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { name, description, iconUrl, bannerUrl } = req.body;
+  if (!name) return res.status(400).json({ error: 'Hub name required' });
+  try {
+    const hubId = `hub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await createHub({ id: hubId, name, description, iconUrl, bannerUrl, createdBy: userId });
+    return res.json({ id: hubId, name, description });
+  } catch (e) {
+    console.error('[Hubs] Create error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/hubs', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const hubs = await getUserHubs(userId);
+    return res.json({ hubs });
+  } catch (e) {
+    console.error('[Hubs] List error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/hubs/:hubId', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { hubId } = req.params;
+  try {
+    const hub = await getHub(hubId);
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+    const members = await getHubMembers(hubId);
+    const groups = await getHubGroups(hubId);
+    return res.json({ hub, members, groups });
+  } catch (e) {
+    console.error('[Hubs] Get error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/hubs/:hubId/join', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { hubId } = req.params;
+  try {
+    await joinHub(hubId, userId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Hubs] Join error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/hubs/:hubId/leave', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { hubId } = req.params;
+  try {
+    await leaveHub(hubId, userId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Hubs] Leave error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/hubs/:hubId', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  const { hubId } = req.params;
+  try {
+    const hub = await getHub(hubId);
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+    if (hub.created_by !== userId) return res.status(403).json({ error: 'Only owner can delete hub' });
+    await deleteHub(hubId);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Hubs] Delete error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── Get members missing key envelopes for a channel ─────────────────────────
 app.get('/api/channels/:channelId/missing-keys', async (req, res) => {
   const userId = await requireAuth(req, res);
@@ -2370,6 +2535,20 @@ socket.emit('channels:update', channels);
     }
   });
 
+  // Heartbeat pong — client responds to server ping:heartbeat
+  socket.on('pong:heartbeat', () => {
+    const userId = socketToUser.get(socket.id);
+    if (userId) {
+      const userConns = activeUsers.get(userId);
+      if (userConns) {
+        const conn = userConns.get(socket.id);
+        if (conn) {
+          conn.lastSeen = Date.now();
+        }
+      }
+    }
+  });
+
   socket.on('disconnect', () => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
@@ -2484,6 +2663,11 @@ async function boot() {
         console.log(`[Registry] Cleanup: removed ${removedConnections} stale connection(s), ${removedUsers} fully offline user(s)`);
       }
     }, 60 * 1000);
+
+    // Heartbeat: ping all connected clients every 30 seconds
+    setInterval(() => {
+      io.emit('ping:heartbeat');
+    }, 30000);
   });
 }
 
