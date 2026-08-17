@@ -291,7 +291,7 @@ function MediaItem({ msg, activeTab, onImageClick, onJumpToMessage }: {
   if (isImage && activeTab === 'images') {
     return (
       <div className="aspect-square rounded-lg overflow-hidden relative group cursor-default" style={{ border: '1px solid var(--border-color)' }}>
-        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(meta.thumbnailDataUrl || '', meta.fileName)}>
+        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(msg.id, meta.fileName)}>
           {meta.thumbnailDataUrl ? (
             <img src={meta.thumbnailDataUrl} alt={meta.fileName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
           ) : (
@@ -309,7 +309,7 @@ function MediaItem({ msg, activeTab, onImageClick, onJumpToMessage }: {
   if (isVideo && activeTab === 'video') {
     return (
       <div className="aspect-video rounded-lg overflow-hidden relative group cursor-default" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-input)' }}>
-        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(meta.thumbnailDataUrl || '', meta.fileName)}>
+        <div className="w-full h-full cursor-pointer" onClick={() => onImageClick?.(msg.id, meta.fileName)}>
           {meta.thumbnailDataUrl ? <img src={meta.thumbnailDataUrl} alt={meta.fileName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6" style={{ color: 'var(--text-muted)' }} /></div>}
           <div className="absolute inset-0 flex items-center justify-center"><div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}><div className="w-0 h-0 border-l-[8px] border-l-white border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent ml-0.5" /></div></div>
         </div>

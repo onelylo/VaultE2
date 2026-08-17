@@ -127,7 +127,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [text, selectedChannel?.id, selectedUser?.userId]);
 
   const [activeReply, setActiveReply] = useState<{ msgId: string; senderName: string; text: string } | null>(null);
-  const [activeLightbox, setActiveLightbox] = useState<{ url: string; name?: string; allImages?: string[]; currentIndex?: number } | null>(null);
+  const [activeLightbox, setActiveLightbox] = useState<{ messageIds: string[]; currentIndex: number } | null>(null);
   const [forwardMsg, setForwardMsg] = useState<LocalMessage | null>(null);
   const [inspectedUser, setInspectedUser] = useState<User | null>(null);
   const [pendingDeleteForMeId, setPendingDeleteForMeId] = useState<string | null>(null);
@@ -275,23 +275,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return groups;
   }, [visibleMessages.map(m => m.id).join(',')]);
 
-  const openLightbox = useCallback((url: string, name?: string, groupImages?: string[], messageId?: string) => {
-    const images = groupImages || allImageUrls;
-    let idx = 0;
-    if (messageId && groupImages) {
-      // Find position by message ID within the group
-      const groupMsgs = groupedMessages.find(g => g.messages.some(m => m.id === messageId));
-      if (groupMsgs) {
-        const imageMsgs = groupMsgs.messages.filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'));
-        idx = imageMsgs.findIndex(m => m.id === messageId);
-        if (idx < 0) idx = 0;
-      }
-    } else {
-      idx = images.indexOf(url);
-      if (idx < 0) idx = 0;
-    }
-    setActiveLightbox({ url, name, allImages: images, currentIndex: idx });
-  }, [allImageUrls, groupedMessages]);
+  const openLightbox = useCallback((messageId: string, groupMessageIds?: string[]) => {
+    const messageIds = groupMessageIds || [messageId];
+    const idx = messageIds.indexOf(messageId);
+    if (idx < 0) return;
+    setActiveLightbox({ messageIds, currentIndex: idx });
+  }, []);
 
   // Reactions: Map<messageId, {userId: string, emoji: string}[]>
   type ReactionEntry = { userId: string; emoji: string };
@@ -1075,11 +1064,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             if (group.isGroup) {
               const firstMsg = group.messages[0];
               const isSelf = firstMsg.senderId === currentUserId;
-              const groupImages = group.messages
+              const groupMessageIds = group.messages
                 .filter(m => m.attachmentMeta?.mimeType?.startsWith('image/'))
-                .map(m => m.attachmentMeta?.thumbnailDataUrl || '')
-                .filter(Boolean);
-              const handleGroupImageClick = (url: string, name?: string, messageId?: string) => openLightbox(url, name, groupImages, messageId);
+                .map(m => m.id);
+              const handleGroupImageClick = (messageId: string) => openLightbox(messageId, groupMessageIds);
               return (
                 <div key={`group-${firstMsg.id}`} className={`relative flex ${isSelf ? 'ml-auto flex-row-reverse' : 'mr-auto flex-row'} max-w-lg`}>
                   <div className="rounded-2xl p-2 shadow-sm" style={{ 
@@ -1116,7 +1104,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                           {group.messages.length > 4 && (
                             <div 
                               className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center cursor-pointer hover:bg-black/50 transition-colors"
-                              onClick={() => openLightbox(groupImages[3] || '', 'Group', groupImages)}
+                              onClick={() => openLightbox(group.messages[3].id, groupMessageIds)}
                             >
                               <span className="text-white font-bold text-sm">+{group.messages.length - 4}</span>
                             </div>
@@ -1155,7 +1143,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 setPendingDeleteForMeId={setPendingDeleteForMeId}
                 setPendingDeleteEveryoneId={setPendingDeleteEveryoneId}
                 resolveKey={resolveMessageKey}
-                onImageClick={(url, name) => openLightbox(url, name)}
+onImageClick={(messageId: string) => openLightbox(messageId)}
                 reactions={reactionsMap.get(msg.id) || []}
                 onAddReaction={handleAddReaction}
                 onRemoveReaction={handleRemoveReaction}
@@ -1361,16 +1349,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
 <ImageLightboxModal
-          imageUrl={activeLightbox?.url ?? ''}
+          messageIds={activeLightbox?.messageIds || []}
+          currentIndex={activeLightbox?.currentIndex || 0}
           isOpen={!!activeLightbox}
           onClose={() => setActiveLightbox(null)}
-          fileName={activeLightbox?.name ?? 'Media Preview'}
-          allImages={activeLightbox?.allImages || []}
-          currentIndex={activeLightbox?.currentIndex || 0}
-          onNavigate={(idx) => {
-            const imgs = activeLightbox?.allImages || [];
-            if (imgs[idx]) setActiveLightbox({ url: imgs[idx], allImages: imgs, currentIndex: idx });
-          }}
+          onNavigate={(idx) => setActiveLightbox(prev => prev ? { ...prev, currentIndex: idx } : null)}
+          currentUserKeys={currentUserKeys}
+          privateKeyObject={privateKeyObject}
+          allUsers={allUsers}
+          selectedChannel={selectedChannel}
+          selectedPeer={selectedUser}
         />
 
       {inspectedUser && (
@@ -1378,7 +1366,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={inspectedUser}
           currentUserId={currentUserId}
           onClose={() => setInspectedUser(null)}
-          onImageClick={(url, name) => openLightbox(url, name)}
+          onImageClick={(messageId: string) => openLightbox(messageId)}
           isBlocked={blockedUsers.has(inspectedUser.userId)}
           onBlock={async () => {
             await blockUser(inspectedUser.userId);
@@ -1400,7 +1388,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           user={selectedUser}
           currentUserId={currentUserId}
           onClose={() => setShowProfileModal(false)}
-          onImageClick={(url, name) => openLightbox(url, name)}
+          onImageClick={(messageId: string) => openLightbox(messageId)}
           isBlocked={blockedUsers.has(selectedUser.userId)}
           onBlock={async () => {
             await blockUser(selectedUser.userId);
