@@ -7,6 +7,7 @@ import { useMessages } from './hooks/useMessages';
 import { usePresence } from './hooks/usePresence';
 import { useAdmin } from './hooks/useAdmin';
 import { useUIState } from './hooks/useUIState';
+import { useFriends } from './hooks/useFriends';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { ProfileDrawer } from './components/ProfileDrawer';
@@ -14,6 +15,7 @@ import { AuthModal } from './components/AuthModal';
 import { OfflineBanner } from './components/OfflineBanner';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { AddFriendModal } from './components/modals/AddFriendModal';
 import { ChannelSettingsModal } from './components/channels/ChannelSettingsModal';
 import { MessageSearch } from './components/MessageSearch';
 import { socket, connectSocket } from './lib/socket';
@@ -198,6 +200,10 @@ export const App: React.FC = () => {
     showSearch, openSearch, closeSearch,
     showFingerprintModal, setShowFingerprintModal,
   } = uiState;
+
+  const friendsHook = useFriends();
+  const { friends, friendRequests, fetchFriends, addFriend, acceptFriend, rejectFriend, removeFriend } = friendsHook;
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
 
   useEffect(() => {
     if (currentUserKeys && !socketObj.connected) {
@@ -785,6 +791,11 @@ export const App: React.FC = () => {
             unreadChannels={unreadChannels}
             recentDMs={recentDMs}
             latestDMMessages={latestDMMessages}
+            friends={friends}
+            friendRequests={friendRequests}
+            onAcceptFriend={acceptFriend}
+            onRejectFriend={rejectFriend}
+            onAddFriend={() => setShowAddFriendModal(true)}
             onCloseDM={(userId) => {
               if (selectedUser?.userId === userId) {
                 setSelectedUser(null);
@@ -919,6 +930,13 @@ export const App: React.FC = () => {
         isDangerous={true}
         onConfirm={handleLogoutConfirm}
         onClose={() => setIsLogoutOpen(false)}
+      />
+
+      {/* Add Friend Modal */}
+      <AddFriendModal
+        isOpen={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        onAddFriend={addFriend}
       />
 
       {/* Channel Settings Modal */}

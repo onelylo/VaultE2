@@ -29,6 +29,15 @@ import { getFingerprint } from '../lib/crypto';
 import { db, getActiveDMPartners, getMutedConversations, muteConversation, unmuteConversation, getBlockedUsers, getHiddenConversations, hideConversation, unhideConversation } from '../lib/db';
 import { CreateChannelModal } from './channels/CreateChannelModal';
 
+interface Friend {
+  userId: string;
+  username: string;
+  displayName?: string;
+  avatarUrl?: string;
+  status: 'pending' | 'accepted' | 'blocked';
+  direction?: 'incoming' | 'outgoing';
+}
+
 interface SidebarProps {
   users: User[];
   channels: Channel[];
@@ -57,6 +66,11 @@ interface SidebarProps {
   latestDMMessages?: Record<string, string>;
   onCloseDM?: (userId: string) => void;
   hiddenConversations?: Set<string>;
+  friends?: Friend[];
+  friendRequests?: Friend[];
+  onAcceptFriend?: (friendId: string) => void;
+  onRejectFriend?: (friendId: string) => void;
+  onAddFriend?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -86,6 +100,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unreadChannels = {},
   recentDMs = [],
   latestDMMessages = {},
+  friends = [],
+  friendRequests = [],
+  onAcceptFriend,
+  onRejectFriend,
+  onAddFriend,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
@@ -107,17 +126,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const onlineCount = otherUsers.filter(u => u.isOnline).length;
 
   // Filter users based on mode
+  const friendIds = new Set(friends.filter(f => f.status === 'accepted').map(f => f.userId));
   const filteredUsers = (searchMode
     ? otherUsers.filter(u =>
         u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.displayName || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     : (() => {
-        // Merge recentDMs (instant) with activeDMPartners (Dexie-backed)
+        // Merge recentDMs (instant) with activeDMPartners (Dexie-backed), filtered to friends only
         const recentIds = new Set(recentDMs.map(u => u.userId));
         const dexieMatches = otherUsers.filter(u => activeDMPartners.includes(u.userId) && !recentIds.has(u.userId));
         // recentDMs first (already ordered by most recent), then Dexie matches
-        return [...recentDMs.filter(u => otherUsers.some(o => o.userId === u.userId)), ...dexieMatches];
+        const allDMs = [...recentDMs.filter(u => otherUsers.some(o => o.userId === u.userId)), ...dexieMatches];
+        // If we have friends, filter to only show friends; otherwise show all (backwards compat)
+        if (friendIds.size > 0) {
+          return allDMs.filter(u => friendIds.has(u.userId));
+        }
+        return allDMs;
       })()
   );
   const visibleDMUsers = filteredUsers.filter(u => !hiddenSet.has(u.userId));
@@ -394,6 +419,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             ) : (
               <div className="flex items-center gap-1">
+                {onAddFriend && (
+                  <button
+                    onClick={onAddFriend}
+                    className="px-2 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 transition-smooth"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, #34d399 12%, transparent)',
+                      border: '1px solid color-mix(in srgb, #34d399 30%, transparent)',
+                      color: '#34d399',
+                    }}
+                    title="Add Friend"
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    <span>ADD</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setSearchMode(!searchMode);
@@ -656,27 +696,100 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )
         ) : (
           /* DM Roster */
-          filteredUsers.length === 0 ? (
-            !isCollapsed && (
-              <div className="p-6 text-center text-xs space-y-2 rounded-lg m-2" style={{ border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
-                {searchMode ? (
-                  <>
-                    <UserPlus className="w-6 h-6 mx-auto opacity-40" />
-                    <p className="font-bold">NO MATCHES FOUND</p>
-                    <p className="text-[10px] opacity-60">Try a different search term</p>
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle className="w-6 h-6 mx-auto opacity-40" />
-                    <p className="font-bold">NO CONVERSATIONS YET</p>
-                    <p className="text-[10px] opacity-60">Search for someone to start a DM</p>
-                  </>
-                )}
+          <>
+            {/* Friend Requests Section */}
+            {!searchMode && friendRequests.length > 0 && !isCollapsed && (
+              <div className="mb-2">
+                <div className="px-2 py-1.5 text-[9px] font-bold tracking-widest flex items-center space-x-1.5" style={{ color: '#f59e0b' }}>
+                  <UserPlus className="w-3 h-3" />
+                  <span>FRIEND REQUESTS ({friendRequests.length})</span>
+                </div>
+                {friendRequests.map(req => (
+                  <div
+                    key={`req-${req.userId}`}
+                    className="w-full px-2 py-2 rounded-lg flex items-center justify-between group transition-smooth"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, #f59e0b 5%, transparent)',
+                      border: '1px solid color-mix(in srgb, #f59e0b 20%, transparent)',
+                    }}
+                  >
+                    <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                      <div className="relative flex-shrink-0">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px]"
+                          style={{
+                            backgroundColor: 'var(--bg-input)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--accent-primary)',
+                          }}
+                        >
+                          {(req.displayName || req.username).substring(0, 2).toUpperCase()}
+                        </div>
+                        {req.avatarUrl && (
+                          <img
+                            src={req.avatarUrl}
+                            alt={req.username}
+                            className="w-8 h-8 rounded-lg absolute inset-0 object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-xs truncate block" style={{ color: 'var(--text-main)' }}>
+                          {req.displayName || req.username}
+                        </span>
+                        <span className="text-[9px]" style={{ color: '#f59e0b' }}>
+                          {req.direction === 'incoming' ? 'WANTS TO BE FRIENDS' : 'PENDING'}
+                        </span>
+                      </div>
+                    </div>
+                    {req.direction === 'incoming' && onAcceptFriend && onRejectFriend && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onAcceptFriend(req.userId); }}
+                          className="p-1.5 rounded-md transition-smooth"
+                          style={{ backgroundColor: 'color-mix(in srgb, #34d399 15%, transparent)', color: '#34d399' }}
+                          title="Accept"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRejectFriend(req.userId); }}
+                          className="p-1.5 rounded-md transition-smooth"
+                          style={{ backgroundColor: 'color-mix(in srgb, #ef4444 15%, transparent)', color: '#ef4444' }}
+                          title="Reject"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            )
-          ) : (
-            <>
-            {visibleDMUsers.map(user => {
+            )}
+
+            {/* Friends / DM List */}
+            {filteredUsers.length === 0 ? (
+              !isCollapsed && (
+                <div className="p-6 text-center text-xs space-y-2 rounded-lg m-2" style={{ border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
+                  {searchMode ? (
+                    <>
+                      <UserPlus className="w-6 h-6 mx-auto opacity-40" />
+                      <p className="font-bold">NO MATCHES FOUND</p>
+                      <p className="text-[10px] opacity-60">Try a different search term</p>
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="w-6 h-6 mx-auto opacity-40" />
+                      <p className="font-bold">NO CONVERSATIONS YET</p>
+                      <p className="text-[10px] opacity-60">Add friends to start chatting</p>
+                    </>
+                  )}
+                </div>
+              )
+            ) : (
+              <>
+              {visibleDMUsers.map(user => {
               const isSelected = selectedUser?.userId === user.userId;
               const fp = fingerprints[user.userId] || '...';
               // Always look up live presence from the users prop, not from recentDMs which may be stale
@@ -841,8 +954,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 })}
               </div>
             )}
-            </>
-          )
+              </>
+            )}
+          </>
         )}
       </div>
 
