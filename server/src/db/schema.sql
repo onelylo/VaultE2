@@ -219,9 +219,7 @@ CREATE TABLE IF NOT EXISTS group_visibility (
 
 CREATE INDEX IF NOT EXISTS idx_group_visibility_user ON group_visibility (user_id);
 
--- User profile extensions
-ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
-ALTER TABLE users RENAME COLUMN full_name TO display_name;
+-- User profile extensions (display_name already exists from initial schema)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
 
