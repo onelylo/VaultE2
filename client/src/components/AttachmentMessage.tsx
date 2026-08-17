@@ -128,19 +128,19 @@ export const AttachmentMessage: React.FC<AttachmentMessageProps> = ({ message, i
   if (isImage) {
     return (
       <div className="relative group/att w-full h-full">
-        {meta.thumbnailDataUrl ? (
+{meta.thumbnailDataUrl ? (
           <img
             src={meta.thumbnailDataUrl}
             alt={meta.fileName}
             onClick={decryptAndOpen}
             title="Click to decrypt & view full image"
-            className="w-full h-full max-w-[300px] max-h-[300px] rounded-lg object-cover cursor-zoom-in"
+            className="w-full h-full max-w-[225px] max-h-[225px] rounded-lg object-cover cursor-zoom-in"
             style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}
           />
-) : (
+        ) : (
           <button
             onClick={decryptAndOpen}
-            className="max-w-[300px] rounded-lg p-6 flex flex-col items-center space-y-2 transition-smooth"
+            className="max-w-[225px] rounded-lg p-6 flex flex-col items-center space-y-2 transition-smooth"
             style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-muted)' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}

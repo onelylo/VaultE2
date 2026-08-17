@@ -1216,15 +1216,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   <img
                     src={previewDataUrl}
                     alt="thumbnail"
-                    className="w-10 h-10 object-cover rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]"
+                    className="w-14 h-14 object-cover rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]"
                   />
                 ) : file.type.startsWith('image/') ? (
-                  <div className="w-10 h-10 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-[var(--accent-primary)]" />
+                  <div className="w-14 h-14 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-[var(--accent-primary)]" />
                   </div>
                 ) : (
-                  <div className="w-10 h-10 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-[var(--accent-primary)]" />
+                  <div className="w-14 h-14 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-[var(--accent-primary)]" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
