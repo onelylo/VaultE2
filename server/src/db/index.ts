@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import EmbeddedPostgres from 'embedded-postgres';
 import pg from 'pg';
+import logger from '../logger.js';
 
 const { Pool } = pg;
 
@@ -113,7 +114,7 @@ export async function initDatabase(): Promise<pg.Pool> {
 
   const isInitialised = fs.existsSync(path.join(DB_DIR, 'PG_VERSION'));
   if (!isInitialised) {
-    console.log('[DB] Initialising PostgreSQL data directory…');
+    logger.info('[DB] Initialising PostgreSQL data directory…');
     await embedded.initialise();
   }
 
@@ -122,7 +123,7 @@ export async function initDatabase(): Promise<pg.Pool> {
   } catch (err) {
     // A leftover Postgres process may already hold the port from a crashed run.
     const reason = err && typeof err === 'object' ? (err as Error).message || String(err) : String(err);
-    console.warn('[DB] Embedded Postgres start failed (likely already running):', reason);
+    logger.warn({ reason }, '[DB] Embedded Postgres start failed (likely already running)');
   }
 
   pool = new Pool({
@@ -145,7 +146,7 @@ async function runSchema(): Promise<void> {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   await getPool().query(schema);
-  console.log('[DB] Schema verified (users, channels, channel_keys, channel_members, messages, attachments)');
+  logger.info('[DB] Schema verified (users, channels, channel_keys, channel_members, messages, attachments)');
 }
 
 export function getUploadsDir(): string {
@@ -168,7 +169,7 @@ async function seedAdminAccount(): Promise<void> {
 
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
-    console.warn('[DB] ADMIN_PASSWORD not set — skipping admin seed');
+    logger.warn('[DB] ADMIN_PASSWORD not set — skipping admin seed');
     return;
   }
 
@@ -180,7 +181,7 @@ async function seedAdminAccount(): Promise<void> {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [userId, username, 'Onelylo', 'admin@vaultchat.local', 'ADMIN', passwordHash, '', 'ACTIVE', createdAt]
   );
-  console.log(`[DB] Seeded admin account: ${username} (${userId})`);
+  logger.info(`[DB] Seeded admin account: ${username} (${userId})`);
 }
 
 function getPool(): pg.Pool {
@@ -604,10 +605,10 @@ export async function getDirectMessages(userA: string, userB: string, limit = 50
   return res.rows.map(mapMessageRow);
 }
 
-export async function getChannelMessages(channelId: string): Promise<DbMessage[]> {
+export async function getChannelMessages(channelId: string, limit = 500, offset = 0): Promise<DbMessage[]> {
   const res = await getPool().query(
-    `SELECT ${MSG_COLS} FROM messages WHERE channel_id = $1 ORDER BY created_at ASC`,
-    [channelId]
+    `SELECT ${MSG_COLS} FROM messages WHERE channel_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3`,
+    [channelId, limit, offset]
   );
   return res.rows.map(mapMessageRow);
 }

@@ -11,6 +11,7 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import cookieParser from 'cookie-parser';
+import logger from './logger.js';
 import {
   initDatabase,
   getUploadsDir,
@@ -114,7 +115,7 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
 // ── Security Configuration ────────────────────────────────────────────────────
 const JWT_SECRET: string = process.env.JWT_SECRET!;
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
-  console.error('[FATAL] JWT_SECRET environment variable is required (min 32 chars).');
+  logger.fatal('JWT_SECRET environment variable is required (min 32 chars).');
   process.exit(1);
 }
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
@@ -489,7 +490,7 @@ app.get('/api/auth/me', async (req, res) => {
       avatar: pUser.avatarUrl
     });
   } catch (e) {
-    console.error('[Auth] /me error:', e);
+    logger.error({ err: e }, '[Auth] /me error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -531,7 +532,7 @@ const handleProfileUpdate = async (req: any, res: any) => {
     io.emit('user:profile-update', { userId, displayName: user.displayName, username: user.username, avatarUrl: user.avatarUrl, status: user.status, statusMessage: user.statusMessage });
     return res.json({ user: publicUser(user, true) });
   } catch (e) {
-    console.error('[Profile] Update error:', e);
+    logger.error({ err: e }, '[Profile] Update error');
     return res.status(500).json({ error: 'Server error' });
   }
 };
@@ -559,7 +560,7 @@ app.post('/api/users/me/avatar', async (req, res) => {
     io.emit('user:profile-update', { userId, avatarUrl: avatarData });
     return res.json({ avatarUrl: avatarData });
   } catch (e) {
-    console.error('[Avatar] Upload error:', e);
+    logger.error({ err: e }, '[Avatar] Upload error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -659,7 +660,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     };
     await insertUser(newUser);
     const token = signJwt({ userId, username: newUser.username, role: userRole });
-    console.log(`[Auth] Registered: ${sanitizeLog(newUser.username)} (${userId}) [${userRole}]`);
+    logger.info({ username: newUser.username, userId, role: userRole }, '[Auth] Registered');
     io.emit('user:registered', { user: publicUser(newUser) });
     res.cookie('token', token, {
       httpOnly: true,
@@ -672,7 +673,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       user: { ...publicUser(newUser, true), encryptedPrivateKey, keySalt }
     });
   } catch (e) {
-    console.error('[Auth] Register error:', e);
+    logger.error({ err: e }, '[Auth] Register error');
     return res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -706,12 +707,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     // Update vault keys if key rotation requested or missing
     if (forceKeyRotation && publicKey && encryptedPrivateKey && keySalt) {
       await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey, keySalt, signingPublicKey);
-      console.log(`[Auth] Key rotation applied for ${username}`);
+      logger.info({ username }, '[Auth] Key rotation applied');
     } else if (publicKey && !user.publicKey) {
       await updateUserVaultKeys(userId, publicKey, encryptedPrivateKey || '', keySalt || '', signingPublicKey);
     }
     const token = signJwt({ userId, username: user.username, role: user.role });
-    console.log(`[Auth] Login: ${sanitizeLog(user.username)} (${userId})`);
+    logger.info({ username: user.username, userId }, '[Auth] Login');
     res.cookie('token', token, {
       httpOnly: true,
       secure: IS_PRODUCTION,
@@ -727,7 +728,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       }
     });
   } catch (e) {
-    console.error('[Auth] Login error:', e);
+    logger.error({ err: e }, '[Auth] Login error');
     return res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -785,7 +786,7 @@ app.post('/api/auth/rotate-key', async (req, res) => {
     }
 
     await rotateUserKeys(userId, publicKey, encryptedPrivateKey, keySalt, signature, oldPublicKey, signingPublicKey);
-    console.log(`[KeyRotation] ${user.username} (${userId}) rotated key → version ${(user.keyVersion ?? 1) + 1}`);
+    logger.info({ username: user.username, userId, keyVersion: (user.keyVersion ?? 1) + 1 }, '[KeyRotation] Key rotated');
     io.emit('user:key_rotated', {
       userId,
       publicKey,
@@ -796,7 +797,7 @@ app.post('/api/auth/rotate-key', async (req, res) => {
     });
     return res.json({ success: true, keyVersion: (user.keyVersion ?? 1) + 1 });
   } catch (e) {
-    console.error('[KeyRotation] Error:', e);
+    logger.error({ err: e }, '[KeyRotation] Error');
     return res.status(500).json({ error: 'Key rotation failed' });
   }
 });
@@ -821,7 +822,7 @@ app.get('/api/users/:id/keys', async (req, res) => {
       createdAt: user.createdAt,
     });
   } catch (e) {
-    console.error('[Keys] Fetch error:', e);
+    logger.error({ err: e }, '[Keys] Fetch error');
     return res.status(500).json({ error: 'Key fetch failed' });
   }
 });
@@ -834,7 +835,7 @@ app.get('/api/users', async (req, res) => {
   try {
     return res.json({ users: await buildUserDirectory(userId) });
   } catch (e) {
-    console.error('[Directory] Error:', e);
+    logger.error({ err: e }, '[Directory] Error');
     return res.status(500).json({ error: 'Directory fetch failed' });
   }
 });
@@ -853,7 +854,7 @@ app.get('/api/admin/users', async (req, res) => {
       })),
     });
   } catch (e) {
-    console.error('[Admin] List error:', e);
+    logger.error({ err: e }, '[Admin] List error');
     return res.status(500).json({ error: 'Admin user list failed' });
   }
 });
@@ -1006,11 +1007,11 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     }
     await deleteUser(target.userId);
     await logAudit(adminId, 'user_deleted', 'user', target.userId, target.username);
-    console.log(`[Admin] ${adminId} deleted user ${target.username} (${target.userId})`);
+    logger.info({ adminId, targetUsername: target.username, targetUserId: target.userId }, '[Admin] User deleted');
     io.emit('user:removed', { userId: target.userId });
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Admin] Delete error:', e);
+    logger.error({ err: e }, '[Admin] Delete error');
     return res.status(500).json({ error: 'User deletion failed' });
   }
 });
@@ -1035,7 +1036,7 @@ app.get('/api/admin/stats', async (req, res) => {
       activeSockets: activeUsers.size,
     });
   } catch (e) {
-    console.error('[Admin] Stats error:', e);
+    logger.error({ err: e }, '[Admin] Stats error');
     return res.status(500).json({ error: 'Admin stats failed' });
   }
 });
@@ -1085,7 +1086,7 @@ app.get('/api/admin/health', async (req, res) => {
       },
     });
   } catch (e) {
-    console.error('[Admin] Health error:', e);
+    logger.error({ err: e }, '[Admin] Health error');
     return res.status(500).json({ error: 'Admin health failed' });
   }
 });
@@ -1109,11 +1110,13 @@ app.get('/api/messages/direct/:recipientId', async (req, res) => {
   const senderId = await requireAuth(req, res);
   if (!senderId) return;
   try {
-    const msgs = await getDirectMessages(senderId, req.params.recipientId);
+    const limit = Math.min(Number(req.query.limit) || 500, 500);
+    const offset = Number(req.query.offset) || 0;
+    const msgs = await getDirectMessages(senderId, req.params.recipientId, limit, offset);
     await markIncomingDelivered(senderId);
     return res.json({ messages: await enrichMessagesWithAttachments(msgs) });
   } catch (e) {
-    console.error('[History] DM fetch error:', e);
+    logger.error({ err: e }, '[History] DM fetch error');
     return res.status(500).json({ error: 'History fetch failed' });
   }
 });
@@ -1126,11 +1129,27 @@ app.get('/api/messages', async (req, res) => {
   const userId = await requireAuth(req, res);
   if (!userId) return;
   try {
-    const msgs = await getMessagesForUser(userId);
+    const limit = Math.min(Number(req.query.limit) || 500, 500);
+    const offset = Number(req.query.offset) || 0;
+    const msgs = await getMessagesForUser(userId, limit, offset);
     await markIncomingDelivered(userId);
     return res.json({ messages: await enrichMessagesWithAttachments(msgs) });
   } catch (e) {
-    console.error('[History] Global fetch error:', e);
+    logger.error({ err: e }, '[History] Global fetch error');
+    return res.status(500).json({ error: 'History fetch failed' });
+  }
+});
+
+app.get('/api/messages/channel/:channelId', async (req, res) => {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const limit = Math.min(Number(req.query.limit) || 500, 500);
+    const offset = Number(req.query.offset) || 0;
+    const msgs = await getChannelMessages(req.params.channelId, limit, offset);
+    return res.json({ messages: await enrichMessagesWithAttachments(msgs) });
+  } catch (e) {
+    logger.error({ err: e }, '[History] Channel fetch error');
     return res.status(500).json({ error: 'History fetch failed' });
   }
 });
@@ -1147,7 +1166,7 @@ app.post('/api/reactions/batch', async (req, res) => {
     const reactions = await getReactionsForMessages(messageIds);
     return res.json({ reactions });
   } catch (e) {
-    console.error('[Reactions] Batch fetch error:', e);
+    logger.error({ err: e }, '[Reactions] Batch fetch error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1226,7 +1245,7 @@ app.post('/api/starred', async (req, res) => {
     await starMessage(userId, messageId);
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[Starred] Error:', e);
+    logger.error({ err: e }, '[Starred] Error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1238,7 +1257,7 @@ app.delete('/api/starred/:messageId', async (req, res) => {
     await unstarMessage(userId, req.params.messageId);
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[Unstarred] Error:', e);
+    logger.error({ err: e }, '[Unstarred] Error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1250,7 +1269,7 @@ app.get('/api/starred', async (req, res) => {
     const starred = await getStarredMessages(userId);
     return res.json({ starred });
   } catch (e) {
-    console.error('[Starred] Fetch error:', e);
+    logger.error({ err: e }, '[Starred] Fetch error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1266,7 +1285,7 @@ app.post('/api/starred/batch', async (req, res) => {
     const status = await getStarredStatus(userId, messageIds);
     return res.json({ status });
   } catch (e) {
-    console.error('[Starred] Batch error:', e);
+    logger.error({ err: e }, '[Starred] Batch error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1323,7 +1342,7 @@ app.get('/api/block/status/:userId', async (req, res) => {
     const blockedByTarget = await isUserBlockedBy(targetId, userId);
     return res.json({ blockedByThem, blockedByTarget });
   } catch (e) {
-    console.error('[Block] Status error:', e);
+    logger.error({ err: e }, '[Block] Status error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1336,7 +1355,7 @@ app.post('/api/messages/cleanup', async (req, res) => {
     const deleted = await deleteUndecryptableMessages();
     return res.json({ deleted });
   } catch (e) {
-    console.error('[Cleanup] Error:', e);
+    logger.error({ err: e }, '[Cleanup] Error');
     return res.status(500).json({ error: 'Cleanup failed' });
   }
 });
@@ -1355,7 +1374,7 @@ app.post('/api/friends/add', async (req, res) => {
     await addFriend(userId, targetUser.userId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Friends] Add error:', e);
+    logger.error({ err: e }, '[Friends] Add error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1369,7 +1388,7 @@ app.post('/api/friends/accept', async (req, res) => {
     await acceptFriend(userId, friendId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Friends] Accept error:', e);
+    logger.error({ err: e }, '[Friends] Accept error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1383,7 +1402,7 @@ app.post('/api/friends/remove', async (req, res) => {
     await removeFriend(userId, friendId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Friends] Remove error:', e);
+    logger.error({ err: e }, '[Friends] Remove error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1396,7 +1415,7 @@ app.get('/api/friends', async (req, res) => {
     const requests = await getFriendRequests(userId);
     return res.json({ friends, requests });
   } catch (e) {
-    console.error('[Friends] List error:', e);
+    logger.error({ err: e }, '[Friends] List error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1413,7 +1432,7 @@ app.post('/api/hubs', async (req, res) => {
     await createHub({ id: hubId, name, description, iconUrl, bannerUrl, createdBy: userId });
     return res.json({ id: hubId, name, description });
   } catch (e) {
-    console.error('[Hubs] Create error:', e);
+    logger.error({ err: e }, '[Hubs] Create error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1425,7 +1444,7 @@ app.get('/api/hubs', async (req, res) => {
     const hubs = await getUserHubs(userId);
     return res.json({ hubs });
   } catch (e) {
-    console.error('[Hubs] List error:', e);
+    logger.error({ err: e }, '[Hubs] List error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1441,7 +1460,7 @@ app.get('/api/hubs/:hubId', async (req, res) => {
     const groups = await getHubGroups(hubId);
     return res.json({ hub, members, groups });
   } catch (e) {
-    console.error('[Hubs] Get error:', e);
+    logger.error({ err: e }, '[Hubs] Get error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1454,7 +1473,7 @@ app.post('/api/hubs/:hubId/join', async (req, res) => {
     await joinHub(hubId, userId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Hubs] Join error:', e);
+    logger.error({ err: e }, '[Hubs] Join error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1467,7 +1486,7 @@ app.post('/api/hubs/:hubId/leave', async (req, res) => {
     await leaveHub(hubId, userId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Hubs] Leave error:', e);
+    logger.error({ err: e }, '[Hubs] Leave error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1483,7 +1502,7 @@ app.delete('/api/hubs/:hubId', async (req, res) => {
     await deleteHub(hubId);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Hubs] Delete error:', e);
+    logger.error({ err: e }, '[Hubs] Delete error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1497,7 +1516,7 @@ app.get('/api/channels/:channelId/missing-keys', async (req, res) => {
     const members = await getMembersWithoutKeyEnvelope(channelId);
     return res.json({ members });
   } catch (e) {
-    console.error('[ChannelKeys] Missing keys error:', e);
+    logger.error({ err: e }, '[ChannelKeys] Missing keys error');
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1530,7 +1549,7 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
       : keys.filter((item: any) => item.userId && item.encryptedChannelKey && item.iv && memberSet.has(item.userId));
     const droppedKeys = keys.filter((item: any) => !item.userId || !item.encryptedChannelKey || !item.iv || (!isOpen && !memberSet.has(item.userId)));
     if (droppedKeys.length > 0) {
-      console.warn(`[ChannelKeys] Dropped ${droppedKeys.length} envelope(s) for non-members:`, droppedKeys.map((k: any) => k.userId));
+      logger.warn({ count: droppedKeys.length, userIds: droppedKeys.map((k: any) => k.userId) }, '[ChannelKeys] Dropped envelope(s) for non-members');
     }
     const validKeys = filteredKeys.map((item: any) => ({
         channelId,
@@ -1539,11 +1558,11 @@ app.post('/api/channels/:channelId/keys', async (req, res) => {
         iv: item.iv,
       }));
     await upsertChannelKeys(channelId, validKeys);
-    console.log(`[ChannelKeys] Stored ${validKeys.length} envelope(s) for channel ${channelId} (requested ${keys.length})`);
+    logger.info({ channelId, count: validKeys.length, requested: keys.length }, '[ChannelKeys] Stored envelopes');
 
     return res.json({ success: true, count: validKeys.length });
   } catch (e) {
-    console.error('[ChannelKeys] Store error:', e);
+    logger.error({ err: e }, '[ChannelKeys] Store error');
     return res.status(500).json({ error: 'Failed to store channel keys' });
   }
 });
@@ -1558,7 +1577,7 @@ app.get('/api/channels/:channelId/key', async (req, res) => {
     }
     return res.json({ key: keyEntry });
   } catch (e) {
-    console.error('[ChannelKeys] Fetch error:', e);
+    logger.error({ err: e }, '[ChannelKeys] Fetch error');
     return res.status(500).json({ error: 'Channel key fetch failed' });
   }
 });
@@ -1620,7 +1639,7 @@ app.patch('/api/channels/:channelId', async (req, res) => {
     
     return res.json({ channel: updated });
   } catch (e) {
-    console.error('[Channel] Update error:', e);
+    logger.error({ err: e }, '[Channel] Update error');
     return res.status(500).json({ error: 'Failed to update channel' });
   }
 });
@@ -1642,7 +1661,7 @@ app.delete('/api/channels/:channelId', async (req, res) => {
     await broadcastChannels();
     return res.json({ success: true });
   } catch (e) {
-    console.error('[Channel] Delete error:', e);
+    logger.error({ err: e }, '[Channel] Delete error');
     return res.status(500).json({ error: 'Failed to delete channel' });
   }
 });
@@ -1713,7 +1732,7 @@ app.post('/api/attachments/upload', upload.single('file'), async (req, res) => {
 
     return res.json({ attachmentId });
   } catch (e) {
-    console.error('[Attachment] Upload error:', e);
+    logger.error({ err: e }, '[Attachment] Upload error');
     return res.status(500).json({ error: 'Upload failed' });
   }
 });
@@ -1756,7 +1775,7 @@ app.get('/api/attachments/:id', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     return res.sendFile(abs);
   } catch (e) {
-    console.error('[Attachment] Download error:', e);
+    logger.error({ err: e }, '[Attachment] Download error');
     return res.status(500).json({ error: 'Download failed' });
   }
 });
@@ -1799,10 +1818,10 @@ setInterval(async () => {
       await fs.promises.unlink(absPath).catch(() => {});
     }
     if (count > 0) {
-      console.log(`[Cleanup] Removed ${count} orphaned attachment(s)`);
+      logger.info({ count }, '[Cleanup] Removed orphaned attachment(s)');
     }
   } catch (e) {
-    console.error('[Cleanup] Orphaned attachment cleanup error:', e);
+    logger.error({ err: e }, '[Cleanup] Orphaned attachment cleanup error');
   }
 }, 30 * 60 * 1000);
 
@@ -1815,7 +1834,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: 'Upload error' });
   }
-  console.error('[Express] Unhandled error:', err);
+  logger.error({ err }, '[Express] Unhandled error');
   return res.status(500).json({ error: IS_PRODUCTION ? 'Server error' : err?.message || 'Server error' });
 });
 
@@ -1859,7 +1878,7 @@ async function broadcastChannels(): Promise<void> {
         io.to(socketId).emit('channels:update', filtered);
       }
     } catch (e) {
-      console.error('[Channel] Broadcast error for user:', e);
+      logger.error({ err: e }, '[Channel] Broadcast error for user');
     }
   }
 }
@@ -1912,7 +1931,7 @@ io.on('connection', (socket) => {
     // Verify the claimed userId matches the authenticated socket user
     const authenticatedUserId = (socket as any).authenticatedUserId;
     if (data.userId !== authenticatedUserId) {
-      console.warn(`[Socket] userId mismatch: claimed ${data.userId}, authenticated ${authenticatedUserId}`);
+      logger.warn({ claimed: data.userId, authenticated: authenticatedUserId }, '[Socket] userId mismatch');
       return;
     }
     // Always use DB-resolved role, never trust client-supplied role (H7)
@@ -2029,7 +2048,7 @@ socket.emit('channels:update', channels);
       isAnnouncement: data.isAnnouncement || false,
       allowedRoles: data.allowedRoles || ['ADMIN', 'SUPERVISOR', 'MEMBER'],
     };
-    await insertChannel(newChannel).catch(e => console.error('[Channel] Persist error:', e));
+    await insertChannel(newChannel).catch(e => logger.error({ err: e }, '[Channel] Persist error'));
     // Add creator to channel_members so they can see the channel
     await addChannelMember(channelId, authenticatedUserId, authenticatedUserId).catch(() => {});
     // Add invited members and join their sockets to the channel room
@@ -2047,7 +2066,7 @@ socket.emit('channels:update', channels);
     // Auto-join creator to channel room
     socket.join(`channel:${channelId}`);
 
-    console.log(`[Channel] Created ${channelId} by ${authenticatedUserId} with ${invitedIds.length} invited member(s)`);
+    logger.info({ channelId, userId: authenticatedUserId, invitedCount: invitedIds.length }, '[Channel] Created');
     await broadcastChannels();
 
     // ACK to creator so client knows channel is ready for key distribution
@@ -2081,7 +2100,7 @@ socket.emit('channels:update', channels);
       const memberUsers = await Promise.all(members.map(mid => getUserById(mid).catch(() => undefined)));
       socket.emit('channel:members', { channelId, members: memberUsers.filter((u): u is DbUser => !!u).map(u => publicUser(u)) });
     } catch (e) {
-      console.error('[Channel] Join error:', e);
+      logger.error({ err: e }, '[Channel] Join error');
     }
   });
 
@@ -2121,7 +2140,7 @@ socket.emit('channels:update', channels);
       io.emit('channel:key_rotated', { channelId, removedMemberIds: [userId] });
       await broadcastChannels();
     } catch (e) {
-      console.error('[Channel] Leave error:', e);
+      logger.error({ err: e }, '[Channel] Leave error');
     }
   });
 
@@ -2132,7 +2151,7 @@ socket.emit('channels:update', channels);
     // Verify requester is a member
     const members: string[] = await getChannelMembers(data.channelId).catch(() => []);
     if (!members.includes(userId)) return;
-    console.log(`[ChannelKey] User ${userId} requested key for channel ${data.channelId}`);
+    logger.info({ userId, channelId: data.channelId }, '[ChannelKey] User requested key');
     // Notify all other members in the channel room so they can distribute
     socket.to(`channel:${data.channelId}`).emit('channel:key_request', { channelId: data.channelId, requesterId: userId });
   });
@@ -2179,7 +2198,7 @@ socket.emit('channels:update', channels);
     try {
       await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
     } catch (e) {
-      console.error('[DM] Persist error:', e);
+      logger.error({ err: e }, '[DM] Persist error');
     }
 
     // Link attachment separately so a failure doesn't block the message
@@ -2187,7 +2206,7 @@ socket.emit('channels:update', channels);
       try {
         await linkAttachmentToMessage(attachment.attachmentId, messageId);
       } catch (e) {
-        console.error('[DM] linkAttachmentToMessage failed:', e);
+        logger.error({ err: e }, '[DM] linkAttachmentToMessage failed');
       }
     }
 
@@ -2319,7 +2338,7 @@ socket.emit('channels:update', channels);
     try {
       await insertMessage(toDbMessage({ ...payload, senderId, id: messageId, status: 'sent', timestamp: payload.timestamp ?? Date.now() }));
     } catch (e) {
-      console.error('[Channel] Persist error:', e);
+      logger.error({ err: e }, '[Channel] Persist error');
     }
 
     // Link attachment separately so a failure doesn't block the message
@@ -2327,7 +2346,7 @@ socket.emit('channels:update', channels);
       try {
         await linkAttachmentToMessage(attachment.attachmentId, messageId);
       } catch (e) {
-        console.error('[Channel] linkAttachmentToMessage failed:', e);
+        logger.error({ err: e }, '[Channel] linkAttachmentToMessage failed');
       }
     }
 
@@ -2466,7 +2485,7 @@ socket.emit('channels:update', channels);
       io.emit('message:reactions', { messageId: data.messageId, reactions });
     } catch (e) {
       // Only log, don't broadcast stale data that would overwrite optimistic update
-      console.error('[Reaction] Add failed:', e);
+      logger.error({ err: e }, '[Reaction] Add failed');
     }
   });
 
@@ -2487,7 +2506,7 @@ socket.emit('channels:update', channels);
       const reactions = await getReactionsForMessage(data.messageId).catch(() => []);
       io.emit('message:reactions', { messageId: data.messageId, reactions });
     } catch (e) {
-      console.error('[Reaction] Remove failed:', e);
+      logger.error({ err: e }, '[Reaction] Remove failed');
     }
   });
 
@@ -2600,7 +2619,7 @@ socket.emit('channels:update', channels);
           userToSockets.delete(userId);
         }
       }
-      console.log(`[Registry] Disconnected: ${username} (${userId}), remaining connections: ${userConns?.size ?? 0}`);
+      logger.info({ username, userId, remainingConnections: userConns?.size ?? 0 }, '[Registry] Disconnected');
 
       // If this was the last connection, broadcast offline status
       const userConnsAfter = activeUsers.get(userId);
@@ -2621,18 +2640,15 @@ async function boot() {
   try {
     await initDatabase();
   } catch (e) {
-    console.error('[Boot] Failed to initialise PostgreSQL:', e);
+    logger.error({ err: e }, '[Boot] Failed to initialise PostgreSQL');
     process.exit(1);
   }
 
   server.listen(PORT, () => {
-    console.log(`\n================================================`);
-    console.log(`  VaultChat Enterprise E2EE — Port ${PORT}`);
-    console.log(`  Roles: ADMIN | SUPERVISOR | MEMBER`);
-    console.log(`  Database: PostgreSQL (persistent)`);
-    console.log(`  APIs: /api/users  /api/messages  /api/messages/direct/:id`);
-    console.log(`  Attachments: /api/attachments/upload | /api/attachments/:id`);
-    console.log(`================================================\n`);
+    logger.info({ port: PORT }, 'VaultChat Enterprise E2EE started');
+    logger.info({ roles: 'ADMIN | SUPERVISOR | MEMBER', database: 'PostgreSQL (persistent)' }, 'Server configuration');
+    logger.info({ apis: '/api/users  /api/messages  /api/messages/direct/:id' }, 'API routes');
+    logger.info({ attachments: '/api/attachments/upload | /api/attachments/:id' }, 'Attachment endpoints');
 
     // Periodic cleanup: expired tokens, stale slowmode entries, empty rate limit maps
     setInterval(() => {
@@ -2663,7 +2679,7 @@ async function boot() {
         // Remove stale connections
         for (const [socketId, conn] of userConns) {
           if (now - conn.lastSeen > staleThreshold) {
-            console.log(`[Registry] Removing stale connection for ${conn.username || userId} (socket: ${socketId}), lastSeen ${Math.round((now - conn.lastSeen) / 1000)}s ago`);
+            logger.info({ username: conn.username || userId, socketId, lastSeenSeconds: Math.round((now - conn.lastSeen) / 1000) }, '[Registry] Removing stale connection');
             userConns.delete(socketId);
             socketToUser.delete(socketId);
             const userSockets = userToSockets.get(userId);
@@ -2682,7 +2698,7 @@ async function boot() {
       }
       if (removedUsers > 0 || removedConnections > 0) {
         broadcastPresence();
-        console.log(`[Registry] Cleanup: removed ${removedConnections} stale connection(s), ${removedUsers} fully offline user(s)`);
+        logger.info({ removedConnections, removedUsers }, '[Registry] Cleanup: removed stale connections');
       }
     }, 60 * 1000);
 
@@ -2694,7 +2710,7 @@ async function boot() {
 }
 
 async function gracefulShutdown() {
-  console.log('\n[Shutdown] Stopping PostgreSQL & server…');
+  logger.info('[Shutdown] Stopping PostgreSQL & server…');
   await shutdownDatabase();
   process.exit(0);
 }

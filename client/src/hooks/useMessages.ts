@@ -788,7 +788,7 @@ export const useMessages = (
         }
       } catch { /* keep existing directory */ }
 
-      const res = await fetch(`${API_BASE}/api/messages`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/api/messages?limit=50`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data = await res.json();
       const payloads: any[] = data.messages || [];
@@ -815,6 +815,37 @@ export const useMessages = (
       console.error('[History] Global history fetch error:', e);
     }
   }, [currentUserKeys, setOnlineIds]);
+
+  // ── Load Older Messages (pagination) ──────────────────────────────────
+  const loadMoreMessages = useCallback(async (token: string, opts: { recipientId?: string; channelId?: string; currentCount: number }): Promise<number> => {
+    if (!currentUserKeysRef.current) return 0;
+    try {
+      let url: string;
+      if (opts.channelId) {
+        url = `${API_BASE}/api/messages/channel/${opts.channelId}?limit=50&offset=${opts.currentCount}`;
+      } else if (opts.recipientId) {
+        url = `${API_BASE}/api/messages/direct/${opts.recipientId}?limit=50&offset=${opts.currentCount}`;
+      } else {
+        url = `${API_BASE}/api/messages?limit=50&offset=${opts.currentCount}`;
+      }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return 0;
+      const data = await res.json();
+      const payloads: any[] = data.messages || [];
+      for (const payload of payloads) {
+        try {
+          const localMsg = await decryptPayloadRef.current(payload);
+          if (localMsg) await saveMessage(localMsg);
+        } catch {
+          // Skip undecryptable messages
+        }
+      }
+      return payloads.length;
+    } catch (e) {
+      console.error('[History] Load more error:', e);
+      return 0;
+    }
+  }, []);
 
   // ── Starred Messages ──────────────────────────────────────────────────────
   const fetchStarredMessages = useCallback(async (token: string, messageIds: string[]) => {
@@ -860,6 +891,7 @@ export const useMessages = (
     handleUnpinMessage,
     pinnedMessages,
     fetchAllHistory,
+    loadMoreMessages,
     uploadProgress,
     starredSet,
     handleToggleStar,

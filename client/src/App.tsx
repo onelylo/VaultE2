@@ -162,7 +162,7 @@ export const App: React.FC = () => {
     (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => { if (ids instanceof Set) onlineIdsRef.current = ids; else onlineIdsRef.current = ids(onlineIdsRef.current); },
     upsertDMConversation
   );
-  const { handleSendMessage, handleForwardMessage, handleSendFiles, handleEditMessage, handleDeleteForMe, handleDeleteForEveryone, handlePinMessage, handleUnpinMessage, pinnedMessages, fetchAllHistory, uploadProgress, decryptPayload } = messagesHook;
+  const { handleSendMessage, handleForwardMessage, handleSendFiles, handleEditMessage, handleDeleteForMe, handleDeleteForEveryone, handlePinMessage, handleUnpinMessage, pinnedMessages, fetchAllHistory, loadMoreMessages, uploadProgress, decryptPayload } = messagesHook;
 
   const presenceHook = usePresence(
     currentUserKeys,
@@ -856,6 +856,10 @@ export const App: React.FC = () => {
               onCloseFingerprintModal={handleOnCloseFingerprintModal}
               onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
               onForwardMessage={handleOnForwardMessage}
+              loadMoreMessages={async (opts) => {
+                const token = localStorage.getItem('vaultchat_jwt') || sessionStorage.getItem('vaultchat_jwt') || '';
+                return loadMoreMessages(token, opts);
+              }}
               channels={channels}
               onBlockUser={(userId) => {
                 setAllUsers(prev => prev.map(u => u.userId === userId ? { ...u, blockedByMe: true } : u));

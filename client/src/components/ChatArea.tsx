@@ -48,6 +48,7 @@ interface ChatAreaProps {
   onCloseFingerprintModal?: () => void;
   onToggleSidebar?: () => void;
   onForwardMessage?: (originalText: string, target: { type: 'dm'; userId: string } | { type: 'channel'; channelId: string }) => void;
+  loadMoreMessages?: (opts: { recipientId?: string; channelId?: string; currentCount: number }) => Promise<number>;
   channels?: Channel[];
   onBlockUser?: (userId: string) => void;
   onUnblockUser?: (userId: string) => void;
@@ -84,6 +85,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onCloseFingerprintModal,
   onToggleSidebar,
   onForwardMessage,
+  loadMoreMessages,
   channels = [],
   onBlockUser,
   onUnblockUser,
@@ -184,6 +186,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [loadCount, setLoadCount] = useState(INITIAL_LOAD);
   const [allMessages, setAllMessages] = useState<LocalMessage[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
   // Fetch all messages for current conversation
   const messages = useLiveQuery(
@@ -209,6 +212,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     setLoadCount(INITIAL_LOAD);
     setAllMessages([]);
+    setHasMoreMessages(true);
   }, [selectedUser?.userId, selectedChannel?.id]);
 
   // Update allMessages when messages change (liveQuery handles reactivity)
@@ -437,15 +441,28 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       .catch(() => {});
   }, [selectedUser?.userId, allMessages.length]);
 
-  // Load more when scrolling to top
-  const handleScrollTop = useCallback(() => {
-    if (loadingMore || !allMessages || loadCount >= allMessages.length) return;
+  // Load more when scrolling to top (server-side pagination)
+  const handleScrollTop = useCallback(async () => {
+    if (loadingMore || !loadMoreMessages || !hasMoreMessages) return;
     setLoadingMore(true);
-    setTimeout(() => {
-      setLoadCount(prev => Math.min(prev + 50, allMessages.length));
-      setLoadingMore(false);
-    }, 200);
-  }, [loadingMore, loadCount, allMessages]);
+    const el = scrollRef.current;
+    const prevScrollHeight = el?.scrollHeight ?? 0;
+    const prevScrollTop = el?.scrollTop ?? 0;
+    const nonRemoved = allMessages.filter(m => !m.removed);
+    const count = await loadMoreMessages({
+      recipientId: selectedUser?.userId,
+      channelId: selectedChannel?.id,
+      currentCount: nonRemoved.length,
+    });
+    if (count === 0) setHasMoreMessages(false);
+    setLoadingMore(false);
+    requestAnimationFrame(() => {
+      if (el) {
+        const newScrollHeight = el.scrollHeight;
+        el.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+      }
+    });
+  }, [loadingMore, loadMoreMessages, hasMoreMessages, allMessages, selectedUser?.userId, selectedChannel?.id]);
 
   // Track whether user is near bottom for smart auto-scroll
   const isNearBottomRef = useRef(true);
@@ -469,7 +486,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const el = scrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // 50px threshold — anything within 50px of bottom = "at bottom"
     isNearBottomRef.current = distFromBottom < 50;
     setShowScrollDown(distFromBottom >= 50);
     if (el.scrollTop < 100) handleScrollTop();
@@ -1017,7 +1033,45 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </p>
           </div>
         ) : (
-          groupedMessages.map((group, groupIdx) => {
+          <>
+            {loadMoreMessages && hasMoreMessages && allMessages.filter(m => !m.removed).length >= INITIAL_LOAD && (
+              <div className="flex justify-center py-2">
+                <button
+                  onClick={async () => {
+                    if (loadingMore) return;
+                    setLoadingMore(true);
+                    const el = scrollRef.current;
+                    const prevScrollHeight = el?.scrollHeight ?? 0;
+                    const prevScrollTop = el?.scrollTop ?? 0;
+                    const nonRemoved = allMessages.filter(m => !m.removed);
+                    const count = await loadMoreMessages({
+                      recipientId: selectedUser?.userId,
+                      channelId: selectedChannel?.id,
+                      currentCount: nonRemoved.length,
+                    });
+                    if (count === 0) setHasMoreMessages(false);
+                    setLoadingMore(false);
+                    requestAnimationFrame(() => {
+                      if (el) {
+                        const newScrollHeight = el.scrollHeight;
+                        el.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+                      }
+                    });
+                  }}
+                  disabled={loadingMore}
+                  className="px-4 py-1.5 rounded-full text-xs font-mono transition-all"
+                  style={{
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-muted)',
+                    opacity: loadingMore ? 0.6 : 1,
+                  }}
+                >
+                  {loadingMore ? 'Loading...' : 'Load earlier messages'}
+                </button>
+              </div>
+            )}
+            {groupedMessages.map((group, groupIdx) => {
             if (group.isGroup) {
               const firstMsg = group.messages[0];
               const isSelf = firstMsg.senderId === currentUserId;
@@ -1112,7 +1166,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 isForwarded={forwardedSet.has(msg.id)}
               />
             );
-          })
+          })}
+          </>
         )}
       </div>
 
